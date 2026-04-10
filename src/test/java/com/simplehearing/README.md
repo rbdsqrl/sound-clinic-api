@@ -2,11 +2,11 @@
 
 This directory contains unit and integration tests for the application.
 
-## Test Classes
+## Current Test Classes
 
 - **SimpleHearingApplicationTests.java**: Main application context test
 
-## Testing Strategy
+## Planned Testing Strategy
 
 - Unit tests for service classes
 - Integration tests for controllers
@@ -18,6 +18,7 @@ This directory contains unit and integration tests for the application.
 
 ```bash
 mvn test
+```
 ```
 
 ## Test Configuration

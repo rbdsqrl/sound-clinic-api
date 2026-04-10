@@ -1,32 +1,33 @@
 # Simple Hearing API
 
-A comprehensive REST API for a hearing services platform built with Spring Boot. This application manages appointments, hearing services, blog posts, gallery items, contact messages, and payment processing.
+A basic REST API for a hearing services platform built with Spring Boot. This application provides a health check endpoint and is set up for future expansion with appointment management, services, blog, gallery, contact, and payment features.
 
-## Features
+## Current Features
 
-- **Appointment Management**: Schedule and manage hearing appointments
-- **Service Catalog**: Manage hearing services with pricing and descriptions
-- **Blog System**: Create and manage blog posts about hearing health
-- **Gallery**: Display photos and videos of services/facilities
-- **Contact System**: Handle customer inquiries
-- **Payment Integration**: Process payments via Razorpay
-- **Security**: JWT-based authentication and authorization
+- **Health Check**: Basic endpoint to verify application status
+- **Actuator Health**: Spring Boot Actuator health endpoint for monitoring
+
+## Planned Features
+
+- Appointment Management
+- Service Catalog
+- Blog System
+- Gallery
+- Contact System
+- Payment Integration
+- Security with JWT
 
 ## Tech Stack
 
-- **Java 17**
-- **Spring Boot 3.x**
-- **Spring Data JPA** (with Hibernate)
-- **H2 Database** (for development)
-- **Spring Security** (with JWT)
+- **Java 21**
+- **Spring Boot 3.3.4**
+- **Spring Boot Actuator**
 - **Maven** (build tool)
-- **OpenAPI/Swagger** (API documentation)
 
 ## Prerequisites
 
-- Java 17 or higher
-- Maven 3.6+ (will be installed via Homebrew if needed)
-- Git
+- Java 21 or higher
+- Maven 3.6+
 
 ## Repository Setup
 
@@ -47,6 +48,13 @@ A comprehensive REST API for a hearing services platform built with Spring Boot.
    ```bash
    mvn spring-boot:run
    ```
+
+The application will start on `http://localhost:8080`.
+
+## API Endpoints
+
+- `GET /` - Health check with service info
+- `GET /actuator/health` - Detailed health status
 
 2. **Access the application:**
    - API Base URL: `http://localhost:8080`

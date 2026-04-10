@@ -1,9 +1,9 @@
 # Configuration Package
 
-This package contains Spring configuration classes that set up various aspects of the application.
+This package is reserved for Spring configuration classes that will set up various aspects of the application.
 
-## Classes
+## Planned Classes
 
-- **DataSeeder.java**: Initializes the database with sample data on application startup
-- **OpenApiConfig.java**: Configures OpenAPI/Swagger documentation for the REST API
-- **SecurityConfig.java**: Configures Spring Security with JWT authentication and authorization rules
+- **DataSeeder.java**: Will initialize the database with sample data on application startup
+- **OpenApiConfig.java**: Will configure OpenAPI/Swagger documentation for the REST API
+- **SecurityConfig.java**: Will configure Spring Security with JWT authentication and authorization rules

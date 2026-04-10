@@ -4,8 +4,11 @@ This directory contains the core Java source code for the Simple Hearing API app
 
 ## Package Structure
 
-- **config/**: Spring configuration classes (security, OpenAPI, data seeding)
+- **config/**: Reserved for Spring configuration classes (currently empty)
 - **controller/**: REST API controllers handling HTTP requests
+
+## Planned Packages
+
 - **dto/**: Data Transfer Objects for API communication
 - **entity/**: JPA entity classes representing database tables
 - **enums/**: Enumeration types for status and type values

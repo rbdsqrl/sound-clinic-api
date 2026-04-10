@@ -5,13 +5,21 @@ This directory contains application configuration files and static resources.
 ## Configuration Files
 
 - **application.yml**: Main application configuration (default profile)
+
+## Planned Configuration Files
+
 - **application-dev.yml**: Development environment configuration
 - **application-prod.yml**: Production environment configuration
 
-## Configuration Details
+## Current Configuration Details
+
+- **Application Name**: simple-hearing-api
+- **Server Port**: 8080
+- **Actuator**: Health endpoint exposed
+
+## Planned Configuration Details
 
 - **Database**: H2 for dev, external DB for prod
-- **Server**: Port 8080, context path '/'
 - **Security**: JWT configuration, CORS settings
 - **External APIs**: Razorpay payment gateway settings
 - **Logging**: Log levels and output configuration
