@@ -55,16 +55,16 @@ jobs:
           name: simple-hearing-api-jar
           path: target/simple-hearing-api-1.0.0.jar
 
-      - name: Create Git tag for successful build
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: |
-          TAG="ci-build-${{ github.run_number }}"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "$TAG" -m "CI build $TAG"
-          git push origin "$TAG"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+      # - name: Create Git tag for successful build
+      #   if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      #   run: |
+      #     TAG="ci-build-${{ github.run_number }}"
+      #     git config user.name "github-actions[bot]"
+      #     git config user.email "github-actions[bot]@users.noreply.github.com"
+      #     git tag -a "$TAG" -m "CI build $TAG"
+      #     git push origin "$TAG"
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
 
   publish-pages:
     needs: build
