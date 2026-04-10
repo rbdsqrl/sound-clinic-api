@@ -1,0 +1,51 @@
+openapi: 3.0.3
+info:
+  title: Simple Hearing API
+  description: API contract for the Simple Hearing backend.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+paths:
+  /:
+    get:
+      summary: Root health check
+      description: Returns basic service status information.
+      responses:
+        '200':
+          description: Service status response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  service:
+                    type: string
+                    example: Simple Hearing & Speech Care API
+                  status:
+                    type: string
+                    example: running
+                  timestamp:
+                    type: string
+                    format: date-time
+  /health:
+    get:
+      summary: Actuator health status
+      description: Returns application health status and service metadata.
+      responses:
+        '200':
+          description: Health endpoint response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: UP
+                  service:
+                    type: string
+                    example: simple-hearing-api
+                  timestamp:
+                    type: string
+                    format: date-time

@@ -1,5 +1,7 @@
 package com.simplehearing.assembler.page;
 
+import com.simplehearing.data.page.PageDataPort;
+import com.simplehearing.data.page.PageEntityMapper;
 import com.simplehearing.dto.page.*;
 import com.simplehearing.dto.page.section.*;
 import com.simplehearing.dto.page.section.ServicesPreviewData.ServiceCard;
@@ -12,17 +14,29 @@ import java.util.List;
 /**
  * Assembles the home page layout.
  *
- * ── Stub note ──────────────────────────────────────────────────────────────
- * All data is currently hardcoded. Future integration points are marked with
- * TODO comments. When a repository is introduced, inject it here and replace
- * the relevant stub list — no other class needs to change.
- * ───────────────────────────────────────────────────────────────────────────
+ * Page content can be loaded from a persisted page model stored in the data
+ * layer. When the database does not contain a page, the assembler falls back
+ * to the existing hardcoded stub implementation.
  */
 @Component("home")
 public class HomePageAssembler implements PageAssembler {
 
+    private final PageDataPort pageDataPort;
+    private final PageEntityMapper entityMapper;
+
+    public HomePageAssembler(PageDataPort pageDataPort, PageEntityMapper entityMapper) {
+        this.pageDataPort = pageDataPort;
+        this.entityMapper = entityMapper;
+    }
+
     @Override
     public PageResponse assemble() {
+        return pageDataPort.findByPageId("home")
+            .map(entityMapper::toPageResponse)
+            .orElseGet(this::buildStubResponse);
+    }
+
+    private PageResponse buildStubResponse() {
         return new PageResponse(
             "home",
             meta(),

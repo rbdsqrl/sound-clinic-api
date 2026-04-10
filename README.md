@@ -51,15 +51,48 @@ A basic REST API for a hearing services platform built with Spring Boot. This ap
 
 The application will start on `http://localhost:8080`.
 
-## API Endpoints
+## API Contract
 
-- `GET /` - Health check with service info
-- `GET /actuator/health` - Detailed health status
+The current API contract is published in `swagger.yaml`.
 
-2. **Access the application:**
-   - API Base URL: `http://localhost:8080`
-   - Swagger UI: `http://localhost:8080/swagger-ui.html`
-   - API Docs: `http://localhost:8080/v3/api-docs`
+## Page Data Architecture
+
+The application now includes a data layer for page content with the following model:
+
+- `PageEntity`
+  - `pageId` — page identifier such as `home`
+  - `title` / `description` — page metadata
+  - ordered `sections` collection
+- `PageComponentEntity`
+  - `sectionId` — stable renderable section key
+  - `type` — polymorphic section payload discriminator
+  - `componentOrder` — render order for the page
+  - `dataJson` — serialized section payload stored as JSON
+
+This data layer is separated from business logic by:
+
+- `PageDataPort` — interface used by the application to load and save page entities
+- `JpaPageDataAdapter` — JPA-backed adapter implementation
+- `PageEntityMapper` — converts persisted page entities into `PageResponse` DTOs
+
+A `DataSeeder` populates a sample `home` page in the embedded H2 database on startup.
+
+## Local Swagger UI
+
+After starting the application with:
+
+```bash
+mvn spring-boot:run
+```
+
+open:
+
+- `http://localhost:8080/swagger-ui.html`
+- or `http://localhost:8080/swagger-ui/index.html`
+
+The generated OpenAPI JSON is available at:
+
+- `http://localhost:8080/v3/api-docs`
 
 ## Configuration
 
