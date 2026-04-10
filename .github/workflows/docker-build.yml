@@ -1,0 +1,92 @@
+name: Build and Publish Docker Image
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Run unit tests and generate coverage
+        run: mvn -B clean test jacoco:report
+
+      - name: Upload coverage report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-coverage-report
+          path: target/site/jacoco
+
+      - name: Build Spring Boot JAR
+        run: mvn -B package -DskipTests
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        run: docker build --file Dockerfile --tag simple-hearing-api:latest .
+
+      - name: Save Docker image tarball
+        run: docker save simple-hearing-api:latest --output simple-hearing-api.tar
+
+      - name: Upload Docker image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: simple-hearing-api-image
+          path: simple-hearing-api.tar
+
+      - name: Upload built JAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: simple-hearing-api-jar
+          path: target/simple-hearing-api-1.0.0.jar
+
+      - name: Create Git tag for successful build
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          TAG="ci-build-${{ github.run_number }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "CI build $TAG"
+          git push origin "$TAG"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+
+  publish-pages:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      contents: read
+
+    steps:
+      - name: Download coverage report artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: jacoco-coverage-report
+          path: coverage-site
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v1
+        with:
+          path: coverage-site
+
+      - name: Deploy coverage site to GitHub Pages
+        uses: actions/deploy-pages@v1

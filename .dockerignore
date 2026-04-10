@@ -1,0 +1,13 @@
+target
+!target/
+!target/*.jar
+.git
+.github
+.idea
+.vscode
+*.log
+*.tmp
+**/node_modules
+**/build
+**/dist
+**/.DS_Store
