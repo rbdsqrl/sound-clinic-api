@@ -71,7 +71,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       pages: write
-      contents: read
+      contents: write
       id-token: write
 
     steps:
@@ -83,6 +83,8 @@ jobs:
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v4
+        with:
+          enablement: true
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
