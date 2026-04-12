@@ -72,6 +72,7 @@ jobs:
     permissions:
       pages: write
       contents: read
+      id-token: write
 
     steps:
       - name: Download coverage report artifact
@@ -84,9 +85,9 @@ jobs:
         uses: actions/configure-pages@v4
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v1
+        uses: actions/upload-pages-artifact@v3
         with:
           path: coverage-site
 
       - name: Deploy coverage site to GitHub Pages
-        uses: actions/deploy-pages@v1
+        uses: actions/deploy-pages@v4
