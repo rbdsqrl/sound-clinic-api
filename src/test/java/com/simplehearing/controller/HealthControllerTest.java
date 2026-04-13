@@ -1,8 +1,13 @@
 package com.simplehearing.controller;
 
+import com.simplehearing.auth.security.TokenService;
+import com.simplehearing.config.SecurityConfig;
+import com.simplehearing.user.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.hamcrest.Matchers.hasKey;
@@ -11,8 +16,23 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+/**
+ * WebMvcTest slice for HealthController.
+ *
+ * JwtAuthFilter is a real bean (it's a Filter component that WebMvcTest picks up),
+ * so its dependencies are mocked here. Without a Bearer token in the request, the
+ * real filter short-circuits and calls chain.doFilter() — the health endpoints are
+ * also declared as PUBLIC_PATHS in SecurityConfig, so they pass through unauthenticated.
+ */
 @WebMvcTest(HealthController.class)
+@Import(SecurityConfig.class)
 class HealthControllerTest {
+
+    @MockBean
+    private TokenService tokenService;
+
+    @MockBean
+    private UserRepository userRepository;
 
     @Autowired
     private MockMvc mockMvc;

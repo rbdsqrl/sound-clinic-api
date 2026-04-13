@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - include:
+      file: db/changelog/migrations/001-create-clinics.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/002-create-users.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/003-create-refresh-tokens.sql
+      relativeToChangelogFile: false

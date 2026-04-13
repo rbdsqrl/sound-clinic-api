@@ -2,24 +2,22 @@ spring:
   application:
     name: simple-hearing-api
   datasource:
-    url: jdbc:h2:mem:simple_hearing;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
-    driver-class-name: org.h2.Driver
-    username: sa
-    password: ""
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/simplehearing}
+    username: ${DB_USER:simplehearing}
+    password: ${DB_PASS:simplehearing}
+    driver-class-name: org.postgresql.Driver
   jpa:
-    database-platform: org.hibernate.dialect.H2Dialect
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
     show-sql: false
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.yaml
 
 server:
   port: 8080
-
-springdoc:
-  api-docs:
-    path: /v3/api-docs
-  swagger-ui:
-    path: /swagger-ui.html
 
 management:
   endpoints:
@@ -29,3 +27,17 @@ management:
   endpoint:
     health:
       show-details: always
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:bXlTdXBlclNlY3JldEtleUZvckpXVEFuZEl0SXNWZXJ5TG9uZ0Vub3VnaA==}
+    access-token-expiry: 900       # 15 minutes in seconds
+    refresh-token-expiry: 604800   # 7 days in seconds
+  storage:
+    local-path: ${STORAGE_PATH:./uploads}
