@@ -13,8 +13,8 @@ CREATE TABLE users (
     gender        VARCHAR(10),
     role          VARCHAR(20)  NOT NULL,
     is_active     BOOLEAN      NOT NULL DEFAULT true,
-    created_at    TIMESTAMPTZ  NOT NULL DEFAULT now(),
-    updated_at    TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    created_at    TIMESTAMP WITH TIME ZONE  NOT NULL DEFAULT now(),
+    updated_at    TIMESTAMP WITH TIME ZONE  NOT NULL DEFAULT now(),
     CONSTRAINT uq_users_email     UNIQUE (email),
     CONSTRAINT fk_users_clinic_id FOREIGN KEY (clinic_id) REFERENCES clinics (id)
 );

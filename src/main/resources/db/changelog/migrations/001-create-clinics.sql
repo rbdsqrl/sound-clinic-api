@@ -11,8 +11,8 @@ CREATE TABLE clinics (
     email       VARCHAR(255),
     timezone    VARCHAR(60)  NOT NULL DEFAULT 'UTC',
     is_active   BOOLEAN      NOT NULL DEFAULT true,
-    created_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
-    updated_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    created_at  TIMESTAMP WITH TIME ZONE  NOT NULL DEFAULT now(),
+    updated_at  TIMESTAMP WITH TIME ZONE  NOT NULL DEFAULT now(),
     CONSTRAINT uq_clinics_subdomain UNIQUE (subdomain)
 );
 

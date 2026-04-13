@@ -32,7 +32,8 @@ public class SecurityConfig {
         "/api/v1/auth/refresh",
         "/swagger-ui/**",
         "/swagger-ui.html",
-        "/v3/api-docs/**"
+        "/v3/api-docs/**",
+        "/webjars/**"       // Springdoc serves Swagger UI CSS/JS bundles via webjars
     };
 
     private final JwtAuthFilter jwtAuthFilter;
