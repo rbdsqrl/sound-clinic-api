@@ -27,14 +27,27 @@ public class TokenService {
     }
 
     /**
-     * Issues a short-lived access token (HS256) embedding userId, clinicId and role as claims.
+     * Issues a short-lived access token (HS256) embedding userId, orgId, clinicId and role as claims.
+     * clinicId is omitted from the token when null (e.g. BUSINESS_OWNER has no clinic).
      */
     public String issueAccessToken(User user) {
         long now = System.currentTimeMillis();
-        return Jwts.builder()
+        // Embed every role the user holds so Spring Security grants all of them
+        String allRoles = user.getAllRoles().stream()
+                .map(Enum::name)
+                .collect(java.util.stream.Collectors.joining(","));
+
+        var builder = Jwts.builder()
                 .subject(user.getId().toString())
-                .claim("clinic_id", user.getClinicId().toString())
-                .claim("role", user.getRole().name())
+                .claim("orgId", user.getOrgId().toString())
+                .claim("role", user.getRole().name())   // primary role (for activeRole default)
+                .claim("roles", allRoles);              // comma-separated full set
+
+        if (user.getClinicId() != null) {
+            builder.claim("clinicId", user.getClinicId().toString());
+        }
+
+        return builder
                 .issuedAt(new Date(now))
                 .expiration(new Date(now + properties.getAccessTokenExpiry() * 1_000L))
                 .signWith(secretKey)

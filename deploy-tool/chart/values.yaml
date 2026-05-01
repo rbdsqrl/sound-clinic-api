@@ -1,0 +1,8 @@
+appName: my-app
+image:
+  repository: ""
+  tag: latest
+cloudSql:
+  connectionName: ""
+dbSecretName: ""
+envSecretName: ""

@@ -1,0 +1,79 @@
+name: Build & Deploy to GKE
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/deploy.yml'
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: asia-south1
+  CLUSTER: simple-hearing-cluster
+  NAMESPACE: simple-hearing
+  IMAGE: asia-south1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/simple-hearing/api
+
+jobs:
+  build-and-deploy:
+    name: Build, Push & Helm Deploy
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write   # required for Workload Identity Federation
+
+    steps:
+      # ── Checkout ────────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── GCP Auth via Workload Identity Federation ─────────────────────────
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      # ── Docker auth for Artifact Registry ───────────────────────────────────
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker asia-south1-docker.pkg.dev --quiet
+
+      # ── Build & push image ───────────────────────────────────────────────────
+      - name: Build Docker image
+        working-directory: backend
+        run: |
+          docker build \
+            -t $IMAGE:${{ github.sha }} \
+            -t $IMAGE:latest \
+            .
+
+      - name: Push Docker image
+        run: |
+          docker push $IMAGE:${{ github.sha }}
+          docker push $IMAGE:latest
+
+      # ── Connect to GKE ───────────────────────────────────────────────────────
+      - name: Get GKE credentials
+        uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ env.CLUSTER }}
+          location: ${{ env.REGION }}
+
+      # ── Helm deploy ──────────────────────────────────────────────────────────
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.14.0
+
+      - name: Deploy with Helm
+        working-directory: backend
+        run: |
+          helm upgrade --install simple-hearing helm/simple-hearing \
+            --namespace $NAMESPACE \
+            --create-namespace \
+            --set image.tag=${{ github.sha }} \
+            --set image.repository=$IMAGE \
+            -f helm/simple-hearing/values.yaml \
+            --wait \
+            --timeout 5m

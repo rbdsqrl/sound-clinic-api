@@ -8,3 +8,39 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/003-create-refresh-tokens.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/005-create-organisations.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/004-create-invitations.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/006-alter-clinics-add-org.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/007-alter-users-add-org.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/008-create-patients.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/009-create-conditions.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/010-create-patient-conditions.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/011-create-patient-parents.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/012-create-therapist-patients.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/013-create-user-roles.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/014-create-therapist-slots.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/015-create-appointments.sql
+      relativeToChangelogFile: false

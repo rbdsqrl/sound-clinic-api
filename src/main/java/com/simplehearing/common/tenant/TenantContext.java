@@ -11,12 +11,17 @@ public final class TenantContext {
 
     private TenantContext() {}
 
-    public record TenantData(UUID clinicId, UUID userId, String role) {}
+    public record TenantData(UUID orgId, UUID clinicId, UUID userId, String role) {}
 
     private static final ThreadLocal<TenantData> CONTEXT = new ThreadLocal<>();
 
-    public static void set(UUID clinicId, UUID userId, String role) {
-        CONTEXT.set(new TenantData(clinicId, userId, role));
+    public static void set(UUID orgId, UUID clinicId, UUID userId, String role) {
+        CONTEXT.set(new TenantData(orgId, clinicId, userId, role));
+    }
+
+    public static UUID getOrgId() {
+        TenantData data = CONTEXT.get();
+        return data != null ? data.orgId() : null;
     }
 
     public static UUID getClinicId() {

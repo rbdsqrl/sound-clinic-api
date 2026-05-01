@@ -1,0 +1,70 @@
+# ── Default values (overridden per environment) ───────────────────────────────
+
+replicaCount: 1
+
+image:
+  repository: asia-south1-docker.pkg.dev/YOUR_PROJECT_ID/simple-hearing/api
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  host: api.simplehearing.in
+  tls:
+    enabled: true
+    secretName: simple-hearing-tls
+
+# Spring Boot profile to activate
+springProfile: cloud
+
+# Cloud SQL Auth Proxy sidecar
+cloudSql:
+  enabled: true
+  # Format: PROJECT_ID:REGION:INSTANCE_NAME
+  connectionName: "YOUR_PROJECT_ID:asia-south1:simple-hearing-db"
+  image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.11.4
+
+# Secrets — values injected from GCP Secret Manager via external-secrets or manually
+# Do NOT put real values here; reference secret names instead
+secrets:
+  dbSecretName: simple-hearing-db-credentials
+  jwtSecretName: simple-hearing-jwt
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: 500m
+    memory: 768Mi
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 70
+
+serviceAccount:
+  create: true
+  name: simple-hearing-api
+  # Workload Identity — maps K8s SA to GCP SA
+  gcpServiceAccount: simple-hearing-api@YOUR_PROJECT_ID.iam.gserviceaccount.com
+
+livenessProbe:
+  path: /actuator/health
+  initialDelaySeconds: 45
+  periodSeconds: 15
+
+readinessProbe:
+  path: /actuator/health
+  initialDelaySeconds: 30
+  periodSeconds: 10

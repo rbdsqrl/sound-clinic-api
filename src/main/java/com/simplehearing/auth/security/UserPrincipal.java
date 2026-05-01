@@ -25,6 +25,10 @@ public class UserPrincipal implements UserDetails {
         return user.getId();
     }
 
+    public UUID getOrgId() {
+        return user.getOrgId();
+    }
+
     public UUID getClinicId() {
         return user.getClinicId();
     }

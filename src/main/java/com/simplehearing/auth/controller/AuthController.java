@@ -3,11 +3,13 @@ package com.simplehearing.auth.controller;
 import com.simplehearing.auth.dto.*;
 import com.simplehearing.auth.security.UserPrincipal;
 import com.simplehearing.auth.service.AuthService;
+import com.simplehearing.auth.service.RegistrationService;
 import com.simplehearing.common.dto.ApiResponse;
 import com.simplehearing.user.dto.UserResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -18,9 +20,19 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final AuthService authService;
+    private final RegistrationService registrationService;
 
-    public AuthController(AuthService authService) {
+    public AuthController(AuthService authService, RegistrationService registrationService) {
         this.authService = authService;
+        this.registrationService = registrationService;
+    }
+
+    @Operation(summary = "Register a new clinic",
+               description = "Creates a clinic and its first BUSINESS_OWNER account. Returns tokens — the owner is immediately logged in.")
+    @PostMapping("/register")
+    public ResponseEntity<ApiResponse<LoginResponse>> register(@Valid @RequestBody RegisterRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Clinic registered successfully", registrationService.register(request)));
     }
 
     @Operation(summary = "Login with email and password", description = "Returns a short-lived access token and a 7-day refresh token.")

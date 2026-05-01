@@ -11,6 +11,8 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.EnumSet;
+import java.util.Set;
 import java.util.UUID;
 
 @Entity
@@ -26,7 +28,11 @@ public class User {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(name = "clinic_id", nullable = false)
+    @Column(name = "org_id", nullable = false)
+    private UUID orgId;
+
+    /** Null for BUSINESS_OWNER — they belong to the org, not a specific clinic. */
+    @Column(name = "clinic_id")
     private UUID clinicId;
 
     @Column(unique = true, nullable = false)
@@ -52,6 +58,16 @@ public class User {
     @Column(nullable = false)
     private Role role;
 
+    /**
+     * Secondary roles this user also holds (e.g. a THERAPIST who is also a PARENT).
+     * The primary {@link #role} is never duplicated here.
+     */
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "user_roles", joinColumns = @JoinColumn(name = "user_id"))
+    @Column(name = "role")
+    @Enumerated(EnumType.STRING)
+    private Set<Role> additionalRoles = EnumSet.noneOf(Role.class);
+
     @Column(nullable = false)
     private boolean isActive = true;
 
@@ -67,6 +83,9 @@ public class User {
 
     public UUID getId() { return id; }
     public void setId(UUID id) { this.id = id; }
+
+    public UUID getOrgId() { return orgId; }
+    public void setOrgId(UUID orgId) { this.orgId = orgId; }
 
     public UUID getClinicId() { return clinicId; }
     public void setClinicId(UUID clinicId) { this.clinicId = clinicId; }
@@ -94,6 +113,20 @@ public class User {
 
     public Role getRole() { return role; }
     public void setRole(Role role) { this.role = role; }
+
+    public Set<Role> getAdditionalRoles() { return additionalRoles; }
+    public void setAdditionalRoles(Set<Role> additionalRoles) { this.additionalRoles = additionalRoles; }
+
+    /** Returns all roles this user holds — primary + additional. */
+    public Set<Role> getAllRoles() {
+        Set<Role> all = EnumSet.of(role);
+        all.addAll(additionalRoles);
+        return all;
+    }
+
+    public boolean hasRole(Role r) {
+        return role == r || additionalRoles.contains(r);
+    }
 
     public boolean isActive() { return isActive; }
     public void setActive(boolean active) { isActive = active; }
