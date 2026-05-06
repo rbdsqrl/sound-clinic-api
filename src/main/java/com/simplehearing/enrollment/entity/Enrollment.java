@@ -37,9 +37,9 @@ public class Enrollment {
     @Column(name = "start_date", nullable = false)
     private LocalDate startDate;
 
-    /** Stored as the enum name, e.g. "MONDAY" */
+    /** Derived from start_date at creation time. Nullable — sessions are now daily. */
     @Enumerated(EnumType.STRING)
-    @Column(name = "day_of_week", nullable = false)
+    @Column(name = "day_of_week")
     private DayOfWeek dayOfWeek;
 
     @Column(name = "start_time", nullable = false)

@@ -20,6 +20,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
@@ -120,6 +121,16 @@ public class AppointmentService {
     // ── Appointments ──────────────────────────────────────────────────────────
 
     public AppointmentResponse book(BookAppointmentRequest req, UserPrincipal principal) {
+        // Reject bookings in the past
+        LocalDate today = LocalDate.now();
+        LocalTime now   = LocalTime.now();
+        if (req.appointmentDate().isBefore(today)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Cannot book an appointment in the past");
+        }
+        if (req.appointmentDate().isEqual(today) && !req.startTime().isAfter(now)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Cannot book an appointment for a time that has already passed");
+        }
+
         // Patient must belong to org
         Patient patient = patientRepository.findById(req.patientId())
                 .filter(p -> p.getOrgId().equals(principal.getOrgId()))
