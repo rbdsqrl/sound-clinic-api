@@ -3,10 +3,6 @@ name: Build & Deploy to GKE
 on:
   push:
     branches: [ main ]
-    paths:
-      - 'backend/**'
-      - '.github/workflows/deploy.yml'
-
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   REGION: asia-south1
