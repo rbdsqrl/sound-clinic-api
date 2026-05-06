@@ -30,7 +30,7 @@ public class ClinicController {
 
     @Operation(summary = "Create a new clinic")
     @PostMapping
-    @PreAuthorize("hasRole('BUSINESS_OWNER')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN')")
     public ResponseEntity<ApiResponse<ClinicResponse>> create(
             @Valid @RequestBody CreateClinicRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -40,7 +40,7 @@ public class ClinicController {
 
     @Operation(summary = "List all clinics in your organisation")
     @GetMapping
-    @PreAuthorize("hasRole('BUSINESS_OWNER')")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<List<ClinicResponse>>> list(
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(clinicService.listForOrg(principal)));
@@ -48,7 +48,7 @@ public class ClinicController {
 
     @Operation(summary = "Get a clinic by ID")
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('BUSINESS_OWNER')")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<ClinicResponse>> get(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -57,7 +57,7 @@ public class ClinicController {
 
     @Operation(summary = "Update a clinic")
     @PatchMapping("/{id}")
-    @PreAuthorize("hasRole('BUSINESS_OWNER')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN')")
     public ResponseEntity<ApiResponse<ClinicResponse>> update(
             @PathVariable UUID id,
             @RequestBody CreateClinicRequest request,

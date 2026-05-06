@@ -28,6 +28,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # ── Build JAR ────────────────────────────────────────────────────────────
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Build Spring Boot JAR
+        working-directory: backend
+        run: mvn -B package -DskipTests -q
+
       # ── GCP Auth via Workload Identity Federation ─────────────────────────
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2

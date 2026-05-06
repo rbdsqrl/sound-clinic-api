@@ -1,0 +1,56 @@
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 20000      # 20s — fail fast if DB is unreachable
+      idle-timeout: 300000           # 5min — release idle connections
+      max-lifetime: 1800000          # 30min — recycle connections before DB kills them
+      keepalive-time: 60000          # 1min — keep connections alive through idle periods
+      pool-name: SimpleHearingPool
+
+  jpa:
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+
+  liquibase:
+    enabled: true
+    drop-first: false
+
+server:
+  port: ${PORT:8080}
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/plain
+    min-response-size: 1024
+  http2:
+    enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health          # only /actuator/health exposed — no metrics leak
+  endpoint:
+    health:
+      show-details: when-authorized  # don't expose DB status to unauthenticated requests
+
+# Disable Swagger in production
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+logging:
+  level:
+    root: WARN
+    com.simplehearing: INFO
+    org.springframework.security: WARN
+    org.hibernate: WARN
+    liquibase: WARN
+    com.zaxxer.hikari: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"

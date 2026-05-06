@@ -74,3 +74,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/025-add-patient-id-to-invitations.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/026-make-enrollment-day-optional.sql
+      relativeToChangelogFile: false

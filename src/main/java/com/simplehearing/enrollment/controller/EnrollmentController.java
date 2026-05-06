@@ -23,7 +23,6 @@ import com.simplehearing.program.entity.Program;
 import com.simplehearing.program.repository.ProgramRepository;
 import com.simplehearing.session.service.SessionGenerationService;
 import com.simplehearing.subscription.entity.Subscription;
-import com.simplehearing.subscription.enums.SubscriptionPaymentStatus;
 import com.simplehearing.subscription.repository.SubscriptionRepository;
 import com.simplehearing.user.entity.User;
 import com.simplehearing.user.repository.UserRepository;
@@ -80,11 +79,10 @@ public class EnrollmentController {
 
     // ── Available therapists for a given slot ─────────────────────────────────
 
-    @Operation(summary = "Find therapists available for the given day/time/duration")
+    @Operation(summary = "Find therapists available for the given time/duration (any day)")
     @GetMapping("/available-therapists")
     @PreAuthorize("hasAnyRole('OFFICE_ADMIN', 'ADMIN', 'BUSINESS_OWNER')")
     public ResponseEntity<ApiResponse<List<AvailableTherapistResponse>>> availableTherapists(
-            @RequestParam DayOfWeek dayOfWeek,
             @RequestParam LocalTime startTime,
             @RequestParam int durationMinutes,
             @RequestParam LocalDate startDate,
@@ -92,11 +90,10 @@ public class EnrollmentController {
 
         LocalTime endTime = startTime.plusMinutes(durationMinutes);
 
-        // 1. All slots for the org on that day of week where the slot covers the requested window
+        // 1. Any slot in the org where the slot covers the requested time window (day-agnostic)
         List<TherapistSlot> matchingSlots = slotRepository.findByOrgId(principal.getOrgId())
                 .stream()
-                .filter(s -> s.getDayOfWeek() == dayOfWeek
-                        && !s.getStartTime().isAfter(startTime)
+                .filter(s -> !s.getStartTime().isAfter(startTime)
                         && !s.getEndTime().isBefore(endTime))
                 .toList();
 
@@ -187,10 +184,6 @@ public class EnrollmentController {
             throw new ApiException(HttpStatus.FORBIDDEN, "Access denied");
         }
 
-        if (sub.getPaymentStatus() != SubscriptionPaymentStatus.PAID) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Subscription must be fully paid before enrollment");
-        }
-
         // Validate therapist exists and belongs to org
         User therapist = userRepository.findById(request.therapistId())
                 .orElseThrow(() -> new ResourceNotFoundException("Therapist not found"));
@@ -199,7 +192,7 @@ public class EnrollmentController {
             throw new ApiException(HttpStatus.FORBIDDEN, "Therapist does not belong to this organisation");
         }
 
-        // Create enrollment
+        // Create enrollment — day_of_week derived from start date (sessions are daily)
         Enrollment enrollment = new Enrollment();
         enrollment.setOrgId(principal.getOrgId());
         enrollment.setSubscriptionId(request.subscriptionId());
@@ -207,7 +200,7 @@ public class EnrollmentController {
         enrollment.setTherapistId(request.therapistId());
         enrollment.setSessionDurationMinutes(request.sessionDurationMinutes());
         enrollment.setStartDate(request.startDate());
-        enrollment.setDayOfWeek(request.dayOfWeek());
+        enrollment.setDayOfWeek(request.startDate().getDayOfWeek());
         enrollment.setStartTime(request.startTime());
         enrollment.setCreatedBy(principal.getId());
 

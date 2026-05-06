@@ -4,6 +4,9 @@ import com.simplehearing.auth.security.UserPrincipal;
 import com.simplehearing.common.dto.ApiResponse;
 import com.simplehearing.common.exception.ApiException;
 import com.simplehearing.common.exception.ResourceNotFoundException;
+import com.simplehearing.patient.entity.Patient;
+import com.simplehearing.patient.enums.PatientStage;
+import com.simplehearing.patient.repository.PatientRepository;
 import com.simplehearing.program.entity.Program;
 import com.simplehearing.program.repository.ProgramRepository;
 import com.simplehearing.subscription.dto.CreateSubscriptionRequest;
@@ -34,12 +37,15 @@ public class SubscriptionController {
 
     private final SubscriptionRepository subscriptionRepository;
     private final ProgramRepository programRepository;
+    private final PatientRepository patientRepository;
 
     public SubscriptionController(
             SubscriptionRepository subscriptionRepository,
-            ProgramRepository programRepository) {
+            ProgramRepository programRepository,
+            PatientRepository patientRepository) {
         this.subscriptionRepository = subscriptionRepository;
         this.programRepository = programRepository;
+        this.patientRepository = patientRepository;
     }
 
     // ── List subscriptions for a patient ──────────────────────────────────────
@@ -93,6 +99,18 @@ public class SubscriptionController {
         sub.setCreatedBy(principal.getId());
 
         Subscription saved = subscriptionRepository.save(sub);
+
+        // Auto-advance patient stage to ENROLLMENT if not yet there
+        patientRepository.findById(request.patientId()).ifPresent(patient -> {
+            PatientStage stage = patient.getStage();
+            if (stage == PatientStage.INQUIRY_CONVERTED
+                    || stage == PatientStage.PRE_ASSESSMENT
+                    || stage == PatientStage.ASSESSMENT_DONE) {
+                patient.setStage(PatientStage.ENROLLMENT);
+                patientRepository.save(patient);
+            }
+        });
+
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(SubscriptionResponse.from(saved, program.getName())));
     }
