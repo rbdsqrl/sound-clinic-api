@@ -3,6 +3,7 @@ name: Build & Deploy to GKE
 on:
   push:
     branches: [ main ]
+
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   REGION: asia-south1
@@ -33,7 +34,6 @@ jobs:
           cache: maven
 
       - name: Build Spring Boot JAR
-        working-directory: backend
         run: mvn -B package -DskipTests -q
 
       # ── GCP Auth via Workload Identity Federation ─────────────────────────
@@ -49,7 +49,6 @@ jobs:
 
       # ── Build & push image ───────────────────────────────────────────────────
       - name: Build Docker image
-        working-directory: backend
         run: |
           docker build \
             -t $IMAGE:${{ github.sha }} \
@@ -75,7 +74,6 @@ jobs:
           version: v3.14.0
 
       - name: Deploy with Helm
-        working-directory: backend
         run: |
           helm upgrade --install simple-hearing helm/simple-hearing \
             --namespace $NAMESPACE \
