@@ -1,5 +1,6 @@
 package com.simplehearing.patient.entity;
 
+import com.simplehearing.patient.enums.PatientStage;
 import com.simplehearing.user.enums.Gender;
 import jakarta.persistence.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -37,6 +38,10 @@ public class Patient {
     @Column(columnDefinition = "TEXT")
     private String notes;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private PatientStage stage = PatientStage.PRE_ASSESSMENT;
+
     @Column(nullable = false)
     private boolean isActive = true;
 
@@ -73,6 +78,9 @@ public class Patient {
 
     public String getNotes() { return notes; }
     public void setNotes(String notes) { this.notes = notes; }
+
+    public PatientStage getStage() { return stage; }
+    public void setStage(PatientStage stage) { this.stage = stage; }
 
     public boolean isActive() { return isActive; }
     public void setActive(boolean active) { isActive = active; }

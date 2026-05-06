@@ -44,3 +44,33 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/015-create-appointments.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/016-create-leaves.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/017-create-inquiries.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/018-add-patient-stage.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/019-add-inquiry-appointment.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/020-create-inquiry-logs.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/021-create-programs.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/022-create-subscriptions.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/023-create-enrollments.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/024-create-therapy-sessions.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/025-add-patient-id-to-invitations.sql
+      relativeToChangelogFile: false

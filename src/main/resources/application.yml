@@ -34,6 +34,10 @@ springdoc:
   swagger-ui:
     path: /swagger-ui.html
 
+logging:
+  level:
+    com.zaxxer.hikari.pool.HikariPool: ERROR
+
 app:
   jwt:
     secret: ${JWT_SECRET:bXlTdXBlclNlY3JldEtleUZvckpXVEFuZEl0SXNWZXJ5TG9uZ0Vub3VnaA==}
@@ -41,3 +45,6 @@ app:
     refresh-token-expiry: 604800   # 7 days in seconds
   storage:
     local-path: ${STORAGE_PATH:./uploads}
+  # Single-org deployment: the org-id assigned to all public (unauthenticated) inquiries.
+  # Set ORG_ID env var in production. Leave blank during dev — controller handles null gracefully.
+  org-id: ${ORG_ID:}

@@ -74,6 +74,16 @@ public class PatientController {
         return ResponseEntity.ok(ApiResponse.success(patientService.update(id, request, principal)));
     }
 
+    @Operation(summary = "Update patient journey stage")
+    @PatchMapping("/{id}/stage")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'DOCTOR')")
+    public ResponseEntity<ApiResponse<PatientResponse>> updateStage(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdatePatientStageRequest request,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(patientService.updateStage(id, request, principal)));
+    }
+
     // ── Conditions ────────────────────────────────────────────────────────────
 
     @Operation(summary = "Add a condition to a patient")

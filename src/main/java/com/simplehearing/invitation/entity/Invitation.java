@@ -26,6 +26,10 @@ public class Invitation {
     @Column(name = "clinic_id")
     private UUID clinicId;
 
+    /** Null unless the invite was created during inquiry conversion — auto-links user to this patient on accept. */
+    @Column(name = "patient_id")
+    private UUID patientId;
+
     @Column(name = "invited_by", nullable = false)
     private UUID invitedBy;
 
@@ -60,6 +64,9 @@ public class Invitation {
 
     public UUID getClinicId() { return clinicId; }
     public void setClinicId(UUID clinicId) { this.clinicId = clinicId; }
+
+    public UUID getPatientId() { return patientId; }
+    public void setPatientId(UUID patientId) { this.patientId = patientId; }
 
     public UUID getInvitedBy() { return invitedBy; }
     public void setInvitedBy(UUID invitedBy) { this.invitedBy = invitedBy; }

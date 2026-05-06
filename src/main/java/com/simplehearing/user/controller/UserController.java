@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 @Tag(name = "Users", description = "User profile and role management")
 @RestController
@@ -32,6 +33,35 @@ public class UserController {
 
     public UserController(UserRepository userRepository) {
         this.userRepository = userRepository;
+    }
+
+    /** Roles that count as "clinical staff" for the therapists list. */
+    private static final List<Role> CLINICAL_ROLES = List.of(Role.THERAPIST, Role.DOCTOR);
+
+    @Operation(
+        summary = "List all therapists (and doctors) in the organisation",
+        description = "Returns every THERAPIST and DOCTOR user in the caller's org. " +
+                      "Pass an optional clinicId to scope the results to a single clinic. " +
+                      "Accessible by BUSINESS_OWNER and ADMIN only."
+    )
+    @GetMapping("/therapists")
+    public ResponseEntity<ApiResponse<List<UserResponse>>> listTherapists(
+            @RequestParam(required = false) UUID clinicId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        if (!principal.getUser().hasRole(Role.BUSINESS_OWNER) &&
+                !principal.getUser().hasRole(Role.ADMIN)) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only BUSINESS_OWNER or ADMIN may list therapists");
+        }
+
+        List<UserResponse> results = (clinicId != null
+                ? userRepository.findByOrgIdAndClinicIdAndRoleIn(principal.getOrgId(), clinicId, CLINICAL_ROLES)
+                : userRepository.findByOrgIdAndRoleIn(principal.getOrgId(), CLINICAL_ROLES))
+                .stream()
+                .map(UserResponse::from)
+                .toList();
+
+        return ResponseEntity.ok(ApiResponse.success(results));
     }
 
     @Operation(

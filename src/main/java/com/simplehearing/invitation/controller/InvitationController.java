@@ -26,7 +26,7 @@ public class InvitationController {
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('BUSINESS_OWNER')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN')")
     public ResponseEntity<ApiResponse<List<InviteResponse>>> list(
             @AuthenticationPrincipal UserPrincipal principal) {
 
@@ -38,7 +38,7 @@ public class InvitationController {
      * Restricted to BUSINESS_OWNER role only.
      */
     @PostMapping
-    @PreAuthorize("hasRole('BUSINESS_OWNER')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN')")
     public ResponseEntity<ApiResponse<InviteResponse>> invite(
             @Valid @RequestBody InviteRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {

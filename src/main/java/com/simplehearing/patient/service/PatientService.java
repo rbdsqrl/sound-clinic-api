@@ -101,6 +101,12 @@ public class PatientService {
         return buildResponse(patientRepository.save(patient));
     }
 
+    public PatientResponse updateStage(UUID patientId, UpdatePatientStageRequest request, UserPrincipal principal) {
+        Patient patient = findPatient(patientId, principal.getOrgId());
+        patient.setStage(request.stage());
+        return buildResponse(patientRepository.save(patient));
+    }
+
     // ── Conditions ────────────────────────────────────────────────────────────
 
     public PatientResponse addCondition(UUID patientId, AddConditionRequest request, UserPrincipal principal) {

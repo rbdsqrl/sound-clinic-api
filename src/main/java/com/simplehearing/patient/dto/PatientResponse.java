@@ -4,6 +4,7 @@ import com.simplehearing.condition.entity.Condition;
 import com.simplehearing.patient.entity.Patient;
 import com.simplehearing.patient.entity.PatientCondition;
 import com.simplehearing.patient.entity.TherapistPatient;
+import com.simplehearing.patient.enums.PatientStage;
 import com.simplehearing.user.entity.User;
 import com.simplehearing.user.enums.Gender;
 
@@ -21,6 +22,7 @@ public record PatientResponse(
         LocalDate dateOfBirth,
         Gender gender,
         String notes,
+        PatientStage stage,
         boolean isActive,
         Instant createdAt,
         List<ConditionSummary> conditions,
@@ -70,7 +72,7 @@ public record PatientResponse(
                 patient.getId(), patient.getOrgId(), patient.getClinicId(),
                 patient.getFirstName(), patient.getLastName(),
                 patient.getDateOfBirth(), patient.getGender(), patient.getNotes(),
-                patient.isActive(), patient.getCreatedAt(),
+                patient.getStage(), patient.isActive(), patient.getCreatedAt(),
                 conditionSummaries, parentSummaries, therapistSummaries
         );
     }

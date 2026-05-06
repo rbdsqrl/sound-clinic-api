@@ -32,6 +32,9 @@ public class SecurityConfig {
         "/api/v1/auth/login",
         "/api/v1/auth/refresh",
         "/api/v1/invitations/accept",   // invitation accept — user not yet registered
+        "/api/v1/public/**",            // public org info for the landing page
+        "/api/v1/inquiries",            // public inquiry form submission (POST only; GET is role-guarded via @PreAuthorize)
+        "/api/v1/payments/webhook",     // Razorpay webhook — no JWT, signature verified in controller
         "/swagger-ui/**",
         "/swagger-ui.html",
         "/v3/api-docs/**",

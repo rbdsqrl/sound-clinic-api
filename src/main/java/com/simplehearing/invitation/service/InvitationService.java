@@ -8,6 +8,8 @@ import com.simplehearing.invitation.dto.InviteRequest;
 import com.simplehearing.invitation.dto.InviteResponse;
 import com.simplehearing.invitation.entity.Invitation;
 import com.simplehearing.invitation.repository.InvitationRepository;
+import com.simplehearing.patient.entity.PatientParent;
+import com.simplehearing.patient.repository.PatientParentRepository;
 import com.simplehearing.user.entity.User;
 import com.simplehearing.user.enums.Role;
 import com.simplehearing.user.repository.UserRepository;
@@ -36,10 +38,13 @@ public class InvitationService {
     private static final Logger log = LoggerFactory.getLogger(InvitationService.class);
 
     /** Roles that require a clinicId in the invitation. */
-    private static final Set<Role> CLINIC_SCOPED_ROLES = Set.of(Role.PARENT, Role.THERAPIST);
+    private static final Set<Role> CLINIC_SCOPED_ROLES = Set.of(Role.PARENT, Role.THERAPIST, Role.DOCTOR);
 
-    /** All roles a BUSINESS_OWNER may invite. */
-    private static final Set<Role> INVITABLE_ROLES = Set.of(Role.PARENT, Role.THERAPIST, Role.BUSINESS_OWNER);
+    /** All roles a BUSINESS_OWNER / ADMIN may invite. */
+    private static final Set<Role> INVITABLE_ROLES = Set.of(
+            Role.ADMIN, Role.OFFICE_ADMIN, Role.THERAPIST, Role.DOCTOR,
+            Role.PARENT, Role.PATIENT, Role.BUSINESS_OWNER
+    );
 
     private static final long EXPIRY_HOURS = 72;
 
@@ -47,15 +52,18 @@ public class InvitationService {
     private final UserRepository userRepository;
     private final ClinicRepository clinicRepository;
     private final PasswordEncoder passwordEncoder;
+    private final PatientParentRepository patientParentRepository;
 
     public InvitationService(InvitationRepository invitationRepository,
                              UserRepository userRepository,
                              ClinicRepository clinicRepository,
-                             PasswordEncoder passwordEncoder) {
+                             PasswordEncoder passwordEncoder,
+                             PatientParentRepository patientParentRepository) {
         this.invitationRepository = invitationRepository;
         this.userRepository = userRepository;
         this.clinicRepository = clinicRepository;
         this.passwordEncoder = passwordEncoder;
+        this.patientParentRepository = patientParentRepository;
     }
 
     /**
@@ -66,7 +74,7 @@ public class InvitationService {
     public InviteResponse invite(InviteRequest request, UserPrincipal caller) {
         if (!INVITABLE_ROLES.contains(request.role())) {
             throw new ApiException(HttpStatus.FORBIDDEN,
-                    "BUSINESS_OWNER can only invite BUSINESS_OWNER, THERAPIST, or PARENT users");
+                    "Cannot invite users with role: " + request.role());
         }
 
         // Validate clinic requirement for clinic-scoped roles
@@ -165,10 +173,53 @@ public class InvitationService {
         user.setActive(true);
         userRepository.save(user);
 
+        // Auto-link to patient if this invitation was created during inquiry conversion
+        if (invitation.getPatientId() != null) {
+            PatientParent link = new PatientParent(invitation.getPatientId(), user.getId());
+            patientParentRepository.save(link);
+            log.info("Auto-linked user {} to patient {}", user.getId(), invitation.getPatientId());
+        }
+
         invitation.setStatus(Invitation.Status.ACCEPTED);
         invitationRepository.save(invitation);
 
         log.info("Invitation accepted — {} ({}) created", invitation.getEmail(), invitation.getRole());
+    }
+
+    /**
+     * Creates an invitation linked to a patient — called during inquiry conversion.
+     * When the invited user accepts, they are automatically linked to the patient.
+     * Returns the raw accept link (e.g. "/accept-invite?token=...").
+     */
+    public String createLinkedInvitation(
+            String email, Role role, UUID clinicId, UUID patientId,
+            UUID orgId, UUID invitedBy) {
+
+        Role effectiveRole = (role == Role.PATIENT || role == Role.PARENT) ? role : Role.PARENT;
+
+        if (userRepository.existsByEmail(email)) {
+            throw new ApiException(HttpStatus.CONFLICT, "A user with this email already exists");
+        }
+        if (invitationRepository.existsByEmailAndOrgIdAndStatus(email, orgId, Invitation.Status.PENDING)) {
+            throw new ApiException(HttpStatus.CONFLICT, "A pending invitation for this email already exists");
+        }
+
+        String rawToken = UUID.randomUUID() + "-" + UUID.randomUUID();
+
+        Invitation invitation = new Invitation();
+        invitation.setOrgId(orgId);
+        invitation.setClinicId(clinicId);
+        invitation.setInvitedBy(invitedBy);
+        invitation.setEmail(email);
+        invitation.setRole(effectiveRole);
+        invitation.setPatientId(patientId);
+        invitation.setTokenHash(sha256(rawToken));
+        invitation.setStatus(Invitation.Status.PENDING);
+        invitation.setExpiresAt(Instant.now().plus(EXPIRY_HOURS, ChronoUnit.HOURS));
+        invitationRepository.save(invitation);
+
+        log.info("Linked invitation created for {} ({}) → patient {}", email, effectiveRole, patientId);
+        return "/accept-invite?token=" + rawToken;
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────
