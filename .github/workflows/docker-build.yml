@@ -102,6 +102,13 @@ jobs:
           region: ${{ env.REGION }}
           image: ${{ env.IMAGE }}:sha-${{ steps.short-sha.outputs.value }}
           flags: '--allow-unauthenticated --min-instances=0 --max-instances=1 --memory=512Mi'
+          env_vars: |
+            SPRING_PROFILES_ACTIVE=prod
+            DB_URL=${{ secrets.DB_URL }}
+            DB_USER=${{ secrets.DB_USER }}
+            DB_PASS=${{ secrets.DB_PASS }}
+            JWT_SECRET=${{ secrets.JWT_SECRET }}
+            ORG_ID=${{ secrets.ORG_ID }}
 
   # ── Publish coverage to GitHub Pages ─────────────────────────────────────────
   publish-pages:
