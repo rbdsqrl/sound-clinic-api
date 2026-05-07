@@ -15,6 +15,8 @@ spring:
     enabled: false
 
 app:
+  cors:
+    allowed-origins: http://localhost:3000,http://localhost:5173
   jwt:
     secret: bXlTdXBlclNlY3JldEtleUZvckpXVEFuZEl0SXNWZXJ5TG9uZ0Vub3VnaA==
     access-token-expiry: 900
