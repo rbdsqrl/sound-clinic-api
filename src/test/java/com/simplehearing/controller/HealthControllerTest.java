@@ -26,6 +26,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @WebMvcTest(HealthController.class)
 @Import(SecurityConfig.class)
+@org.springframework.test.context.TestPropertySource(properties = {
+    "app.cors.allowed-origins=http://localhost:3000"
+})
 class HealthControllerTest {
 
     @MockBean
