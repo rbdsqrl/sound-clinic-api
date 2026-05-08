@@ -16,6 +16,7 @@ import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.Optional;
 
 @Service
 public class EmailService {
@@ -25,9 +26,12 @@ public class EmailService {
     private final JavaMailSender mailSender;
     private final EmailProperties props;
 
-    public EmailService(JavaMailSender mailSender, EmailProperties props) {
-        this.mailSender = mailSender;
+    public EmailService(Optional<JavaMailSender> mailSender, EmailProperties props) {
+        this.mailSender = mailSender.orElse(null);
         this.props = props;
+        if (this.mailSender == null) {
+            log.warn("No JavaMailSender configured — email sending is disabled");
+        }
     }
 
     @Async
@@ -98,6 +102,10 @@ public class EmailService {
     }
 
     private void send(String to, String subject, String htmlBody) {
+        if (mailSender == null) {
+            log.warn("Email skipped (no SMTP configured) — to={} subject={}", to, subject);
+            return;
+        }
         try {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, "utf-8");
