@@ -52,7 +52,7 @@ public class SubscriptionController {
 
     @Operation(summary = "List subscriptions for a patient")
     @GetMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST', 'DOCTOR', 'PARENT')")
     public ResponseEntity<ApiResponse<List<SubscriptionResponse>>> list(
             @RequestParam UUID patientId,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -119,7 +119,7 @@ public class SubscriptionController {
 
     @Operation(summary = "Record payment and discount for a subscription")
     @PatchMapping("/{id}/payment")
-    @PreAuthorize("hasAnyRole('OFFICE_ADMIN', 'ADMIN', 'BUSINESS_OWNER')")
+    @PreAuthorize("hasAnyRole('OFFICE_ADMIN', 'ADMIN', 'BUSINESS_OWNER', 'PARENT')")
     public ResponseEntity<ApiResponse<SubscriptionResponse>> recordPayment(
             @PathVariable UUID id,
             @Valid @RequestBody UpdatePaymentRequest request,

@@ -10,6 +10,7 @@ import com.simplehearing.auth.security.UserPrincipal;
 import com.simplehearing.clinic.entity.Clinic;
 import com.simplehearing.clinic.repository.ClinicRepository;
 import com.simplehearing.common.exception.ApiException;
+import com.simplehearing.notification.EmailService;
 import com.simplehearing.patient.entity.Patient;
 import com.simplehearing.patient.repository.PatientRepository;
 import com.simplehearing.patient.repository.TherapistPatientRepository;
@@ -38,19 +39,22 @@ public class AppointmentService {
     private final PatientRepository patientRepository;
     private final ClinicRepository clinicRepository;
     private final TherapistPatientRepository therapistPatientRepository;
+    private final EmailService emailService;
 
     public AppointmentService(TherapistSlotRepository slotRepository,
                               AppointmentRepository appointmentRepository,
                               UserRepository userRepository,
                               PatientRepository patientRepository,
                               ClinicRepository clinicRepository,
-                              TherapistPatientRepository therapistPatientRepository) {
+                              TherapistPatientRepository therapistPatientRepository,
+                              EmailService emailService) {
         this.slotRepository = slotRepository;
         this.appointmentRepository = appointmentRepository;
         this.userRepository = userRepository;
         this.patientRepository = patientRepository;
         this.clinicRepository = clinicRepository;
         this.therapistPatientRepository = therapistPatientRepository;
+        this.emailService = emailService;
     }
 
     // ── Therapist Slots ───────────────────────────────────────────────────────
@@ -183,6 +187,16 @@ public class AppointmentService {
         appt.setNotes(req.notes());
 
         Appointment saved = appointmentRepository.save(appt);
+
+        emailService.sendAppointmentReminderEmail(
+                principal.getUser().getEmail(),
+                patient.getFirstName() + " " + patient.getLastName(),
+                therapist.getFirstName() + " " + therapist.getLastName(),
+                req.appointmentDate().toString(),
+                req.startTime().toString(),
+                clinic.getName()
+        );
+
         return AppointmentResponse.from(saved,
                 patient.getFirstName(), patient.getLastName(),
                 therapist.getFirstName(), therapist.getLastName(),

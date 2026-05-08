@@ -14,6 +14,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/invitations")
@@ -46,6 +47,16 @@ public class InvitationController {
         InviteResponse response = invitationService.invite(request, principal);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Invitation sent", response));
+    }
+
+    @PostMapping("/{id}/resend")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN')")
+    public ResponseEntity<ApiResponse<InviteResponse>> resend(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        InviteResponse response = invitationService.resend(id, principal.getOrgId());
+        return ResponseEntity.ok(ApiResponse.success("Invitation resent", response));
     }
 
     /**

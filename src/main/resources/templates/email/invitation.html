@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 0; }
+    .container { max-width: 600px; margin: 40px auto; background: #ffffff; border-radius: 8px; padding: 40px; }
+    .header { text-align: center; margin-bottom: 32px; }
+    .header h1 { color: #1a1a2e; font-size: 24px; margin: 0; }
+    .content { color: #333333; line-height: 1.6; }
+    .button-wrap { text-align: center; margin: 28px 0; }
+    .button { display: inline-block; padding: 14px 32px; background: #4f46e5; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 15px; }
+    .link-box { word-break: break-all; background: #f4f4f4; padding: 12px 16px; border-radius: 4px; font-size: 13px; color: #555; margin-top: 8px; }
+    .footer { margin-top: 40px; font-size: 12px; color: #999999; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>You've been invited!</h1>
+    </div>
+    <div class="content">
+      <p>You have been invited to join <strong>{{ORG_NAME}}</strong> as a <strong>{{ROLE}}</strong>.</p>
+      <p>Click the button below to create your account. This link expires in <strong>{{EXPIRY_HOURS}} hours</strong>.</p>
+      <div class="button-wrap">
+        <a href="{{ACCEPT_LINK}}" class="button">Accept Invitation</a>
+      </div>
+      <p>Or copy this link into your browser:</p>
+      <div class="link-box">{{ACCEPT_LINK}}</div>
+    </div>
+    <div class="footer">
+      <p>If you were not expecting this invitation, you can safely ignore this email.</p>
+    </div>
+  </div>
+</body>
+</html>

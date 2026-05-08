@@ -3,11 +3,14 @@ package com.simplehearing.invitation.service;
 import com.simplehearing.auth.security.UserPrincipal;
 import com.simplehearing.clinic.repository.ClinicRepository;
 import com.simplehearing.common.exception.ApiException;
+import com.simplehearing.common.exception.ResourceNotFoundException;
 import com.simplehearing.invitation.dto.AcceptInviteRequest;
 import com.simplehearing.invitation.dto.InviteRequest;
 import com.simplehearing.invitation.dto.InviteResponse;
 import com.simplehearing.invitation.entity.Invitation;
 import com.simplehearing.invitation.repository.InvitationRepository;
+import com.simplehearing.notification.EmailService;
+import com.simplehearing.organisation.repository.OrganisationRepository;
 import com.simplehearing.patient.entity.PatientParent;
 import com.simplehearing.patient.repository.PatientParentRepository;
 import com.simplehearing.user.entity.User;
@@ -53,17 +56,23 @@ public class InvitationService {
     private final ClinicRepository clinicRepository;
     private final PasswordEncoder passwordEncoder;
     private final PatientParentRepository patientParentRepository;
+    private final OrganisationRepository organisationRepository;
+    private final EmailService emailService;
 
     public InvitationService(InvitationRepository invitationRepository,
                              UserRepository userRepository,
                              ClinicRepository clinicRepository,
                              PasswordEncoder passwordEncoder,
-                             PatientParentRepository patientParentRepository) {
+                             PatientParentRepository patientParentRepository,
+                             OrganisationRepository organisationRepository,
+                             EmailService emailService) {
         this.invitationRepository = invitationRepository;
         this.userRepository = userRepository;
         this.clinicRepository = clinicRepository;
         this.passwordEncoder = passwordEncoder;
         this.patientParentRepository = patientParentRepository;
+        this.organisationRepository = organisationRepository;
+        this.emailService = emailService;
     }
 
     /**
@@ -112,16 +121,17 @@ public class InvitationService {
 
         log.info("Invitation created for {} ({}) by {}", request.email(), request.role(), caller.getId());
 
-        // No email service wired yet — return the accept link so the admin can share it manually.
-        // When an email service is added, send the link here and omit acceptLink from the response.
-        String acceptLink = "/accept-invite?token=" + rawToken;
+        String acceptPath = "/accept-invite?token=" + rawToken;
+        String orgName = organisationRepository.findById(caller.getOrgId())
+                .map(o -> o.getName()).orElse("Simple Hearing");
+        emailService.sendInvitationEmail(request.email(), acceptPath, request.role(), orgName);
 
         String clinicName = invitation.getClinicId() != null
                 ? clinicRepository.findById(invitation.getClinicId())
                         .map(c -> c.getName()).orElse(null)
                 : null;
 
-        return InviteResponse.from(invitation, acceptLink, clinicName);
+        return InviteResponse.from(invitation, null, clinicName);
     }
 
     public List<InviteResponse> listForOrg(UserPrincipal caller) {
@@ -184,6 +194,42 @@ public class InvitationService {
         invitationRepository.save(invitation);
 
         log.info("Invitation accepted — {} ({}) created", invitation.getEmail(), invitation.getRole());
+
+        String orgName = organisationRepository.findById(invitation.getOrgId())
+                .map(o -> o.getName()).orElse("Simple Hearing");
+        emailService.sendWelcomeEmail(user.getEmail(), user.getFirstName(), orgName);
+    }
+
+    /**
+     * Regenerates the token for a pending invitation and re-sends the invite email.
+     * The old token is invalidated — only the new one is valid.
+     */
+    public InviteResponse resend(UUID invitationId, UUID orgId) {
+        Invitation invitation = invitationRepository.findById(invitationId)
+                .filter(i -> i.getOrgId().equals(orgId))
+                .orElseThrow(() -> new ResourceNotFoundException("Invitation not found"));
+
+        if (invitation.getStatus() != Invitation.Status.PENDING) {
+            throw new ApiException(HttpStatus.CONFLICT, "Only pending invitations can be resent");
+        }
+
+        String rawToken = UUID.randomUUID() + "-" + UUID.randomUUID();
+        invitation.setTokenHash(sha256(rawToken));
+        invitation.setExpiresAt(Instant.now().plus(EXPIRY_HOURS, ChronoUnit.HOURS));
+        invitationRepository.save(invitation);
+
+        String acceptPath = "/accept-invite?token=" + rawToken;
+        String orgName = organisationRepository.findById(orgId)
+                .map(o -> o.getName()).orElse("Simple Hearing");
+        emailService.sendInvitationEmail(invitation.getEmail(), acceptPath, invitation.getRole(), orgName);
+
+        log.info("Invitation resent for {} by regenerating token", invitation.getEmail());
+
+        String clinicName = invitation.getClinicId() != null
+                ? clinicRepository.findById(invitation.getClinicId()).map(c -> c.getName()).orElse(null)
+                : null;
+
+        return InviteResponse.from(invitation, null, clinicName);
     }
 
     /**

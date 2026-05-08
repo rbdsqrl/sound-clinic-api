@@ -10,6 +10,7 @@ import com.simplehearing.leave.dto.ReviewLeaveRequest;
 import com.simplehearing.leave.entity.Leave;
 import com.simplehearing.leave.enums.LeaveStatus;
 import com.simplehearing.leave.repository.LeaveRepository;
+import com.simplehearing.notification.EmailService;
 import com.simplehearing.user.entity.User;
 import com.simplehearing.user.enums.Role;
 import com.simplehearing.user.repository.UserRepository;
@@ -36,10 +37,13 @@ public class LeaveController {
 
     private final LeaveRepository leaveRepository;
     private final UserRepository userRepository;
+    private final EmailService emailService;
 
-    public LeaveController(LeaveRepository leaveRepository, UserRepository userRepository) {
+    public LeaveController(LeaveRepository leaveRepository, UserRepository userRepository,
+                           EmailService emailService) {
         this.leaveRepository = leaveRepository;
         this.userRepository = userRepository;
+        this.emailService = emailService;
     }
 
     // ── Apply for leave (therapist / doctor) ─────────────────────────────────
@@ -157,6 +161,20 @@ public class LeaveController {
 
         User therapist = userMap.get(saved.getTherapistId());
         User reviewer  = userMap.get(saved.getReviewedBy());
+
+        if (therapist != null) {
+            String reviewerName = (reviewer != null)
+                    ? reviewer.getFirstName() + " " + reviewer.getLastName()
+                    : "Administrator";
+            emailService.sendLeaveStatusEmail(
+                    therapist.getEmail(),
+                    therapist.getFirstName() + " " + therapist.getLastName(),
+                    saved.getLeaveDate().toString(),
+                    saved.getLeaveType().name(),
+                    newStatus.name(),
+                    reviewerName
+            );
+        }
 
         return ResponseEntity.ok(ApiResponse.success(LeaveResponse.from(saved,
                 therapist != null ? therapist.getFirstName() : "",
