@@ -63,7 +63,9 @@ logging:
 
 app:
   cors:
-    allowed-origins: https://sound-clinic-website.nanil-mines.workers.dev
+    allowed-origins:
+      - https://sound-clinic-website.nanil-mines.workers.dev
+      - http://localhost:3000  # temporary: allow local frontend during dark production; remove once dark prod is retired
   jwt:
     secret: ${JWT_SECRET}
   org-id: ${ORG_ID:}
