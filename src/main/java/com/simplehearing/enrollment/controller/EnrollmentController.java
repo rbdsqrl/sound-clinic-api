@@ -1,7 +1,5 @@
 package com.simplehearing.enrollment.controller;
 
-import com.simplehearing.appointment.entity.TherapistSlot;
-import com.simplehearing.appointment.repository.TherapistSlotRepository;
 import com.simplehearing.auth.security.UserPrincipal;
 import com.simplehearing.clinic.repository.ClinicRepository;
 import com.simplehearing.common.dto.ApiResponse;
@@ -25,6 +23,7 @@ import com.simplehearing.session.service.SessionGenerationService;
 import com.simplehearing.subscription.entity.Subscription;
 import com.simplehearing.subscription.repository.SubscriptionRepository;
 import com.simplehearing.user.entity.User;
+import com.simplehearing.user.enums.Role;
 import com.simplehearing.user.repository.UserRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -35,7 +34,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.*;
@@ -52,7 +50,6 @@ public class EnrollmentController {
     private final PatientRepository patientRepository;
     private final UserRepository userRepository;
     private final ClinicRepository clinicRepository;
-    private final TherapistSlotRepository slotRepository;
     private final LeaveRepository leaveRepository;
     private final SessionGenerationService sessionGenerationService;
 
@@ -63,7 +60,6 @@ public class EnrollmentController {
             PatientRepository patientRepository,
             UserRepository userRepository,
             ClinicRepository clinicRepository,
-            TherapistSlotRepository slotRepository,
             LeaveRepository leaveRepository,
             SessionGenerationService sessionGenerationService) {
         this.enrollmentRepository = enrollmentRepository;
@@ -72,7 +68,6 @@ public class EnrollmentController {
         this.patientRepository = patientRepository;
         this.userRepository = userRepository;
         this.clinicRepository = clinicRepository;
-        this.slotRepository = slotRepository;
         this.leaveRepository = leaveRepository;
         this.sessionGenerationService = sessionGenerationService;
     }
@@ -88,62 +83,42 @@ public class EnrollmentController {
             @RequestParam LocalDate startDate,
             @AuthenticationPrincipal UserPrincipal principal) {
 
-        LocalTime endTime = startTime.plusMinutes(durationMinutes);
+        // 1. All therapists and doctors in the org
+        List<User> therapists = userRepository.findByOrgIdAndRoleIn(
+                principal.getOrgId(), List.of(Role.THERAPIST, Role.DOCTOR));
 
-        // 1. Any slot in the org where the slot covers the requested time window (day-agnostic)
-        List<TherapistSlot> matchingSlots = slotRepository.findByOrgId(principal.getOrgId())
-                .stream()
-                .filter(s -> !s.getStartTime().isAfter(startTime)
-                        && !s.getEndTime().isBefore(endTime))
-                .toList();
-
-        if (matchingSlots.isEmpty()) {
+        if (therapists.isEmpty()) {
             return ResponseEntity.ok(ApiResponse.success(List.of()));
         }
 
-        // 2. Collect candidate therapist IDs (distinct)
-        Set<UUID> candidateIds = matchingSlots.stream()
-                .map(TherapistSlot::getTherapistId)
-                .collect(Collectors.toSet());
-
-        // 3. Exclude therapists on approved leave on startDate
+        // 2. Exclude those on approved leave on startDate
         Set<UUID> onLeave = leaveRepository
                 .findByOrgIdAndLeaveDateAndStatus(principal.getOrgId(), startDate, LeaveStatus.APPROVED)
                 .stream()
                 .map(Leave::getTherapistId)
                 .collect(Collectors.toSet());
 
-        candidateIds.removeAll(onLeave);
+        List<User> available = therapists.stream()
+                .filter(u -> !onLeave.contains(u.getId()))
+                .toList();
 
-        if (candidateIds.isEmpty()) {
+        if (available.isEmpty()) {
             return ResponseEntity.ok(ApiResponse.success(List.of()));
         }
 
-        // 4. Fetch user details and build response
-        Map<UUID, User> userMap = userRepository.findAllById(candidateIds).stream()
-                .collect(Collectors.toMap(User::getId, u -> u));
-
-        // Build a map: therapistId → clinicId from slots
-        Map<UUID, UUID> therapistClinic = matchingSlots.stream()
-                .collect(Collectors.toMap(
-                        TherapistSlot::getTherapistId,
-                        TherapistSlot::getClinicId,
-                        (a, b) -> a));   // keep first if multiple slots
-
-        // Pre-fetch clinic names for the clinic IDs we need
-        Set<UUID> clinicIds = new HashSet<>(therapistClinic.values());
+        // 3. Fetch clinic names
+        Set<UUID> clinicIds = available.stream()
+                .map(User::getClinicId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
         Map<UUID, String> clinicNames = clinicRepository.findAllById(clinicIds).stream()
-                .collect(Collectors.toMap(
-                        c -> c.getId(),
-                        c -> c.getName()));
+                .collect(Collectors.toMap(c -> c.getId(), c -> c.getName()));
 
-        List<AvailableTherapistResponse> result = candidateIds.stream()
-                .filter(userMap::containsKey)
-                .map(tid -> {
-                    User u = userMap.get(tid);
-                    UUID clinicId = therapistClinic.get(tid);
-                    String clinicName = clinicNames.getOrDefault(clinicId, "");
-                    return new AvailableTherapistResponse(tid, u.getFirstName(), u.getLastName(), clinicId, clinicName);
+        List<AvailableTherapistResponse> result = available.stream()
+                .map(u -> {
+                    UUID clinicId = u.getClinicId();
+                    String clinicName = clinicId != null ? clinicNames.getOrDefault(clinicId, "") : "";
+                    return new AvailableTherapistResponse(u.getId(), u.getFirstName(), u.getLastName(), clinicId, clinicName);
                 })
                 .sorted(Comparator.comparing(AvailableTherapistResponse::firstName))
                 .toList();
