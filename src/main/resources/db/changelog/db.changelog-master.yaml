@@ -77,3 +77,18 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/026-make-enrollment-day-optional.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/027-add-session-content-fields.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/028-create-session-attachments.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/029-create-tasks.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/030-create-task-comments.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/031-create-task-attachments.sql
+      relativeToChangelogFile: false

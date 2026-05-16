@@ -25,6 +25,8 @@ public record TherapySessionResponse(
         LocalTime endTime,
         TherapySessionStatus status,
         String notes,
+        String feedback,
+        String progressReport,
         Instant completedAt
 ) {
     public static TherapySessionResponse from(
@@ -52,7 +54,8 @@ public record TherapySessionResponse(
                 session.getEndTime(),
                 session.getStatus(),
                 session.getNotes(),
-                session.getCompletedAt()
-        );
+                session.getFeedback(),
+                session.getProgressReport(),
+                session.getCompletedAt());
     }
 }

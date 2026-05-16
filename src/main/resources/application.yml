@@ -47,6 +47,12 @@ logging:
   level:
     com.zaxxer.hikari.pool.HikariPool: ERROR
 
+spring:
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+
 app:
   cors:
     allowed-origins: http://localhost:3000,http://localhost:5173,https://sound-clinic-website.nanil-mines.workers.dev
@@ -55,7 +61,17 @@ app:
     access-token-expiry: 900       # 15 minutes in seconds
     refresh-token-expiry: 604800   # 7 days in seconds
   storage:
-    local-path: ${STORAGE_PATH:./uploads}
+    provider: local            # 'local' (default) or 's3'
+    base-url: ${BASE_URL:http://localhost:8080}
+    local:
+      base-dir: ${user.home}/.simplehearing/uploads
+    # ── Switch to S3 in production ──────────────────────────────────────────
+    # provider: s3
+    # s3:
+    #   bucket: ${STORAGE_S3_BUCKET}
+    #   region: ${STORAGE_S3_REGION:ap-south-1}
+    #   access-key-id: ${AWS_ACCESS_KEY_ID}
+    #   secret-access-key: ${AWS_SECRET_ACCESS_KEY}
   email:
     from-address: ${EMAIL_FROM:noreply@simplehearing.com}
     from-name: ${EMAIL_FROM_NAME:Simple Hearing}

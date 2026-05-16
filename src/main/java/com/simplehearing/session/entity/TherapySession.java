@@ -48,6 +48,12 @@ public class TherapySession {
     @Column(columnDefinition = "TEXT")
     private String notes;
 
+    @Column(columnDefinition = "TEXT")
+    private String feedback;
+
+    @Column(name = "progress_report", columnDefinition = "TEXT")
+    private String progressReport;
+
     @Column(name = "completed_by")
     private UUID completedBy;
 
@@ -81,6 +87,10 @@ public class TherapySession {
     public void setStatus(TherapySessionStatus status) { this.status = status; }
     public String getNotes() { return notes; }
     public void setNotes(String notes) { this.notes = notes; }
+    public String getFeedback() { return feedback; }
+    public void setFeedback(String feedback) { this.feedback = feedback; }
+    public String getProgressReport() { return progressReport; }
+    public void setProgressReport(String progressReport) { this.progressReport = progressReport; }
     public UUID getCompletedBy() { return completedBy; }
     public void setCompletedBy(UUID completedBy) { this.completedBy = completedBy; }
     public Instant getCompletedAt() { return completedAt; }

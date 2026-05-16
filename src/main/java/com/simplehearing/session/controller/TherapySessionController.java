@@ -10,11 +10,16 @@ import com.simplehearing.patient.entity.Patient;
 import com.simplehearing.patient.repository.PatientRepository;
 import com.simplehearing.program.entity.Program;
 import com.simplehearing.program.repository.ProgramRepository;
+import com.simplehearing.session.dto.SessionAttachmentResponse;
 import com.simplehearing.session.dto.TherapySessionResponse;
+import com.simplehearing.session.dto.UpdateSessionNotesRequest;
 import com.simplehearing.session.dto.UpdateSessionStatusRequest;
+import com.simplehearing.session.entity.SessionAttachment;
 import com.simplehearing.session.entity.TherapySession;
 import com.simplehearing.session.enums.TherapySessionStatus;
+import com.simplehearing.session.repository.SessionAttachmentRepository;
 import com.simplehearing.session.repository.TherapySessionRepository;
+import com.simplehearing.storage.StorageService;
 import com.simplehearing.subscription.entity.Subscription;
 import com.simplehearing.subscription.repository.SubscriptionRepository;
 import com.simplehearing.user.entity.User;
@@ -29,7 +34,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.*;
@@ -46,6 +53,8 @@ public class TherapySessionController {
     private final ProgramRepository programRepository;
     private final PatientRepository patientRepository;
     private final UserRepository userRepository;
+    private final SessionAttachmentRepository attachmentRepository;
+    private final StorageService storageService;
 
     public TherapySessionController(
             TherapySessionRepository sessionRepository,
@@ -53,13 +62,17 @@ public class TherapySessionController {
             SubscriptionRepository subscriptionRepository,
             ProgramRepository programRepository,
             PatientRepository patientRepository,
-            UserRepository userRepository) {
-        this.sessionRepository = sessionRepository;
+            UserRepository userRepository,
+            SessionAttachmentRepository attachmentRepository,
+            StorageService storageService) {
+        this.sessionRepository    = sessionRepository;
         this.enrollmentRepository = enrollmentRepository;
         this.subscriptionRepository = subscriptionRepository;
-        this.programRepository = programRepository;
-        this.patientRepository = patientRepository;
-        this.userRepository = userRepository;
+        this.programRepository    = programRepository;
+        this.patientRepository    = patientRepository;
+        this.userRepository       = userRepository;
+        this.attachmentRepository = attachmentRepository;
+        this.storageService       = storageService;
     }
 
     // ── List sessions (calendar / patient view) ────────────────────────────────
@@ -78,12 +91,10 @@ public class TherapySessionController {
         LocalDate end   = to   != null ? to   : start.plusMonths(1).minusDays(1);
 
         User caller = principal.getUser();
-        Role role = caller.getRole();
+        Role role   = caller.getRole();
 
         List<TherapySession> sessions;
-
         if (role == Role.THERAPIST || role == Role.DOCTOR) {
-            // Therapists always see only their own sessions
             sessions = sessionRepository
                     .findByOrgIdAndTherapistIdAndSessionDateBetweenOrderBySessionDateAscStartTimeAsc(
                             principal.getOrgId(), principal.getId(), start, end);
@@ -115,9 +126,18 @@ public class TherapySessionController {
 
         List<TherapySession> sessions = sessionRepository.findByEnrollmentIdOrderBySessionNumberAsc(enrollmentId);
 
-        // Security: ensure the enrollment belongs to this org
         if (!sessions.isEmpty() && !sessions.get(0).getOrgId().equals(principal.getOrgId())) {
             throw new ApiException(HttpStatus.FORBIDDEN, "Access denied");
+        }
+
+        // Therapists and doctors can only see sessions for enrollments assigned to them
+        Role role = principal.getUser().getRole();
+        if (role == Role.THERAPIST || role == Role.DOCTOR) {
+            enrollmentRepository.findById(enrollmentId).ifPresent(enrollment -> {
+                if (!enrollment.getTherapistId().equals(principal.getId())) {
+                    throw new ApiException(HttpStatus.FORBIDDEN, "Access denied");
+                }
+            });
         }
 
         return ResponseEntity.ok(ApiResponse.success(enrich(sessions)));
@@ -133,29 +153,15 @@ public class TherapySessionController {
             @Valid @RequestBody UpdateSessionStatusRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
 
-        TherapySession session = sessionRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Therapy session not found"));
-
-        if (!session.getOrgId().equals(principal.getOrgId())) {
-            throw new ApiException(HttpStatus.FORBIDDEN, "Access denied");
-        }
-
-        // Therapists can only update their own sessions
-        User caller = principal.getUser();
-        if ((caller.getRole() == Role.THERAPIST || caller.getRole() == Role.DOCTOR)
-                && !session.getTherapistId().equals(principal.getId())) {
-            throw new ApiException(HttpStatus.FORBIDDEN, "You can only update your own sessions");
-        }
+        TherapySession session = findOwned(id, principal);
+        requireTherapistOwnership(session, principal);
 
         session.setStatus(request.status());
-        if (request.notes() != null) {
-            session.setNotes(request.notes());
-        }
+        if (request.notes() != null) session.setNotes(request.notes());
+
         if (request.status() == TherapySessionStatus.COMPLETED) {
             session.setCompletedBy(principal.getId());
             session.setCompletedAt(Instant.now());
-
-            // Increment sessionsCompleted on the enrollment
             enrollmentRepository.findById(session.getEnrollmentId()).ifPresent(enrollment -> {
                 enrollment.setSessionsCompleted(enrollment.getSessionsCompleted() + 1);
                 enrollmentRepository.save(enrollment);
@@ -163,11 +169,123 @@ public class TherapySessionController {
         }
 
         TherapySession saved = sessionRepository.save(session);
-        List<TherapySessionResponse> enriched = enrich(List.of(saved));
-        return ResponseEntity.ok(ApiResponse.success(enriched.get(0)));
+        return ResponseEntity.ok(ApiResponse.success(enrich(List.of(saved)).get(0)));
     }
 
-    // ── Enrichment helper ─────────────────────────────────────────────────────
+    // ── Update session notes / feedback / progress report ─────────────────────
+
+    @Operation(summary = "Update session feedback, progress report, and notes")
+    @PatchMapping("/{id}/notes")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'ADMIN', 'BUSINESS_OWNER')")
+    public ResponseEntity<ApiResponse<TherapySessionResponse>> updateNotes(
+            @PathVariable UUID id,
+            @RequestBody UpdateSessionNotesRequest request,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        TherapySession session = findOwned(id, principal);
+        requireTherapistOwnership(session, principal);
+
+        if (request.feedback()       != null) session.setFeedback(request.feedback());
+        if (request.progressReport() != null) session.setProgressReport(request.progressReport());
+        if (request.notes()          != null) session.setNotes(request.notes());
+
+        TherapySession saved = sessionRepository.save(session);
+        return ResponseEntity.ok(ApiResponse.success(enrich(List.of(saved)).get(0)));
+    }
+
+    // ── Upload attachment ──────────────────────────────────────────────────────
+
+    @Operation(summary = "Upload a file attachment to a session")
+    @PostMapping("/{id}/attachments")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'ADMIN', 'BUSINESS_OWNER')")
+    public ResponseEntity<ApiResponse<SessionAttachmentResponse>> uploadAttachment(
+            @PathVariable UUID id,
+            @RequestParam("file") MultipartFile file,
+            @AuthenticationPrincipal UserPrincipal principal) throws IOException {
+
+        TherapySession session = findOwned(id, principal);
+        requireTherapistOwnership(session, principal);
+
+        String url = storageService.store(file, "sessions/" + id);
+
+        SessionAttachment att = new SessionAttachment();
+        att.setOrgId(session.getOrgId());
+        att.setSessionId(id);
+        att.setTherapistId(principal.getId());
+        att.setFileName(file.getOriginalFilename() != null ? file.getOriginalFilename() : "file");
+        att.setFileUrl(url);
+        att.setContentType(file.getContentType());
+        att.setFileSizeBytes(file.getSize());
+
+        SessionAttachment saved = attachmentRepository.save(att);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(SessionAttachmentResponse.from(saved)));
+    }
+
+    // ── List attachments ───────────────────────────────────────────────────────
+
+    @Operation(summary = "List all attachments for a session")
+    @GetMapping("/{id}/attachments")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST', 'DOCTOR', 'PARENT')")
+    public ResponseEntity<ApiResponse<List<SessionAttachmentResponse>>> listAttachments(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        TherapySession session = findOwned(id, principal);
+
+        List<SessionAttachmentResponse> result = attachmentRepository
+                .findBySessionIdOrderByCreatedAtAsc(session.getId())
+                .stream().map(SessionAttachmentResponse::from).toList();
+
+        return ResponseEntity.ok(ApiResponse.success(result));
+    }
+
+    // ── Delete attachment ──────────────────────────────────────────────────────
+
+    @Operation(summary = "Delete a session attachment")
+    @DeleteMapping("/{id}/attachments/{attachmentId}")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'ADMIN', 'BUSINESS_OWNER')")
+    public ResponseEntity<ApiResponse<Void>> deleteAttachment(
+            @PathVariable UUID id,
+            @PathVariable UUID attachmentId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        SessionAttachment att = attachmentRepository.findById(attachmentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Attachment not found"));
+
+        if (!att.getSessionId().equals(id) || !att.getOrgId().equals(principal.getOrgId())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Access denied");
+        }
+
+        User caller = principal.getUser();
+        if ((caller.getRole() == Role.THERAPIST || caller.getRole() == Role.DOCTOR)
+                && !att.getTherapistId().equals(principal.getId())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "You can only delete your own attachments");
+        }
+
+        storageService.delete(att.getFileUrl());
+        attachmentRepository.delete(att);
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    // ── Private helpers ────────────────────────────────────────────────────────
+
+    private TherapySession findOwned(UUID id, UserPrincipal principal) {
+        TherapySession session = sessionRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Therapy session not found"));
+        if (!session.getOrgId().equals(principal.getOrgId())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Access denied");
+        }
+        return session;
+    }
+
+    private void requireTherapistOwnership(TherapySession session, UserPrincipal principal) {
+        User caller = principal.getUser();
+        if ((caller.getRole() == Role.THERAPIST || caller.getRole() == Role.DOCTOR)
+                && !session.getTherapistId().equals(principal.getId())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "You can only modify your own sessions");
+        }
+    }
 
     private List<TherapySessionResponse> enrich(List<TherapySession> sessions) {
         if (sessions.isEmpty()) return List.of();
@@ -176,32 +294,31 @@ public class TherapySessionController {
         Set<UUID> therapistIds  = sessions.stream().map(TherapySession::getTherapistId).collect(Collectors.toSet());
         Set<UUID> enrollmentIds = sessions.stream().map(TherapySession::getEnrollmentId).collect(Collectors.toSet());
 
-        Map<UUID, Patient> patientMap = patientRepository.findAllById(patientIds).stream()
+        Map<UUID, Patient> patientMap   = patientRepository.findAllById(patientIds).stream()
                 .collect(Collectors.toMap(Patient::getId, p -> p));
-        Map<UUID, User> therapistMap = userRepository.findAllById(therapistIds).stream()
+        Map<UUID, User>    therapistMap = userRepository.findAllById(therapistIds).stream()
                 .collect(Collectors.toMap(User::getId, u -> u));
 
-        // enrollment → subscription → program
         Map<UUID, Integer> totalSessionsMap = new HashMap<>();
-        Map<UUID, String> programNameMap = new HashMap<>();
+        Map<UUID, String>  programNameMap   = new HashMap<>();
 
         for (UUID eid : enrollmentIds) {
-            enrollmentRepository.findById(eid).ifPresent(enrollment -> {
+            enrollmentRepository.findById(eid).ifPresent(enrollment ->
                 subscriptionRepository.findById(enrollment.getSubscriptionId()).ifPresent(sub -> {
                     totalSessionsMap.put(eid, sub.getNumSessions());
                     programRepository.findById(sub.getProgramId()).ifPresent(prog ->
                             programNameMap.put(eid, prog.getName()));
-                });
-            });
+                })
+            );
         }
 
         return sessions.stream().map(s -> {
-            Patient patient = patientMap.get(s.getPatientId());
-            User therapist  = therapistMap.get(s.getTherapistId());
+            Patient patient   = patientMap.get(s.getPatientId());
+            User    therapist = therapistMap.get(s.getTherapistId());
             return TherapySessionResponse.from(
                     s,
-                    patient  != null ? patient.getFirstName()   : "",
-                    patient  != null ? patient.getLastName()    : "",
+                    patient   != null ? patient.getFirstName()   : "",
+                    patient   != null ? patient.getLastName()     : "",
                     therapist != null ? therapist.getFirstName() : "",
                     therapist != null ? therapist.getLastName()  : "",
                     programNameMap.getOrDefault(s.getEnrollmentId(), "Unknown Program"),

@@ -41,6 +41,7 @@ public class SecurityConfig {
         "/api/v1/public/**",            // public org info for the landing page
         "/api/v1/inquiries",            // public inquiry form submission (POST only; GET is role-guarded via @PreAuthorize)
         "/api/v1/payments/webhook",     // Razorpay webhook — no JWT, signature verified in controller
+        "/api/v1/files/**",             // locally stored session attachments (images/videos)
         "/swagger-ui/**",
         "/swagger-ui.html",
         "/v3/api-docs/**",
