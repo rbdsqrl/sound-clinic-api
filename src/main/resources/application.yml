@@ -24,6 +24,10 @@ spring:
     properties:
       mail.smtp.auth: ${SMTP_AUTH:false}
       mail.smtp.starttls.enable: ${SMTP_STARTTLS:false}
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
 
 server:
   port: 8080
@@ -46,12 +50,6 @@ springdoc:
 logging:
   level:
     com.zaxxer.hikari.pool.HikariPool: ERROR
-
-spring:
-  servlet:
-    multipart:
-      max-file-size: 100MB
-      max-request-size: 100MB
 
 app:
   cors:
