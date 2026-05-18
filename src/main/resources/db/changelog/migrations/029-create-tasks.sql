@@ -2,7 +2,7 @@
 
 --changeset simplehearing:029-create-tasks
 CREATE TABLE tasks (
-    id              UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+    id              UUID         PRIMARY KEY,
     org_id          UUID         NOT NULL,
     title           VARCHAR(255) NOT NULL,
     description     TEXT,

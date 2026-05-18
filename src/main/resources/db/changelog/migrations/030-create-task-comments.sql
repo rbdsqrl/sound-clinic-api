@@ -2,7 +2,7 @@
 
 --changeset simplehearing:030-create-task-comments
 CREATE TABLE task_comments (
-    id          UUID      PRIMARY KEY DEFAULT gen_random_uuid(),
+    id          UUID      PRIMARY KEY,
     org_id      UUID      NOT NULL,
     task_id     UUID      NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
     author_id   UUID      NOT NULL REFERENCES users(id),

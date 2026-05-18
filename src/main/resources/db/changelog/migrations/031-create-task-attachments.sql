@@ -2,7 +2,7 @@
 
 --changeset simplehearing:031-create-task-attachments
 CREATE TABLE task_attachments (
-    id               UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    id               UUID          PRIMARY KEY,
     org_id           UUID          NOT NULL,
     task_id          UUID          NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
     uploaded_by      UUID          NOT NULL REFERENCES users(id),
