@@ -200,9 +200,10 @@ public class TherapySessionController {
         TherapySession session = findOwned(id, principal);
         requireTherapistOwnership(session, principal);
 
-        if (request.feedback()       != null) session.setFeedback(request.feedback());
-        if (request.progressReport() != null) session.setProgressReport(request.progressReport());
-        if (request.notes()          != null) session.setNotes(request.notes());
+        if (request.feedback()          != null) session.setFeedback(request.feedback());
+        if (request.progressReport()    != null) session.setProgressReport(request.progressReport());
+        if (request.notes()             != null) session.setNotes(request.notes());
+        if (request.performanceScore()  != null) session.setPerformanceScore(request.performanceScore());
 
         TherapySession saved = sessionRepository.save(session);
         return ResponseEntity.ok(ApiResponse.success(enrich(List.of(saved)).get(0)));

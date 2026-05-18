@@ -95,3 +95,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/032-task-multi-assignee.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/033-session-performance-score.sql
+      relativeToChangelogFile: false

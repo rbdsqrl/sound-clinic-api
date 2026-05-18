@@ -47,6 +47,14 @@ public class PatientController {
         return ResponseEntity.ok(ApiResponse.success(patientService.listForOrg(principal)));
     }
 
+    @Operation(summary = "Patients whose birthday falls in the next 30 days")
+    @GetMapping("/upcoming-birthdays")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST', 'DOCTOR')")
+    public ResponseEntity<ApiResponse<List<UpcomingBirthdayResponse>>> upcomingBirthdays(
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(patientService.upcomingBirthdays(principal)));
+    }
+
     @Operation(summary = "List patients where I am a linked parent (my children)")
     @GetMapping("/my-children")
     @PreAuthorize("hasRole('PARENT')")

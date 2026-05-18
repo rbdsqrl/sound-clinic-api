@@ -15,7 +15,13 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.time.MonthDay;
+import java.time.temporal.ChronoUnit;
+import java.util.AbstractMap;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -116,6 +122,49 @@ public class PatientService {
         Patient patient = findPatient(patientId, principal.getOrgId());
         patient.setStage(request.stage());
         return buildResponse(patientRepository.save(patient));
+    }
+
+    @Transactional(readOnly = true)
+    public List<UpcomingBirthdayResponse> upcomingBirthdays(UserPrincipal principal) {
+        Role role = principal.getUser().getRole();
+        List<Patient> patients;
+
+        if (role == Role.THERAPIST || role == Role.DOCTOR) {
+            List<UUID> patientIds = therapistPatientRepository
+                    .findByTherapistIdAndIsActive(principal.getId(), true)
+                    .stream().map(TherapistPatient::getPatientId).toList();
+            if (patientIds.isEmpty()) return List.of();
+            patients = patientRepository.findAllById(patientIds).stream()
+                    .filter(p -> p.getOrgId().equals(principal.getOrgId()) && p.getDateOfBirth() != null)
+                    .toList();
+        } else {
+            patients = patientRepository.findByOrgId(principal.getOrgId()).stream()
+                    .filter(p -> p.getDateOfBirth() != null)
+                    .toList();
+        }
+
+        LocalDate today    = LocalDate.now();
+        LocalDate cutoff   = today.plusDays(30);
+
+        return patients.stream()
+                .map(p -> {
+                    MonthDay bday        = MonthDay.from(p.getDateOfBirth());
+                    LocalDate nextBirthday = bday.atYear(today.getYear());
+                    if (nextBirthday.isBefore(today)) {
+                        nextBirthday = bday.atYear(today.getYear() + 1);
+                    }
+                    return new AbstractMap.SimpleEntry<>(p, nextBirthday);
+                })
+                .filter(e -> !e.getValue().isAfter(cutoff))
+                .sorted(Map.Entry.comparingByValue())
+                .map(e -> {
+                    Patient p    = e.getKey();
+                    int daysUntil = (int) ChronoUnit.DAYS.between(today, e.getValue());
+                    return new UpcomingBirthdayResponse(
+                            p.getId(), p.getFirstName(), p.getLastName(),
+                            p.getDateOfBirth(), daysUntil);
+                })
+                .toList();
     }
 
     // ── Conditions ────────────────────────────────────────────────────────────

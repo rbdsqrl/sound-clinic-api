@@ -27,6 +27,7 @@ public record TherapySessionResponse(
         String notes,
         String feedback,
         String progressReport,
+        Integer performanceScore,
         Instant completedAt
 ) {
     public static TherapySessionResponse from(
@@ -56,6 +57,7 @@ public record TherapySessionResponse(
                 session.getNotes(),
                 session.getFeedback(),
                 session.getProgressReport(),
+                session.getPerformanceScore(),
                 session.getCompletedAt());
     }
 }

@@ -54,6 +54,9 @@ public class TherapySession {
     @Column(name = "progress_report", columnDefinition = "TEXT")
     private String progressReport;
 
+    @Column(name = "performance_score")
+    private Integer performanceScore;
+
     @Column(name = "completed_by")
     private UUID completedBy;
 
@@ -91,6 +94,8 @@ public class TherapySession {
     public void setFeedback(String feedback) { this.feedback = feedback; }
     public String getProgressReport() { return progressReport; }
     public void setProgressReport(String progressReport) { this.progressReport = progressReport; }
+    public Integer getPerformanceScore() { return performanceScore; }
+    public void setPerformanceScore(Integer performanceScore) { this.performanceScore = performanceScore; }
     public UUID getCompletedBy() { return completedBy; }
     public void setCompletedBy(UUID completedBy) { this.completedBy = completedBy; }
     public Instant getCompletedAt() { return completedAt; }
