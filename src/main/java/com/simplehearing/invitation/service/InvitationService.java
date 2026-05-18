@@ -5,6 +5,7 @@ import com.simplehearing.clinic.repository.ClinicRepository;
 import com.simplehearing.common.exception.ApiException;
 import com.simplehearing.common.exception.ResourceNotFoundException;
 import com.simplehearing.invitation.dto.AcceptInviteRequest;
+import com.simplehearing.invitation.dto.InvitePreviewResponse;
 import com.simplehearing.invitation.dto.InviteRequest;
 import com.simplehearing.invitation.dto.InviteResponse;
 import com.simplehearing.invitation.entity.Invitation;
@@ -145,6 +146,31 @@ public class InvitationService {
         return invitations.stream()
                 .map(inv -> InviteResponse.from(inv, null, clinicNames.get(inv.getClinicId())))
                 .toList();
+    }
+
+    /**
+     * Returns the email and role for a pending invitation token — used by the
+     * accept-invite page to show who the invite was sent to before the form is filled.
+     */
+    @Transactional(readOnly = true)
+    public InvitePreviewResponse preview(String token) {
+        String tokenHash = sha256(token);
+
+        Invitation invitation = invitationRepository.findByTokenHash(tokenHash)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Invalid or unknown invitation link"));
+
+        if (invitation.getStatus() == Invitation.Status.ACCEPTED) {
+            throw new ApiException(HttpStatus.CONFLICT, "This invitation has already been accepted");
+        }
+        if (invitation.getStatus() == Invitation.Status.EXPIRED
+                || invitation.getExpiresAt().isBefore(Instant.now())) {
+            throw new ApiException(HttpStatus.GONE, "This invitation has expired");
+        }
+
+        String orgName = organisationRepository.findById(invitation.getOrgId())
+                .map(o -> o.getName()).orElse("Simple Hearing");
+
+        return new InvitePreviewResponse(invitation.getEmail(), invitation.getRole(), orgName);
     }
 
     /**

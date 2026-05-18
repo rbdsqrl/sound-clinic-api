@@ -3,6 +3,7 @@ package com.simplehearing.invitation.controller;
 import com.simplehearing.auth.security.UserPrincipal;
 import com.simplehearing.common.dto.ApiResponse;
 import com.simplehearing.invitation.dto.AcceptInviteRequest;
+import com.simplehearing.invitation.dto.InvitePreviewResponse;
 import com.simplehearing.invitation.dto.InviteRequest;
 import com.simplehearing.invitation.dto.InviteResponse;
 import com.simplehearing.invitation.service.InvitationService;
@@ -57,6 +58,15 @@ public class InvitationController {
 
         InviteResponse response = invitationService.resend(id, principal.getOrgId());
         return ResponseEntity.ok(ApiResponse.success("Invitation resent", response));
+    }
+
+    /**
+     * Returns the email and role for a token — public, used to prefill the accept-invite form.
+     */
+    @GetMapping("/preview")
+    public ResponseEntity<ApiResponse<InvitePreviewResponse>> preview(
+            @RequestParam String token) {
+        return ResponseEntity.ok(ApiResponse.success(invitationService.preview(token)));
     }
 
     /**
