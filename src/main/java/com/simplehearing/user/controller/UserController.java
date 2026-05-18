@@ -11,9 +11,11 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -37,6 +39,22 @@ public class UserController {
 
     /** Roles that count as "clinical staff" for the therapists list. */
     private static final List<Role> CLINICAL_ROLES = List.of(Role.THERAPIST, Role.DOCTOR);
+
+    @Operation(summary = "List all staff members in the organisation")
+    @GetMapping("/members")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN')")
+    public ResponseEntity<ApiResponse<List<UserResponse>>> listMembers(
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        List<Role> staffRoles = List.of(
+                Role.ADMIN, Role.BUSINESS_OWNER, Role.OFFICE_ADMIN, Role.THERAPIST, Role.DOCTOR);
+        List<UserResponse> results = userRepository.findByOrgIdAndRoleIn(principal.getOrgId(), staffRoles)
+                .stream()
+                .sorted(Comparator.comparing(User::getFirstName).thenComparing(User::getLastName))
+                .map(UserResponse::from)
+                .toList();
+        return ResponseEntity.ok(ApiResponse.success(results));
+    }
 
     @Operation(
         summary = "List all therapists (and doctors) in the organisation",

@@ -96,8 +96,9 @@ public class TherapySessionController {
 
         // Status-only query (e.g. fetch all PENDING_RESCHEDULE for the dashboard)
         if (status != null && from == null && to == null && patientId == null && therapistId == null) {
-            List<TherapySession> byStatus = sessionRepository
-                    .findByOrgIdAndStatusOrderBySessionDateAscStartTimeAsc(principal.getOrgId(), status);
+            List<TherapySession> byStatus = (status == TherapySessionStatus.PENDING_RESCHEDULE)
+                    ? sessionRepository.findPendingRescheduleWithApprovedLeave(principal.getOrgId())
+                    : sessionRepository.findByOrgIdAndStatus(principal.getOrgId(), status);
             return ResponseEntity.ok(ApiResponse.success(enrich(byStatus)));
         }
 

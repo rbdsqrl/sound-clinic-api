@@ -6,8 +6,10 @@ import com.simplehearing.common.exception.ApiException;
 import com.simplehearing.common.exception.ResourceNotFoundException;
 import com.simplehearing.task.dto.*;
 import com.simplehearing.task.entity.Task;
+import com.simplehearing.task.entity.TaskAssignee;
 import com.simplehearing.task.entity.TaskAttachment;
 import com.simplehearing.task.entity.TaskComment;
+import com.simplehearing.task.repository.TaskAssigneeRepository;
 import com.simplehearing.task.repository.TaskAttachmentRepository;
 import com.simplehearing.task.repository.TaskCommentRepository;
 import com.simplehearing.task.repository.TaskRepository;
@@ -35,17 +37,20 @@ import java.util.stream.Collectors;
 public class TaskController {
 
     private final TaskRepository taskRepository;
+    private final TaskAssigneeRepository assigneeRepository;
     private final TaskCommentRepository commentRepository;
     private final TaskAttachmentRepository attachmentRepository;
     private final UserRepository userRepository;
     private final StorageService storageService;
 
     public TaskController(TaskRepository taskRepository,
+                          TaskAssigneeRepository assigneeRepository,
                           TaskCommentRepository commentRepository,
                           TaskAttachmentRepository attachmentRepository,
                           UserRepository userRepository,
                           StorageService storageService) {
         this.taskRepository      = taskRepository;
+        this.assigneeRepository  = assigneeRepository;
         this.commentRepository   = commentRepository;
         this.attachmentRepository = attachmentRepository;
         this.userRepository      = userRepository;
@@ -63,31 +68,46 @@ public class TaskController {
         Role role = principal.getUser().getRole();
         List<Task> tasks = isManager(role)
                 ? taskRepository.findByOrgIdOrderByCreatedAtDesc(principal.getOrgId())
-                : taskRepository.findByOrgIdAndAssignedToOrderByCreatedAtDesc(
-                        principal.getOrgId(), principal.getId());
+                : taskRepository.findByOrgIdAndAssignee(principal.getOrgId(), principal.getId());
 
         return ResponseEntity.ok(ApiResponse.success(enrich(tasks)));
     }
 
     // ── Create task ────────────────────────────────────────────────────────────
 
-    @Operation(summary = "Create a task and assign it to a user")
+    @Operation(summary = "Create a task and assign it to one or more users")
     @PostMapping
     @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN')")
     public ResponseEntity<ApiResponse<TaskResponse>> create(
             @Valid @RequestBody CreateTaskRequest req,
             @AuthenticationPrincipal UserPrincipal principal) {
 
+        // Validate assignees belong to org
+        List<User> assigneeUsers = userRepository.findAllById(req.assignedTo());
+        if (assigneeUsers.size() != req.assignedTo().size()) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "One or more assignees not found");
+        }
+        assigneeUsers.forEach(u -> {
+            if (!u.getOrgId().equals(principal.getOrgId())) {
+                throw new ApiException(HttpStatus.FORBIDDEN, "Assignee does not belong to this organisation");
+            }
+        });
+
         Task task = new Task();
         task.setOrgId(principal.getOrgId());
         task.setTitle(req.title());
         task.setDescription(req.description());
-        task.setAssignedTo(req.assignedTo());
         task.setAssignedBy(principal.getId());
         task.setDueDate(req.dueDate());
         if (req.priority() != null) task.setPriority(req.priority());
 
         Task saved = taskRepository.save(task);
+
+        List<TaskAssignee> assignees = req.assignedTo().stream()
+                .map(uid -> new TaskAssignee(saved.getId(), uid))
+                .toList();
+        assigneeRepository.saveAll(assignees);
+
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(enrich(List.of(saved)).get(0)));
     }
@@ -105,7 +125,7 @@ public class TaskController {
         return ResponseEntity.ok(ApiResponse.success(enrich(List.of(task)).get(0)));
     }
 
-    // ── Update task (title / description / due date / priority / assignee) ────
+    // ── Update task ────────────────────────────────────────────────────────────
 
     @Operation(summary = "Update task details")
     @PatchMapping("/{id}")
@@ -118,9 +138,16 @@ public class TaskController {
         Task task = findOwned(id, principal);
         if (req.title()       != null) task.setTitle(req.title());
         if (req.description() != null) task.setDescription(req.description());
-        if (req.assignedTo()  != null) task.setAssignedTo(req.assignedTo());
         if (req.dueDate()     != null) task.setDueDate(req.dueDate());
         if (req.priority()    != null) task.setPriority(req.priority());
+
+        if (req.assignedTo() != null && !req.assignedTo().isEmpty()) {
+            assigneeRepository.deleteById_TaskId(task.getId());
+            List<TaskAssignee> newAssignees = req.assignedTo().stream()
+                    .map(uid -> new TaskAssignee(task.getId(), uid))
+                    .toList();
+            assigneeRepository.saveAll(newAssignees);
+        }
 
         Task saved = taskRepository.save(task);
         return ResponseEntity.ok(ApiResponse.success(enrich(List.of(saved)).get(0)));
@@ -128,7 +155,7 @@ public class TaskController {
 
     // ── Update task status ─────────────────────────────────────────────────────
 
-    @Operation(summary = "Update task status (OPEN / IN_PROGRESS / COMPLETED / CANCELLED)")
+    @Operation(summary = "Update task status")
     @PatchMapping("/{id}/status")
     @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST', 'DOCTOR')")
     public ResponseEntity<ApiResponse<TaskResponse>> updateStatus(
@@ -307,10 +334,12 @@ public class TaskController {
     private Task findAccessible(UUID id, UserPrincipal principal) {
         Task task = findOwned(id, principal);
         Role role = principal.getUser().getRole();
-        if (!isManager(role)
-                && !task.getAssignedTo().equals(principal.getId())
-                && !task.getAssignedBy().equals(principal.getId())) {
-            throw new ApiException(HttpStatus.FORBIDDEN, "Access denied");
+        if (!isManager(role)) {
+            boolean isAssignee = assigneeRepository.findById_TaskId(task.getId())
+                    .stream().anyMatch(a -> a.getUserId().equals(principal.getId()));
+            if (!isAssignee && !task.getAssignedBy().equals(principal.getId())) {
+                throw new ApiException(HttpStatus.FORBIDDEN, "Access denied");
+            }
         }
         return task;
     }
@@ -322,13 +351,18 @@ public class TaskController {
     private List<TaskResponse> enrich(List<Task> tasks) {
         if (tasks.isEmpty()) return List.of();
 
+        List<UUID> taskIds = tasks.stream().map(Task::getId).toList();
+
+        Map<UUID, List<TaskAssignee>> assigneesByTask = assigneeRepository.findByTaskIdIn(taskIds)
+                .stream()
+                .collect(Collectors.groupingBy(TaskAssignee::getTaskId));
+
         Set<UUID> userIds = new HashSet<>();
-        tasks.forEach(t -> { userIds.add(t.getAssignedTo()); userIds.add(t.getAssignedBy()); });
+        tasks.forEach(t -> userIds.add(t.getAssignedBy()));
+        assigneesByTask.values().forEach(list -> list.forEach(a -> userIds.add(a.getUserId())));
 
         Map<UUID, User> userMap = userRepository.findAllById(userIds).stream()
                 .collect(Collectors.toMap(User::getId, u -> u));
-
-        List<UUID> taskIds = tasks.stream().map(Task::getId).toList();
 
         Map<UUID, Long> commentCounts = commentRepository.countByTaskIdIn(taskIds).stream()
                 .collect(Collectors.toMap(r -> r.getTaskId(), r -> r.getCnt()));
@@ -336,15 +370,29 @@ public class TaskController {
                 .collect(Collectors.toMap(r -> r.getTaskId(), r -> r.getCnt()));
 
         return tasks.stream().map(t -> {
-            User assignee = userMap.get(t.getAssignedTo());
+            List<TaskResponse.AssigneeInfo> assignees = assigneesByTask
+                    .getOrDefault(t.getId(), List.of())
+                    .stream()
+                    .map(a -> {
+                        User u = userMap.get(a.getUserId());
+                        return new TaskResponse.AssigneeInfo(
+                                a.getUserId(),
+                                u != null ? u.getFirstName() : "",
+                                u != null ? u.getLastName()  : "");
+                    })
+                    .toList();
+
             User assigner = userMap.get(t.getAssignedBy());
-            return TaskResponse.from(t,
-                    assignee != null ? assignee.getFirstName() : "",
-                    assignee != null ? assignee.getLastName()  : "",
+            return new TaskResponse(
+                    t.getId(), t.getOrgId(), t.getTitle(), t.getDescription(),
+                    assignees,
+                    t.getAssignedBy(),
                     assigner != null ? assigner.getFirstName() : "",
                     assigner != null ? assigner.getLastName()  : "",
+                    t.getDueDate(), t.getPriority(), t.getStatus(),
                     commentCounts.getOrDefault(t.getId(), 0L).intValue(),
-                    attachmentCounts.getOrDefault(t.getId(), 0L).intValue());
+                    attachmentCounts.getOrDefault(t.getId(), 0L).intValue(),
+                    t.getCreatedAt(), t.getUpdatedAt());
         }).toList();
     }
 

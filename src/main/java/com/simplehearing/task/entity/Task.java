@@ -27,9 +27,6 @@ public class Task {
     @Column(columnDefinition = "TEXT")
     private String description;
 
-    @Column(name = "assigned_to", nullable = false)
-    private UUID assignedTo;
-
     @Column(name = "assigned_by", nullable = false)
     private UUID assignedBy;
 
@@ -59,8 +56,6 @@ public class Task {
     public void setTitle(String title)         { this.title = title; }
     public String getDescription()             { return description; }
     public void setDescription(String d)       { this.description = d; }
-    public UUID getAssignedTo()                { return assignedTo; }
-    public void setAssignedTo(UUID assignedTo) { this.assignedTo = assignedTo; }
     public UUID getAssignedBy()                { return assignedBy; }
     public void setAssignedBy(UUID assignedBy) { this.assignedBy = assignedBy; }
     public LocalDate getDueDate()              { return dueDate; }

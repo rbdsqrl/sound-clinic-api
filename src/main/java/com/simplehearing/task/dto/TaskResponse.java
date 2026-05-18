@@ -6,6 +6,7 @@ import com.simplehearing.task.enums.TaskStatus;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 public record TaskResponse(
@@ -13,9 +14,7 @@ public record TaskResponse(
         UUID orgId,
         String title,
         String description,
-        UUID assignedTo,
-        String assignedToFirstName,
-        String assignedToLastName,
+        List<AssigneeInfo> assignees,
         UUID assignedBy,
         String assignedByFirstName,
         String assignedByLastName,
@@ -27,16 +26,5 @@ public record TaskResponse(
         Instant createdAt,
         Instant updatedAt
 ) {
-    public static TaskResponse from(Task t,
-                                    String assignedToFirst, String assignedToLast,
-                                    String assignedByFirst, String assignedByLast,
-                                    int commentCount, int attachmentCount) {
-        return new TaskResponse(
-                t.getId(), t.getOrgId(), t.getTitle(), t.getDescription(),
-                t.getAssignedTo(), assignedToFirst, assignedToLast,
-                t.getAssignedBy(), assignedByFirst, assignedByLast,
-                t.getDueDate(), t.getPriority(), t.getStatus(),
-                commentCount, attachmentCount,
-                t.getCreatedAt(), t.getUpdatedAt());
-    }
+    public record AssigneeInfo(UUID id, String firstName, String lastName) {}
 }
