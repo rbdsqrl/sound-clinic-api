@@ -132,7 +132,7 @@ public class InvitationService {
                         .map(c -> c.getName()).orElse(null)
                 : null;
 
-        return InviteResponse.from(invitation, null, clinicName);
+        return InviteResponse.from(invitation, acceptPath, clinicName);
     }
 
     public List<InviteResponse> listForOrg(UserPrincipal caller) {
@@ -255,7 +255,7 @@ public class InvitationService {
                 ? clinicRepository.findById(invitation.getClinicId()).map(c -> c.getName()).orElse(null)
                 : null;
 
-        return InviteResponse.from(invitation, null, clinicName);
+        return InviteResponse.from(invitation, acceptPath, clinicName);
     }
 
     /**

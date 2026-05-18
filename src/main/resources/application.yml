@@ -73,7 +73,7 @@ app:
   email:
     from-address: ${EMAIL_FROM:noreply@simplehearing.com}
     from-name: ${EMAIL_FROM_NAME:Simple Hearing}
-    base-url: ${BASE_URL:http://localhost:3000}
+    base-url: ${FRONTEND_URL:http://localhost:3000}
   # Single-org deployment: the org-id assigned to all public (unauthenticated) inquiries.
   # Set ORG_ID env var in production. Leave blank during dev — controller handles null gracefully.
   org-id: ${ORG_ID:}
