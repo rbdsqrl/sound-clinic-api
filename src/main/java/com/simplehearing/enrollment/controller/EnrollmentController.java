@@ -15,8 +15,10 @@ import com.simplehearing.leave.entity.Leave;
 import com.simplehearing.leave.enums.LeaveStatus;
 import com.simplehearing.leave.repository.LeaveRepository;
 import com.simplehearing.patient.entity.Patient;
+import com.simplehearing.patient.entity.TherapistPatient;
 import com.simplehearing.patient.enums.PatientStage;
 import com.simplehearing.patient.repository.PatientRepository;
+import com.simplehearing.patient.repository.TherapistPatientRepository;
 import com.simplehearing.program.entity.Program;
 import com.simplehearing.program.repository.ProgramRepository;
 import com.simplehearing.session.service.SessionGenerationService;
@@ -52,6 +54,7 @@ public class EnrollmentController {
     private final ClinicRepository clinicRepository;
     private final LeaveRepository leaveRepository;
     private final SessionGenerationService sessionGenerationService;
+    private final TherapistPatientRepository therapistPatientRepository;
 
     public EnrollmentController(
             EnrollmentRepository enrollmentRepository,
@@ -61,7 +64,8 @@ public class EnrollmentController {
             UserRepository userRepository,
             ClinicRepository clinicRepository,
             LeaveRepository leaveRepository,
-            SessionGenerationService sessionGenerationService) {
+            SessionGenerationService sessionGenerationService,
+            TherapistPatientRepository therapistPatientRepository) {
         this.enrollmentRepository = enrollmentRepository;
         this.subscriptionRepository = subscriptionRepository;
         this.programRepository = programRepository;
@@ -70,6 +74,7 @@ public class EnrollmentController {
         this.clinicRepository = clinicRepository;
         this.leaveRepository = leaveRepository;
         this.sessionGenerationService = sessionGenerationService;
+        this.therapistPatientRepository = therapistPatientRepository;
     }
 
     // ── Available therapists for a given slot ─────────────────────────────────
@@ -180,6 +185,21 @@ public class EnrollmentController {
         enrollment.setCreatedBy(principal.getId());
 
         Enrollment saved = enrollmentRepository.save(enrollment);
+
+        // Auto-link therapist to patient so they appear in the therapist's patient list
+        therapistPatientRepository.findByPatientIdAndTherapistId(request.patientId(), request.therapistId())
+                .ifPresentOrElse(tp -> {
+                    if (!tp.isActive()) {
+                        tp.setActive(true);
+                        therapistPatientRepository.save(tp);
+                    }
+                }, () -> {
+                    TherapistPatient link = new TherapistPatient();
+                    link.setPatientId(request.patientId());
+                    link.setTherapistId(request.therapistId());
+                    link.setAssignedBy(principal.getId());
+                    therapistPatientRepository.save(link);
+                });
 
         // Advance patient stage to ENROLLED if currently at ENROLLMENT
         patientRepository.findById(request.patientId()).ifPresent(patient -> {

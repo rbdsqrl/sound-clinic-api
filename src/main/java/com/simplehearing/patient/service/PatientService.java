@@ -67,6 +67,17 @@ public class PatientService {
 
     @Transactional(readOnly = true)
     public List<PatientResponse> listForOrg(UserPrincipal principal) {
+        Role role = principal.getUser().getRole();
+        if (role == Role.THERAPIST || role == Role.DOCTOR) {
+            List<UUID> patientIds = therapistPatientRepository
+                    .findByTherapistIdAndIsActive(principal.getId(), true)
+                    .stream().map(TherapistPatient::getPatientId).toList();
+            if (patientIds.isEmpty()) return List.of();
+            return patientRepository.findAllById(patientIds).stream()
+                    .filter(p -> p.getOrgId().equals(principal.getOrgId()))
+                    .map(this::buildResponse)
+                    .toList();
+        }
         return patientRepository.findByOrgId(principal.getOrgId()).stream()
                 .map(this::buildResponse)
                 .toList();
