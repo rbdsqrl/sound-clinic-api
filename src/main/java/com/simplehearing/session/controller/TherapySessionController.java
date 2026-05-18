@@ -10,6 +10,9 @@ import com.simplehearing.patient.entity.Patient;
 import com.simplehearing.patient.repository.PatientRepository;
 import com.simplehearing.program.entity.Program;
 import com.simplehearing.program.repository.ProgramRepository;
+import com.simplehearing.patient.entity.TherapistPatient;
+import com.simplehearing.patient.repository.TherapistPatientRepository;
+import com.simplehearing.session.dto.RescheduleSessionRequest;
 import com.simplehearing.session.dto.SessionAttachmentResponse;
 import com.simplehearing.session.dto.TherapySessionResponse;
 import com.simplehearing.session.dto.UpdateSessionNotesRequest;
@@ -55,6 +58,7 @@ public class TherapySessionController {
     private final UserRepository userRepository;
     private final SessionAttachmentRepository attachmentRepository;
     private final StorageService storageService;
+    private final TherapistPatientRepository therapistPatientRepository;
 
     public TherapySessionController(
             TherapySessionRepository sessionRepository,
@@ -64,7 +68,8 @@ public class TherapySessionController {
             PatientRepository patientRepository,
             UserRepository userRepository,
             SessionAttachmentRepository attachmentRepository,
-            StorageService storageService) {
+            StorageService storageService,
+            TherapistPatientRepository therapistPatientRepository) {
         this.sessionRepository    = sessionRepository;
         this.enrollmentRepository = enrollmentRepository;
         this.subscriptionRepository = subscriptionRepository;
@@ -73,6 +78,7 @@ public class TherapySessionController {
         this.userRepository       = userRepository;
         this.attachmentRepository = attachmentRepository;
         this.storageService       = storageService;
+        this.therapistPatientRepository = therapistPatientRepository;
     }
 
     // ── List sessions (calendar / patient view) ────────────────────────────────
@@ -85,7 +91,15 @@ public class TherapySessionController {
             @RequestParam(required = false) UUID therapistId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) TherapySessionStatus status,
             @AuthenticationPrincipal UserPrincipal principal) {
+
+        // Status-only query (e.g. fetch all PENDING_RESCHEDULE for the dashboard)
+        if (status != null && from == null && to == null && patientId == null && therapistId == null) {
+            List<TherapySession> byStatus = sessionRepository
+                    .findByOrgIdAndStatusOrderBySessionDateAscStartTimeAsc(principal.getOrgId(), status);
+            return ResponseEntity.ok(ApiResponse.success(enrich(byStatus)));
+        }
 
         LocalDate start = from != null ? from : LocalDate.now().withDayOfMonth(1);
         LocalDate end   = to   != null ? to   : start.plusMonths(1).minusDays(1);
@@ -189,6 +203,57 @@ public class TherapySessionController {
         if (request.progressReport() != null) session.setProgressReport(request.progressReport());
         if (request.notes()          != null) session.setNotes(request.notes());
 
+        TherapySession saved = sessionRepository.save(session);
+        return ResponseEntity.ok(ApiResponse.success(enrich(List.of(saved)).get(0)));
+    }
+
+    // ── Reschedule a session (new date and/or substitute therapist) ───────────
+
+    @Operation(summary = "Reschedule a PENDING_RESCHEDULE session — set a new date and/or substitute therapist")
+    @PatchMapping("/{id}/reschedule")
+    @PreAuthorize("hasAnyRole('ADMIN', 'BUSINESS_OWNER', 'OFFICE_ADMIN')")
+    public ResponseEntity<ApiResponse<TherapySessionResponse>> reschedule(
+            @PathVariable UUID id,
+            @RequestBody RescheduleSessionRequest request,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        TherapySession session = findOwned(id, principal);
+
+        if (request.newDate() == null && request.substituteTherapistId() == null) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Provide a new date or a substitute therapist");
+        }
+
+        if (request.newDate() != null) {
+            session.setSessionDate(request.newDate());
+        }
+
+        if (request.substituteTherapistId() != null) {
+            User sub = userRepository.findById(request.substituteTherapistId())
+                    .filter(u -> u.getOrgId().equals(principal.getOrgId()))
+                    .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Therapist not found in your organisation"));
+            UUID oldTherapistId = session.getTherapistId();
+            session.setTherapistId(sub.getId());
+
+            // Update enrollment to point to the substitute therapist
+            enrollmentRepository.findById(session.getEnrollmentId()).ifPresent(enrollment -> {
+                enrollment.setTherapistId(sub.getId());
+                enrollmentRepository.save(enrollment);
+            });
+
+            // Ensure the substitute is linked to the patient
+            therapistPatientRepository.findByPatientIdAndTherapistId(session.getPatientId(), sub.getId())
+                    .ifPresentOrElse(tp -> {
+                        if (!tp.isActive()) { tp.setActive(true); therapistPatientRepository.save(tp); }
+                    }, () -> {
+                        TherapistPatient link = new TherapistPatient();
+                        link.setPatientId(session.getPatientId());
+                        link.setTherapistId(sub.getId());
+                        link.setAssignedBy(principal.getId());
+                        therapistPatientRepository.save(link);
+                    });
+        }
+
+        session.setStatus(TherapySessionStatus.SCHEDULED);
         TherapySession saved = sessionRepository.save(session);
         return ResponseEntity.ok(ApiResponse.success(enrich(List.of(saved)).get(0)));
     }

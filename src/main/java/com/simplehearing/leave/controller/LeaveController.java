@@ -11,6 +11,8 @@ import com.simplehearing.leave.entity.Leave;
 import com.simplehearing.leave.enums.LeaveStatus;
 import com.simplehearing.leave.repository.LeaveRepository;
 import com.simplehearing.notification.EmailService;
+import com.simplehearing.session.enums.TherapySessionStatus;
+import com.simplehearing.session.repository.TherapySessionRepository;
 import com.simplehearing.user.entity.User;
 import com.simplehearing.user.enums.Role;
 import com.simplehearing.user.repository.UserRepository;
@@ -38,12 +40,14 @@ public class LeaveController {
     private final LeaveRepository leaveRepository;
     private final UserRepository userRepository;
     private final EmailService emailService;
+    private final TherapySessionRepository sessionRepository;
 
     public LeaveController(LeaveRepository leaveRepository, UserRepository userRepository,
-                           EmailService emailService) {
+                           EmailService emailService, TherapySessionRepository sessionRepository) {
         this.leaveRepository = leaveRepository;
         this.userRepository = userRepository;
         this.emailService = emailService;
+        this.sessionRepository = sessionRepository;
     }
 
     // ── Apply for leave (therapist / doctor) ─────────────────────────────────
@@ -152,6 +156,16 @@ public class LeaveController {
         leave.setReviewedAt(Instant.now());
 
         Leave saved = leaveRepository.save(leave);
+
+        // Flag SCHEDULED sessions on the leave date as needing reschedule
+        if (newStatus == LeaveStatus.APPROVED) {
+            List<com.simplehearing.session.entity.TherapySession> affected = sessionRepository
+                    .findByOrgIdAndTherapistIdAndSessionDateAndStatus(
+                            saved.getOrgId(), saved.getTherapistId(), saved.getLeaveDate(),
+                            TherapySessionStatus.SCHEDULED);
+            affected.forEach(s -> s.setStatus(TherapySessionStatus.PENDING_RESCHEDULE));
+            sessionRepository.saveAll(affected);
+        }
 
         Set<UUID> userIds = new java.util.HashSet<>();
         userIds.add(saved.getTherapistId());
