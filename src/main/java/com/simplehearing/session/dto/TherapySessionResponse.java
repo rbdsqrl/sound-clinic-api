@@ -1,6 +1,7 @@
 package com.simplehearing.session.dto;
 
 import com.simplehearing.session.entity.TherapySession;
+import com.simplehearing.session.enums.RescheduleReason;
 import com.simplehearing.session.enums.TherapySessionStatus;
 
 import java.time.Instant;
@@ -28,7 +29,8 @@ public record TherapySessionResponse(
         String feedback,
         String progressReport,
         Integer performanceScore,
-        Instant completedAt
+        Instant completedAt,
+        RescheduleReason rescheduleReason
 ) {
     public static TherapySessionResponse from(
             TherapySession session,
@@ -58,6 +60,7 @@ public record TherapySessionResponse(
                 session.getFeedback(),
                 session.getProgressReport(),
                 session.getPerformanceScore(),
-                session.getCompletedAt());
+                session.getCompletedAt(),
+                session.getRescheduleReason());
     }
 }

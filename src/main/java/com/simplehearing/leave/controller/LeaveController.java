@@ -11,6 +11,7 @@ import com.simplehearing.leave.entity.Leave;
 import com.simplehearing.leave.enums.LeaveStatus;
 import com.simplehearing.leave.repository.LeaveRepository;
 import com.simplehearing.notification.EmailService;
+import com.simplehearing.session.enums.RescheduleReason;
 import com.simplehearing.session.enums.TherapySessionStatus;
 import com.simplehearing.session.repository.TherapySessionRepository;
 import com.simplehearing.user.entity.User;
@@ -163,7 +164,10 @@ public class LeaveController {
                     .findByOrgIdAndTherapistIdAndSessionDateAndStatus(
                             saved.getOrgId(), saved.getTherapistId(), saved.getLeaveDate(),
                             TherapySessionStatus.SCHEDULED);
-            affected.forEach(s -> s.setStatus(TherapySessionStatus.PENDING_RESCHEDULE));
+            affected.forEach(s -> {
+                s.setStatus(TherapySessionStatus.PENDING_RESCHEDULE);
+                s.setRescheduleReason(RescheduleReason.THERAPIST_LEAVE);
+            });
             sessionRepository.saveAll(affected);
         }
 

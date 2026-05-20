@@ -1,5 +1,6 @@
 package com.simplehearing.session.entity;
 
+import com.simplehearing.session.enums.RescheduleReason;
 import com.simplehearing.session.enums.TherapySessionStatus;
 import jakarta.persistence.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -57,6 +58,13 @@ public class TherapySession {
     @Column(name = "performance_score")
     private Integer performanceScore;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "reschedule_reason")
+    private RescheduleReason rescheduleReason;
+
+    @Column(name = "reschedule_requested_by")
+    private UUID rescheduleRequestedBy;
+
     @Column(name = "completed_by")
     private UUID completedBy;
 
@@ -96,6 +104,10 @@ public class TherapySession {
     public void setProgressReport(String progressReport) { this.progressReport = progressReport; }
     public Integer getPerformanceScore() { return performanceScore; }
     public void setPerformanceScore(Integer performanceScore) { this.performanceScore = performanceScore; }
+    public RescheduleReason getRescheduleReason() { return rescheduleReason; }
+    public void setRescheduleReason(RescheduleReason rescheduleReason) { this.rescheduleReason = rescheduleReason; }
+    public UUID getRescheduleRequestedBy() { return rescheduleRequestedBy; }
+    public void setRescheduleRequestedBy(UUID rescheduleRequestedBy) { this.rescheduleRequestedBy = rescheduleRequestedBy; }
     public UUID getCompletedBy() { return completedBy; }
     public void setCompletedBy(UUID completedBy) { this.completedBy = completedBy; }
     public Instant getCompletedAt() { return completedAt; }

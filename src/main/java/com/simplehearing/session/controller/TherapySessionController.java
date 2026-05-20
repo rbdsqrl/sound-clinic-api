@@ -97,7 +97,7 @@ public class TherapySessionController {
         // Status-only query (e.g. fetch all PENDING_RESCHEDULE for the dashboard)
         if (status != null && from == null && to == null && patientId == null && therapistId == null) {
             List<TherapySession> byStatus = (status == TherapySessionStatus.PENDING_RESCHEDULE)
-                    ? sessionRepository.findPendingRescheduleWithApprovedLeave(principal.getOrgId())
+                    ? sessionRepository.findAllPendingReschedule(principal.getOrgId())
                     : sessionRepository.findByOrgIdAndStatus(principal.getOrgId(), status);
             return ResponseEntity.ok(ApiResponse.success(enrich(byStatus)));
         }
@@ -256,6 +256,31 @@ public class TherapySessionController {
         }
 
         session.setStatus(TherapySessionStatus.SCHEDULED);
+        session.setRescheduleReason(null);
+        session.setRescheduleRequestedBy(null);
+        TherapySession saved = sessionRepository.save(session);
+        return ResponseEntity.ok(ApiResponse.success(enrich(List.of(saved)).get(0)));
+    }
+
+    // ── Parent reschedule request ──────────────────────────────────────────────
+
+    @Operation(summary = "Request reschedule of a SCHEDULED session (parent only)")
+    @PostMapping("/{id}/reschedule-request")
+    @PreAuthorize("hasRole('PARENT')")
+    public ResponseEntity<ApiResponse<TherapySessionResponse>> rescheduleRequest(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        TherapySession session = findOwned(id, principal);
+
+        if (session.getStatus() != TherapySessionStatus.SCHEDULED) {
+            throw new ApiException(HttpStatus.CONFLICT, "Only SCHEDULED sessions can be requested for reschedule");
+        }
+
+        session.setStatus(TherapySessionStatus.PENDING_RESCHEDULE);
+        session.setRescheduleReason(com.simplehearing.session.enums.RescheduleReason.PARENT_REQUEST);
+        session.setRescheduleRequestedBy(principal.getId());
+
         TherapySession saved = sessionRepository.save(session);
         return ResponseEntity.ok(ApiResponse.success(enrich(List.of(saved)).get(0)));
     }

@@ -33,18 +33,19 @@ public interface TherapySessionRepository extends JpaRepository<TherapySession, 
     List<TherapySession> findByOrgIdAndStatus(
             @Param("orgId") UUID orgId, @Param("status") TherapySessionStatus status);
 
-    /**
-     * PENDING_RESCHEDULE sessions that have a corresponding APPROVED leave —
-     * used by the dashboard so stale/incorrect status rows are never shown.
-     */
+    /** All PENDING_RESCHEDULE sessions for the dashboard (covers leave, holiday, and parent requests) */
     @Query("SELECT s FROM TherapySession s WHERE s.orgId = :orgId " +
            "AND s.status = com.simplehearing.session.enums.TherapySessionStatus.PENDING_RESCHEDULE " +
-           "AND EXISTS (SELECT l FROM com.simplehearing.leave.entity.Leave l " +
-           "            WHERE l.orgId = :orgId AND l.therapistId = s.therapistId " +
-           "            AND l.leaveDate = s.sessionDate " +
-           "            AND l.status = com.simplehearing.leave.enums.LeaveStatus.APPROVED) " +
            "ORDER BY s.sessionDate ASC, s.startTime ASC")
-    List<TherapySession> findPendingRescheduleWithApprovedLeave(@Param("orgId") UUID orgId);
+    List<TherapySession> findAllPendingReschedule(@Param("orgId") UUID orgId);
+
+    /** Sessions on a specific date in a given status (used when creating public holidays) */
+    @Query("SELECT s FROM TherapySession s WHERE s.orgId = :orgId " +
+           "AND s.sessionDate = :sessionDate AND s.status = :status")
+    List<TherapySession> findByOrgIdAndSessionDateAndStatus(
+            @Param("orgId") UUID orgId,
+            @Param("sessionDate") java.time.LocalDate sessionDate,
+            @Param("status") TherapySessionStatus status);
 
     /** Sessions for a specific therapist on a specific date in a given status */
     @Query("SELECT s FROM TherapySession s WHERE s.orgId = :orgId AND s.therapistId = :therapistId " +
