@@ -171,6 +171,13 @@ public class TherapySessionController {
         TherapySession session = findOwned(id, principal);
         requireTherapistOwnership(session, principal);
 
+        Role callerRole = principal.getUser().getRole();
+        if (request.status() == TherapySessionStatus.CANCELLED
+                && (callerRole == Role.THERAPIST || callerRole == Role.DOCTOR)) {
+            throw new ApiException(HttpStatus.FORBIDDEN,
+                    "Therapists cannot cancel sessions directly — use cancellation-request instead");
+        }
+
         session.setStatus(request.status());
         if (request.notes() != null) session.setNotes(request.notes());
 
@@ -280,6 +287,73 @@ public class TherapySessionController {
         session.setStatus(TherapySessionStatus.PENDING_RESCHEDULE);
         session.setRescheduleReason(com.simplehearing.session.enums.RescheduleReason.PARENT_REQUEST);
         session.setRescheduleRequestedBy(principal.getId());
+
+        TherapySession saved = sessionRepository.save(session);
+        return ResponseEntity.ok(ApiResponse.success(enrich(List.of(saved)).get(0)));
+    }
+
+    // ── Cancellation request ──────────────────────────────────────────────────
+
+    @Operation(summary = "Request cancellation of a SCHEDULED session — requires admin approval")
+    @PostMapping("/{id}/cancellation-request")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'ADMIN', 'BUSINESS_OWNER', 'OFFICE_ADMIN')")
+    public ResponseEntity<ApiResponse<TherapySessionResponse>> cancellationRequest(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        TherapySession session = findOwned(id, principal);
+        requireTherapistOwnership(session, principal);
+
+        if (session.getStatus() != TherapySessionStatus.SCHEDULED) {
+            throw new ApiException(HttpStatus.CONFLICT, "Only SCHEDULED sessions can be requested for cancellation");
+        }
+
+        session.setStatus(TherapySessionStatus.CANCELLATION_REQUESTED);
+        session.setRescheduleRequestedBy(principal.getId());
+
+        TherapySession saved = sessionRepository.save(session);
+        return ResponseEntity.ok(ApiResponse.success(enrich(List.of(saved)).get(0)));
+    }
+
+    // ── Approve cancellation ──────────────────────────────────────────────────
+
+    @Operation(summary = "Approve a cancellation request — sets session to CANCELLED")
+    @PostMapping("/{id}/approve-cancellation")
+    @PreAuthorize("hasAnyRole('ADMIN', 'BUSINESS_OWNER')")
+    public ResponseEntity<ApiResponse<TherapySessionResponse>> approveCancellation(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        TherapySession session = findOwned(id, principal);
+
+        if (session.getStatus() != TherapySessionStatus.CANCELLATION_REQUESTED) {
+            throw new ApiException(HttpStatus.CONFLICT, "Session is not pending cancellation approval");
+        }
+
+        session.setStatus(TherapySessionStatus.CANCELLED);
+        session.setRescheduleRequestedBy(null);
+
+        TherapySession saved = sessionRepository.save(session);
+        return ResponseEntity.ok(ApiResponse.success(enrich(List.of(saved)).get(0)));
+    }
+
+    // ── Reject cancellation ───────────────────────────────────────────────────
+
+    @Operation(summary = "Reject a cancellation request — reverts session to SCHEDULED")
+    @PostMapping("/{id}/reject-cancellation")
+    @PreAuthorize("hasAnyRole('ADMIN', 'BUSINESS_OWNER')")
+    public ResponseEntity<ApiResponse<TherapySessionResponse>> rejectCancellation(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        TherapySession session = findOwned(id, principal);
+
+        if (session.getStatus() != TherapySessionStatus.CANCELLATION_REQUESTED) {
+            throw new ApiException(HttpStatus.CONFLICT, "Session is not pending cancellation approval");
+        }
+
+        session.setStatus(TherapySessionStatus.SCHEDULED);
+        session.setRescheduleRequestedBy(null);
 
         TherapySession saved = sessionRepository.save(session);
         return ResponseEntity.ok(ApiResponse.success(enrich(List.of(saved)).get(0)));

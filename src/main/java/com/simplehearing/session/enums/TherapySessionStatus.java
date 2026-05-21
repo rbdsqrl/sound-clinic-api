@@ -5,5 +5,6 @@ public enum TherapySessionStatus {
     COMPLETED,
     CANCELLED,
     NO_SHOW,
-    PENDING_RESCHEDULE
+    PENDING_RESCHEDULE,
+    CANCELLATION_REQUESTED
 }
