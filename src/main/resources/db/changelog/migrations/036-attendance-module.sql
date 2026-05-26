@@ -40,6 +40,6 @@ CREATE INDEX IF NOT EXISTS idx_attendance_user_id  ON attendance (user_id);
 CREATE INDEX IF NOT EXISTS idx_attendance_date     ON attendance (attendance_date);
 CREATE INDEX IF NOT EXISTS idx_attendance_status   ON attendance (status);
 
+--rollback DROP TABLE IF EXISTS attendance;
 --rollback ALTER TABLE clinics DROP COLUMN IF EXISTS latitude, DROP COLUMN IF EXISTS longitude, DROP COLUMN IF EXISTS geo_fence_radius_meters;
---rollback ALTER TABLE users DROP COLUMN face_descriptor;
---rollback DROP TABLE attendance;
+--rollback ALTER TABLE users DROP COLUMN IF EXISTS face_descriptor;
