@@ -13,6 +13,9 @@ public record ClinicResponse(
         String phone,
         String email,
         String timezone,
+        Double latitude,
+        Double longitude,
+        Integer geoFenceRadiusMeters,
         boolean isActive,
         Instant createdAt
 ) {
@@ -25,6 +28,9 @@ public record ClinicResponse(
                 clinic.getPhone(),
                 clinic.getEmail(),
                 clinic.getTimezone(),
+                clinic.getLatitude(),
+                clinic.getLongitude(),
+                clinic.getGeoFenceRadiusMeters(),
                 clinic.isActive(),
                 clinic.getCreatedAt()
         );

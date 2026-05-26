@@ -68,6 +68,9 @@ public class User {
     @Enumerated(EnumType.STRING)
     private Set<Role> additionalRoles = EnumSet.noneOf(Role.class);
 
+    @Column(name = "face_descriptor", columnDefinition = "TEXT")
+    private String faceDescriptor;
+
     @Column(nullable = false)
     private boolean isActive = true;
 
@@ -127,6 +130,9 @@ public class User {
     public boolean hasRole(Role r) {
         return role == r || additionalRoles.contains(r);
     }
+
+    public String getFaceDescriptor() { return faceDescriptor; }
+    public void setFaceDescriptor(String faceDescriptor) { this.faceDescriptor = faceDescriptor; }
 
     public boolean isActive() { return isActive; }
     public void setActive(boolean active) { isActive = active; }

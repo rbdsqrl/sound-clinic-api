@@ -9,5 +9,8 @@ public record CreateClinicRequest(
         String address,
         String phone,
         String email,
-        String timezone
+        String timezone,
+        Double latitude,
+        Double longitude,
+        Integer geoFenceRadiusMeters
 ) {}

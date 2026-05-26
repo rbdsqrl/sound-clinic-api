@@ -33,6 +33,13 @@ public class Clinic {
     @Column(nullable = false)
     private String timezone = "UTC";
 
+    private Double latitude;
+
+    private Double longitude;
+
+    @Column(name = "geo_fence_radius_meters")
+    private Integer geoFenceRadiusMeters = 200;
+
     @Column(nullable = false)
     private boolean isActive = true;
 
@@ -69,6 +76,15 @@ public class Clinic {
 
     public String getTimezone() { return timezone; }
     public void setTimezone(String timezone) { this.timezone = timezone; }
+
+    public Double getLatitude() { return latitude; }
+    public void setLatitude(Double latitude) { this.latitude = latitude; }
+
+    public Double getLongitude() { return longitude; }
+    public void setLongitude(Double longitude) { this.longitude = longitude; }
+
+    public Integer getGeoFenceRadiusMeters() { return geoFenceRadiusMeters; }
+    public void setGeoFenceRadiusMeters(Integer geoFenceRadiusMeters) { this.geoFenceRadiusMeters = geoFenceRadiusMeters; }
 
     public boolean isActive() { return isActive; }
     public void setActive(boolean active) { isActive = active; }

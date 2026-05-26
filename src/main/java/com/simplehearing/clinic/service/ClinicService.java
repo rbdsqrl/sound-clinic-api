@@ -27,10 +27,13 @@ public class ClinicService {
         Clinic clinic = new Clinic();
         clinic.setOrgId(principal.getOrgId());
         clinic.setName(request.name());
-        if (request.address() != null)  clinic.setAddress(request.address());
-        if (request.phone() != null)    clinic.setPhone(request.phone());
-        if (request.email() != null)    clinic.setEmail(request.email());
-        if (request.timezone() != null) clinic.setTimezone(request.timezone());
+        if (request.address() != null)              clinic.setAddress(request.address());
+        if (request.phone() != null)                clinic.setPhone(request.phone());
+        if (request.email() != null)                clinic.setEmail(request.email());
+        if (request.timezone() != null)             clinic.setTimezone(request.timezone());
+        if (request.latitude() != null)             clinic.setLatitude(request.latitude());
+        if (request.longitude() != null)            clinic.setLongitude(request.longitude());
+        if (request.geoFenceRadiusMeters() != null) clinic.setGeoFenceRadiusMeters(request.geoFenceRadiusMeters());
         return ClinicResponse.from(clinicRepository.save(clinic));
     }
 
@@ -52,11 +55,14 @@ public class ClinicService {
         Clinic clinic = clinicRepository.findByIdAndOrgId(clinicId, principal.getOrgId())
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Clinic not found"));
 
-        if (request.name() != null)     clinic.setName(request.name());
-        if (request.address() != null)  clinic.setAddress(request.address());
-        if (request.phone() != null)    clinic.setPhone(request.phone());
-        if (request.email() != null)    clinic.setEmail(request.email());
-        if (request.timezone() != null) clinic.setTimezone(request.timezone());
+        if (request.name() != null)                 clinic.setName(request.name());
+        if (request.address() != null)              clinic.setAddress(request.address());
+        if (request.phone() != null)                clinic.setPhone(request.phone());
+        if (request.email() != null)                clinic.setEmail(request.email());
+        if (request.timezone() != null)             clinic.setTimezone(request.timezone());
+        if (request.latitude() != null)             clinic.setLatitude(request.latitude());
+        if (request.longitude() != null)            clinic.setLongitude(request.longitude());
+        if (request.geoFenceRadiusMeters() != null) clinic.setGeoFenceRadiusMeters(request.geoFenceRadiusMeters());
 
         return ClinicResponse.from(clinicRepository.save(clinic));
     }
