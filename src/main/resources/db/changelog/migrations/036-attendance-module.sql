@@ -3,16 +3,16 @@
 --changeset simplehearing:036-attendance-module
 
 -- Geo-fence fields on clinics
-ALTER TABLE clinics ADD COLUMN latitude DECIMAL(10, 8);
-ALTER TABLE clinics ADD COLUMN longitude DECIMAL(11, 8);
-ALTER TABLE clinics ADD COLUMN geo_fence_radius_meters INT DEFAULT 200;
+ALTER TABLE clinics ADD COLUMN IF NOT EXISTS latitude FLOAT8;
+ALTER TABLE clinics ADD COLUMN IF NOT EXISTS longitude FLOAT8;
+ALTER TABLE clinics ADD COLUMN IF NOT EXISTS geo_fence_radius_meters INT DEFAULT 200;
 
 -- Face descriptor on users (128-float JSON array from face-api.js)
 ALTER TABLE users
-    ADD COLUMN face_descriptor TEXT;
+    ADD COLUMN IF NOT EXISTS face_descriptor TEXT;
 
 -- Attendance records
-CREATE TABLE attendance (
+CREATE TABLE IF NOT EXISTS attendance (
     id                UUID                     PRIMARY KEY,
     org_id            UUID                     NOT NULL,
     user_id           UUID                     NOT NULL,
@@ -20,10 +20,10 @@ CREATE TABLE attendance (
     attendance_date   DATE                     NOT NULL,
     check_in_time     TIMESTAMP WITH TIME ZONE,
     check_out_time    TIMESTAMP WITH TIME ZONE,
-    check_in_lat      DECIMAL(10, 8),
-    check_in_lon      DECIMAL(11, 8),
-    check_out_lat     DECIMAL(10, 8),
-    check_out_lon     DECIMAL(11, 8),
+    check_in_lat      FLOAT8,
+    check_in_lon      FLOAT8,
+    check_out_lat     FLOAT8,
+    check_out_lon     FLOAT8,
     geo_verified      BOOLEAN                  NOT NULL DEFAULT FALSE,
     face_verified     BOOLEAN                  NOT NULL DEFAULT FALSE,
     status            VARCHAR(20)              NOT NULL DEFAULT 'CHECKED_IN',
@@ -35,11 +35,11 @@ CREATE TABLE attendance (
     CONSTRAINT uq_attendance_user_date UNIQUE (user_id, attendance_date)
 );
 
-CREATE INDEX idx_attendance_org_id   ON attendance (org_id);
-CREATE INDEX idx_attendance_user_id  ON attendance (user_id);
-CREATE INDEX idx_attendance_date     ON attendance (attendance_date);
-CREATE INDEX idx_attendance_status   ON attendance (status);
+CREATE INDEX IF NOT EXISTS idx_attendance_org_id   ON attendance (org_id);
+CREATE INDEX IF NOT EXISTS idx_attendance_user_id  ON attendance (user_id);
+CREATE INDEX IF NOT EXISTS idx_attendance_date     ON attendance (attendance_date);
+CREATE INDEX IF NOT EXISTS idx_attendance_status   ON attendance (status);
 
---rollback ALTER TABLE clinics DROP COLUMN latitude, DROP COLUMN longitude, DROP COLUMN geo_fence_radius_meters;
+--rollback ALTER TABLE clinics DROP COLUMN IF EXISTS latitude, DROP COLUMN IF EXISTS longitude, DROP COLUMN IF EXISTS geo_fence_radius_meters;
 --rollback ALTER TABLE users DROP COLUMN face_descriptor;
 --rollback DROP TABLE attendance;
