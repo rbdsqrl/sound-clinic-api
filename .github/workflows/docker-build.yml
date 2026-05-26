@@ -15,7 +15,7 @@ env:
   IMAGE: asia-south1-docker.pkg.dev/clinic-dev-493107/my-repo/spring-app
 
 jobs:
-  deploy-build:
+  build-and-deploy:
     runs-on: ubuntu-latest
     permissions:
       contents: read
