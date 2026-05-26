@@ -3,10 +3,9 @@
 --changeset simplehearing:036-attendance-module
 
 -- Geo-fence fields on clinics
-ALTER TABLE clinics
-    ADD COLUMN latitude              DECIMAL(10, 8),
-    ADD COLUMN longitude             DECIMAL(11, 8),
-    ADD COLUMN geo_fence_radius_meters INT DEFAULT 200;
+ALTER TABLE clinics ADD COLUMN latitude DECIMAL(10, 8);
+ALTER TABLE clinics ADD COLUMN longitude DECIMAL(11, 8);
+ALTER TABLE clinics ADD COLUMN geo_fence_radius_meters INT DEFAULT 200;
 
 -- Face descriptor on users (128-float JSON array from face-api.js)
 ALTER TABLE users

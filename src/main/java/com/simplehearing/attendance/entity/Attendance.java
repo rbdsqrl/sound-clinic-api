@@ -35,16 +35,16 @@ public class Attendance {
     @Column(name = "check_out_time")
     private Instant checkOutTime;
 
-    @Column(name = "check_in_lat", precision = 10, scale = 8)
+    @Column(name = "check_in_lat")
     private Double checkInLat;
 
-    @Column(name = "check_in_lon", precision = 11, scale = 8)
+    @Column(name = "check_in_lon")
     private Double checkInLon;
 
-    @Column(name = "check_out_lat", precision = 10, scale = 8)
+    @Column(name = "check_out_lat")
     private Double checkOutLat;
 
-    @Column(name = "check_out_lon", precision = 11, scale = 8)
+    @Column(name = "check_out_lon")
     private Double checkOutLon;
 
     @Column(name = "geo_verified", nullable = false)
