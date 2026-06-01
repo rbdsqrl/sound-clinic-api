@@ -22,6 +22,7 @@ public record UserResponse(
         Role role,
         Set<Role> additionalRoles,
         boolean isActive,
+        boolean faceEnrolled,
         Instant createdAt
 ) {
     public static UserResponse from(User user) {
@@ -38,6 +39,7 @@ public record UserResponse(
                 user.getRole(),
                 user.getAdditionalRoles(),
                 user.isActive(),
+                user.getFaceDescriptor() != null,
                 user.getCreatedAt()
         );
     }
