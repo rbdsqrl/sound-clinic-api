@@ -107,3 +107,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/036-attendance-module.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/037-org-manage-features.sql
+      relativeToChangelogFile: false

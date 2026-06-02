@@ -12,7 +12,10 @@ public class Condition {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(unique = true, nullable = false)
+    @Column(name = "org_id")
+    private UUID orgId;
+
+    @Column(nullable = false)
     private String name;
 
     @Column(columnDefinition = "TEXT")
@@ -25,6 +28,9 @@ public class Condition {
 
     public UUID getId() { return id; }
     public void setId(UUID id) { this.id = id; }
+
+    public UUID getOrgId() { return orgId; }
+    public void setOrgId(UUID orgId) { this.orgId = orgId; }
 
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }

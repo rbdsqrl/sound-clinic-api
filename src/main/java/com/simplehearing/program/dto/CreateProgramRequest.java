@@ -8,5 +8,6 @@ import java.math.BigDecimal;
 
 public record CreateProgramRequest(
         @NotBlank String name,
-        @NotNull @DecimalMin("0.01") BigDecimal perSessionCost
+        String description,
+        @NotNull @DecimalMin("0.00") BigDecimal perSessionCost
 ) {}

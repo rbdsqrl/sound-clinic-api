@@ -64,6 +64,7 @@ public class ProgramController {
         Program program = new Program();
         program.setOrgId(principal.getOrgId());
         program.setName(request.name().trim());
+        program.setDescription(request.description());
         program.setPerSessionCost(request.perSessionCost());
         program.setCreatedBy(principal.getId());
 
@@ -90,6 +91,9 @@ public class ProgramController {
 
         if (request.name() != null && !request.name().isBlank()) {
             program.setName(request.name().trim());
+        }
+        if (request.description() != null) {
+            program.setDescription(request.description().isBlank() ? null : request.description().trim());
         }
         if (request.perSessionCost() != null) {
             program.setPerSessionCost(request.perSessionCost());

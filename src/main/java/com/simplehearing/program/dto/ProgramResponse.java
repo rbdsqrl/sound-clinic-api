@@ -10,6 +10,7 @@ public record ProgramResponse(
         UUID id,
         UUID orgId,
         String name,
+        String description,
         BigDecimal perSessionCost,
         boolean isActive,
         Instant createdAt
@@ -19,6 +20,7 @@ public record ProgramResponse(
                 program.getId(),
                 program.getOrgId(),
                 program.getName(),
+                program.getDescription(),
                 program.getPerSessionCost(),
                 program.isActive(),
                 program.getCreatedAt()

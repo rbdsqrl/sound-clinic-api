@@ -1,16 +1,15 @@
-package com.simplehearing.program.entity;
+package com.simplehearing.tax.entity;
 
 import jakarta.persistence.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "programs")
-public class Program {
+@Table(name = "taxes")
+public class Tax {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -22,17 +21,11 @@ public class Program {
     @Column(nullable = false)
     private String name;
 
-    @Column(columnDefinition = "TEXT")
-    private String description;
-
-    @Column(name = "per_session_cost", nullable = false, precision = 10, scale = 2)
-    private BigDecimal perSessionCost;
+    @Column(nullable = false)
+    private double rate;
 
     @Column(name = "is_active", nullable = false)
     private boolean isActive = true;
-
-    @Column(name = "created_by")
-    private UUID createdBy;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -42,21 +35,16 @@ public class Program {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    public Program() {}
+    public Tax() {}
 
     public UUID getId() { return id; }
     public UUID getOrgId() { return orgId; }
     public void setOrgId(UUID orgId) { this.orgId = orgId; }
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
-    public String getDescription() { return description; }
-    public void setDescription(String description) { this.description = description; }
-    public BigDecimal getPerSessionCost() { return perSessionCost; }
-    public void setPerSessionCost(BigDecimal perSessionCost) { this.perSessionCost = perSessionCost; }
+    public double getRate() { return rate; }
+    public void setRate(double rate) { this.rate = rate; }
     public boolean isActive() { return isActive; }
     public void setActive(boolean active) { isActive = active; }
-    public UUID getCreatedBy() { return createdBy; }
-    public void setCreatedBy(UUID createdBy) { this.createdBy = createdBy; }
     public Instant getCreatedAt() { return createdAt; }
-    public Instant getUpdatedAt() { return updatedAt; }
 }

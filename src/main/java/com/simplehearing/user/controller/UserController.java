@@ -3,6 +3,8 @@ package com.simplehearing.user.controller;
 import com.simplehearing.auth.security.UserPrincipal;
 import com.simplehearing.common.dto.ApiResponse;
 import com.simplehearing.common.exception.ApiException;
+import com.simplehearing.patient.repository.TherapistPatientRepository;
+import com.simplehearing.user.dto.StaffMemberResponse;
 import com.simplehearing.user.dto.UserResponse;
 import com.simplehearing.user.entity.User;
 import com.simplehearing.user.enums.Role;
@@ -17,8 +19,10 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Tag(name = "Users", description = "User profile and role management")
 @RestController
@@ -32,9 +36,12 @@ public class UserController {
     private static final Set<Role> ELIGIBLE_PRIMARY_ROLES = Set.of(Role.BUSINESS_OWNER, Role.THERAPIST, Role.DOCTOR);
 
     private final UserRepository userRepository;
+    private final TherapistPatientRepository therapistPatientRepository;
 
-    public UserController(UserRepository userRepository) {
+    public UserController(UserRepository userRepository,
+                          TherapistPatientRepository therapistPatientRepository) {
         this.userRepository = userRepository;
+        this.therapistPatientRepository = therapistPatientRepository;
     }
 
     /** Roles that count as "clinical staff" for the therapists list. */
@@ -43,16 +50,30 @@ public class UserController {
     @Operation(summary = "List all staff members in the organisation")
     @GetMapping("/members")
     @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN')")
-    public ResponseEntity<ApiResponse<List<UserResponse>>> listMembers(
+    public ResponseEntity<ApiResponse<List<StaffMemberResponse>>> listMembers(
             @AuthenticationPrincipal UserPrincipal principal) {
 
         List<Role> staffRoles = List.of(
                 Role.ADMIN, Role.BUSINESS_OWNER, Role.OFFICE_ADMIN, Role.THERAPIST, Role.DOCTOR);
-        List<UserResponse> results = userRepository.findByOrgIdAndRoleIn(principal.getOrgId(), staffRoles)
+        List<User> staff = userRepository.findByOrgIdAndRoleIn(principal.getOrgId(), staffRoles)
                 .stream()
                 .sorted(Comparator.comparing(User::getFirstName).thenComparing(User::getLastName))
-                .map(UserResponse::from)
                 .toList();
+
+        List<UUID> therapistIds = staff.stream().map(User::getId).toList();
+        Map<UUID, Long> caseCountByTherapist = therapistPatientRepository
+                .countCasesByTherapistIds(therapistIds)
+                .stream()
+                .collect(Collectors.toMap(
+                        row -> (UUID) row[0],
+                        row -> (Long) row[1]
+                ));
+
+        List<StaffMemberResponse> results = staff.stream()
+                .map(u -> StaffMemberResponse.from(u,
+                        caseCountByTherapist.getOrDefault(u.getId(), 0L).intValue()))
+                .toList();
+
         return ResponseEntity.ok(ApiResponse.success(results));
     }
 
