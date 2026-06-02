@@ -51,11 +51,11 @@ public class LeaveController {
         this.sessionRepository = sessionRepository;
     }
 
-    // ── Apply for leave (therapist / doctor) ─────────────────────────────────
+    // ── Apply for leave ──────────────────────────────────────────────────────
 
     @Operation(summary = "Apply for a leave day")
     @PostMapping
-    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'OFFICE_ADMIN', 'BUSINESS_OWNER', 'ADMIN')")
     public ResponseEntity<ApiResponse<LeaveResponse>> apply(
             @Valid @RequestBody CreateLeaveRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -77,9 +77,42 @@ public class LeaveController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
     }
 
-    // ── List leaves ───────────────────────────────────────────────────────────
+    // ── Own leaves (all roles) ────────────────────────────────────────────────
 
-    @Operation(summary = "List leaves — business owner sees all; therapist sees own")
+    @Operation(summary = "List caller's own leave requests")
+    @GetMapping("/my")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<List<LeaveResponse>>> listMine(
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        List<Leave> leaves = leaveRepository.findByOrgIdAndTherapistIdOrderByLeaveDateDesc(
+                principal.getOrgId(), principal.getId());
+
+        Set<UUID> reviewerIds = leaves.stream()
+                .filter(l -> l.getReviewedBy() != null)
+                .map(Leave::getReviewedBy)
+                .collect(Collectors.toSet());
+
+        Map<UUID, User> reviewerMap = reviewerIds.isEmpty()
+                ? Map.of()
+                : userRepository.findAllById(reviewerIds).stream()
+                        .collect(Collectors.toMap(User::getId, u -> u));
+
+        User caller = principal.getUser();
+        List<LeaveResponse> result = leaves.stream().map(l -> {
+            User reviewer = l.getReviewedBy() != null ? reviewerMap.get(l.getReviewedBy()) : null;
+            return LeaveResponse.from(l,
+                    caller.getFirstName(), caller.getLastName(),
+                    reviewer != null ? reviewer.getFirstName() : null,
+                    reviewer != null ? reviewer.getLastName()  : null);
+        }).toList();
+
+        return ResponseEntity.ok(ApiResponse.success(result));
+    }
+
+    // ── List leaves (admin management view) ──────────────────────────────────
+
+    @Operation(summary = "List leaves — business owner/admin sees all org leaves")
     @GetMapping
     @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'THERAPIST', 'DOCTOR')")
     public ResponseEntity<ApiResponse<List<LeaveResponse>>> list(
@@ -205,7 +238,7 @@ public class LeaveController {
 
     @Operation(summary = "Cancel a pending leave request (own leaves only)")
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'OFFICE_ADMIN', 'BUSINESS_OWNER', 'ADMIN')")
     public ResponseEntity<Void> cancel(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {

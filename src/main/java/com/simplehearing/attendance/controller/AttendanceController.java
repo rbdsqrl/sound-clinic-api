@@ -4,6 +4,7 @@ import com.simplehearing.attendance.dto.AttendanceResponse;
 import com.simplehearing.attendance.dto.CheckInRequest;
 import com.simplehearing.attendance.dto.CheckOutRequest;
 import com.simplehearing.attendance.dto.EnrollFaceRequest;
+import com.simplehearing.attendance.dto.VerifyAttendanceRequest;
 import com.simplehearing.attendance.service.AttendanceService;
 import com.simplehearing.auth.security.UserPrincipal;
 import com.simplehearing.common.dto.ApiResponse;
@@ -48,6 +49,15 @@ public class AttendanceController {
             @Valid @RequestBody CheckOutRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(attendanceService.checkOut(request, principal)));
+    }
+
+    @Operation(summary = "Retry geo and face verification for today's record")
+    @PatchMapping("/today/verify")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER','ADMIN','THERAPIST','DOCTOR','OFFICE_ADMIN','PATIENT')")
+    public ResponseEntity<ApiResponse<AttendanceResponse>> verifyToday(
+            @RequestBody VerifyAttendanceRequest request,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(attendanceService.verifyToday(request, principal)));
     }
 
     @Operation(summary = "Get today's attendance record for the caller")

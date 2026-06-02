@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.simplehearing.attendance.dto.AttendanceResponse;
 import com.simplehearing.attendance.dto.CheckInRequest;
 import com.simplehearing.attendance.dto.CheckOutRequest;
+import com.simplehearing.attendance.dto.VerifyAttendanceRequest;
 import com.simplehearing.attendance.entity.Attendance;
 import com.simplehearing.attendance.enums.AttendanceStatus;
 import com.simplehearing.attendance.repository.AttendanceRepository;
@@ -58,6 +59,16 @@ public class AttendanceService {
             throw new ApiException(HttpStatus.CONFLICT, "Already checked in today");
         }
 
+        if (request.latitude() == null || request.longitude() == null) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Location is required for check-in");
+        }
+
+        User currentUser = principal.getUser();
+        if (currentUser.getFaceDescriptor() != null
+                && (request.faceDescriptor() == null || request.faceDescriptor().isEmpty())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Face verification is required for check-in");
+        }
+
         Clinic clinic = clinicRepository.findByIdAndOrgId(request.clinicId(), principal.getOrgId())
                 .orElseThrow(() -> new ResourceNotFoundException("Clinic not found"));
 
@@ -70,12 +81,11 @@ public class AttendanceService {
         attendance.setCheckInLat(request.latitude());
         attendance.setCheckInLon(request.longitude());
         attendance.setGeoVerified(verifyGeoFence(request.latitude(), request.longitude(), clinic));
-        attendance.setFaceVerified(verifyFace(request.faceDescriptor(), principal.getUser()));
+        attendance.setFaceVerified(verifyFace(request.faceDescriptor(), currentUser));
         attendance.setStatus(AttendanceStatus.CHECKED_IN);
 
         Attendance saved = attendanceRepository.save(attendance);
-        User user = principal.getUser();
-        return AttendanceResponse.from(saved, user.getFirstName(), user.getLastName(), clinic.getName());
+        return AttendanceResponse.from(saved, currentUser.getFirstName(), currentUser.getLastName(), clinic.getName());
     }
 
     // ── Check-out ─────────────────────────────────────────────────────────────
@@ -120,6 +130,31 @@ public class AttendanceService {
                 .findByUserIdAndAttendanceDate(principal.getId(), LocalDate.now())
                 .map(a -> enrich(List.of(a)).get(0))
                 .orElse(null);
+    }
+
+    // ── Retry verification on today's record ─────────────────────────────────
+
+    public AttendanceResponse verifyToday(VerifyAttendanceRequest request, UserPrincipal principal) {
+        LocalDate today = LocalDate.now();
+        Attendance attendance = attendanceRepository
+                .findByUserIdAndAttendanceDate(principal.getId(), today)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "No attendance record found for today"));
+
+        Clinic clinic = clinicRepository.findById(attendance.getClinicId())
+                .orElseThrow(() -> new ResourceNotFoundException("Clinic not found"));
+
+        if (request.latitude() != null && request.longitude() != null) {
+            attendance.setCheckInLat(request.latitude());
+            attendance.setCheckInLon(request.longitude());
+            attendance.setGeoVerified(verifyGeoFence(request.latitude(), request.longitude(), clinic));
+        }
+        if (request.faceDescriptor() != null && !request.faceDescriptor().isEmpty()) {
+            attendance.setFaceVerified(verifyFace(request.faceDescriptor(), principal.getUser()));
+        }
+
+        Attendance saved = attendanceRepository.save(attendance);
+        User user = principal.getUser();
+        return AttendanceResponse.from(saved, user.getFirstName(), user.getLastName(), clinic.getName());
     }
 
     // ── All org attendance (admin view) ───────────────────────────────────────
