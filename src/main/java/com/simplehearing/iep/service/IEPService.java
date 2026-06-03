@@ -13,6 +13,8 @@ import com.simplehearing.iep.enums.IEPPlanStatus;
 import com.simplehearing.iep.repository.IEPGoalProgressRepository;
 import com.simplehearing.iep.repository.IEPGoalRepository;
 import com.simplehearing.iep.repository.IEPPlanRepository;
+import com.simplehearing.patient.entity.Patient;
+import com.simplehearing.patient.repository.PatientRepository;
 import com.simplehearing.user.entity.User;
 import com.simplehearing.user.repository.UserRepository;
 import org.springframework.http.HttpStatus;
@@ -30,15 +32,18 @@ public class IEPService {
     private final IEPGoalRepository goalRepository;
     private final IEPGoalProgressRepository progressRepository;
     private final UserRepository userRepository;
+    private final PatientRepository patientRepository;
 
     public IEPService(IEPPlanRepository planRepository,
                       IEPGoalRepository goalRepository,
                       IEPGoalProgressRepository progressRepository,
-                      UserRepository userRepository) {
+                      UserRepository userRepository,
+                      PatientRepository patientRepository) {
         this.planRepository = planRepository;
         this.goalRepository = goalRepository;
         this.progressRepository = progressRepository;
         this.userRepository = userRepository;
+        this.patientRepository = patientRepository;
     }
 
     // ── List plans for a patient ──────────────────────────────────────────────
@@ -58,6 +63,27 @@ public class IEPService {
 
         return plans.stream()
                 .map(plan -> buildPlanResponse(plan, userMap))
+                .collect(Collectors.toList());
+    }
+
+    // ── List all plans in org ─────────────────────────────────────────────────
+
+    public List<IEPPlanResponse> listAllPlans(UserPrincipal principal) {
+        List<IEPPlan> plans = planRepository.findByOrgIdOrderByCreatedAtDesc(principal.getOrgId());
+
+        Set<UUID> therapistIds = plans.stream().map(IEPPlan::getTherapistId).collect(Collectors.toSet());
+        Set<UUID> patientIds   = plans.stream().map(IEPPlan::getPatientId).collect(Collectors.toSet());
+
+        Map<UUID, User> userMap = therapistIds.isEmpty() ? Map.of()
+                : userRepository.findAllById(therapistIds).stream()
+                        .collect(Collectors.toMap(User::getId, u -> u));
+
+        Map<UUID, Patient> patientMap = patientIds.isEmpty() ? Map.of()
+                : patientRepository.findAllById(patientIds).stream()
+                        .collect(Collectors.toMap(Patient::getId, p -> p));
+
+        return plans.stream()
+                .map(plan -> buildPlanResponse(plan, userMap, patientMap))
                 .collect(Collectors.toList());
     }
 
@@ -394,6 +420,32 @@ public class IEPService {
                 .count();
 
         return IEPPlanResponse.from(plan, therapistName, goalResponses, completedGoals);
+    }
+
+    private IEPPlanResponse buildPlanResponse(IEPPlan plan, Map<UUID, User> userMap,
+                                               Map<UUID, Patient> patientMap) {
+        Patient patient = patientMap.get(plan.getPatientId());
+        String patientName = patient != null
+                ? patient.getFirstName() + " " + patient.getLastName()
+                : null;
+
+        User therapist = userMap.get(plan.getTherapistId());
+        String therapistName = therapist != null ? fullName(therapist) : null;
+
+        List<IEPGoal> goals = goalRepository.findByPlanIdOrderByCreatedAtAsc(plan.getId());
+        Map<UUID, Integer> progressCounts = buildProgressCountMap(goals);
+        Map<UUID, User> goalTherapistMap  = buildTherapistMapForGoals(goals);
+
+        List<IEPGoalResponse> goalResponses = goals.stream()
+                .map(g -> IEPGoalResponse.from(g,
+                        therapistNameForGoal(g, goalTherapistMap),
+                        progressCounts.getOrDefault(g.getId(), 0)))
+                .collect(Collectors.toList());
+        int completedGoals = (int) goals.stream()
+                .filter(g -> g.getStatus() == IEPGoalStatus.COMPLETED)
+                .count();
+
+        return IEPPlanResponse.from(plan, therapistName, patientName, goalResponses, completedGoals);
     }
 
     private Map<UUID, Integer> buildProgressCountMap(List<IEPGoal> goals) {

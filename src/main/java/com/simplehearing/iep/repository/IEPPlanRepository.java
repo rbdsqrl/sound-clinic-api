@@ -13,5 +13,7 @@ public interface IEPPlanRepository extends JpaRepository<IEPPlan, UUID> {
 
     List<IEPPlan> findByOrgIdAndPatientIdOrderByCreatedAtDesc(UUID orgId, UUID patientId);
 
+    List<IEPPlan> findByOrgIdOrderByCreatedAtDesc(UUID orgId);
+
     Optional<IEPPlan> findByIdAndOrgId(UUID id, UUID orgId);
 }

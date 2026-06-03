@@ -35,15 +35,22 @@ public class IEPController {
 
     // ── List plans for a patient ──────────────────────────────────────────────
 
-    @Operation(summary = "List IEP plans for a patient")
+    @Operation(summary = "List IEP plans — for a patient (patientId required) or all plans in org (admin only)")
     @GetMapping
     @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'BUSINESS_OWNER', 'ADMIN', 'PARENT')")
     public ResponseEntity<ApiResponse<List<IEPPlanResponse>>> listPlans(
-            @RequestParam UUID patientId,
+            @RequestParam(required = false) UUID patientId,
             @AuthenticationPrincipal UserPrincipal principal) {
 
-        List<IEPPlanResponse> plans = iepService.listPlans(patientId, principal);
-        return ResponseEntity.ok(ApiResponse.success(plans));
+        if (patientId != null) {
+            return ResponseEntity.ok(ApiResponse.success(iepService.listPlans(patientId, principal)));
+        }
+        // Org-level listing restricted to admin roles
+        String role = principal.getUser().getRole().name();
+        if (!role.equals("ADMIN") && !role.equals("BUSINESS_OWNER")) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "patientId is required for your role");
+        }
+        return ResponseEntity.ok(ApiResponse.success(iepService.listAllPlans(principal)));
     }
 
     // ── Create a plan ─────────────────────────────────────────────────────────
