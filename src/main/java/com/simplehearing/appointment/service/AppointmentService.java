@@ -13,6 +13,7 @@ import com.simplehearing.common.exception.ApiException;
 import com.simplehearing.notification.EmailService;
 import com.simplehearing.organisation.repository.OrganisationRepository;
 import com.simplehearing.patient.entity.Patient;
+import com.simplehearing.patient.repository.PatientParentRepository;
 import com.simplehearing.patient.repository.PatientRepository;
 import com.simplehearing.patient.repository.TherapistPatientRepository;
 import com.simplehearing.user.entity.User;
@@ -24,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -38,6 +40,7 @@ public class AppointmentService {
     private final AppointmentRepository appointmentRepository;
     private final UserRepository userRepository;
     private final PatientRepository patientRepository;
+    private final PatientParentRepository patientParentRepository;
     private final ClinicRepository clinicRepository;
     private final TherapistPatientRepository therapistPatientRepository;
     private final EmailService emailService;
@@ -47,6 +50,7 @@ public class AppointmentService {
                               AppointmentRepository appointmentRepository,
                               UserRepository userRepository,
                               PatientRepository patientRepository,
+                              PatientParentRepository patientParentRepository,
                               ClinicRepository clinicRepository,
                               TherapistPatientRepository therapistPatientRepository,
                               EmailService emailService,
@@ -55,6 +59,7 @@ public class AppointmentService {
         this.appointmentRepository = appointmentRepository;
         this.userRepository = userRepository;
         this.patientRepository = patientRepository;
+        this.patientParentRepository = patientParentRepository;
         this.clinicRepository = clinicRepository;
         this.therapistPatientRepository = therapistPatientRepository;
         this.emailService = emailService;
@@ -194,8 +199,30 @@ public class AppointmentService {
 
         String orgName = organisationRepository.findById(principal.getOrgId())
                 .map(o -> o.getName()).orElse("Simple Hearing");
+
+        // Collect parent emails for this patient
+        List<UUID> parentIds = patientParentRepository.findById_PatientId(patient.getId())
+                .stream().map(pp -> pp.getId().getParentId()).toList();
+        List<String> parentEmails = userRepository.findAllById(parentIds).stream()
+                .map(User::getEmail)
+                .filter(e -> e != null && !e.isBlank())
+                .toList();
+
+        // Collect business owner / admin emails in the org
+        List<String> managerEmails = userRepository
+                .findByOrgIdAndRoleIn(principal.getOrgId(), List.of(Role.BUSINESS_OWNER, Role.ADMIN))
+                .stream().map(User::getEmail)
+                .filter(e -> e != null && !e.isBlank())
+                .toList();
+
+        List<String> recipients = new ArrayList<>();
+        recipients.addAll(parentEmails);
+        recipients.addAll(managerEmails);
+        // Deduplicate while preserving order
+        List<String> uniqueRecipients = recipients.stream().distinct().toList();
+
         emailService.sendAppointmentReminderEmail(
-                principal.getUser().getEmail(),
+                uniqueRecipients,
                 patient.getFirstName() + " " + patient.getLastName(),
                 therapist.getFirstName() + " " + therapist.getLastName(),
                 req.appointmentDate().toString(),

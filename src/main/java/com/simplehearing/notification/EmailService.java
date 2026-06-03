@@ -85,7 +85,7 @@ public class EmailService {
     }
 
     @Async
-    public void sendAppointmentReminderEmail(String to, String patientName, String therapistName,
+    public void sendAppointmentReminderEmail(List<String> recipients, String patientName, String therapistName,
                                               String date, String time, String clinicName,
                                               String orgName) {
         Map<String, String> vars = new java.util.HashMap<>();
@@ -97,7 +97,10 @@ public class EmailService {
         vars.put("TIME", time);
         vars.put("CLINIC_NAME", clinicName);
         String html = fillStubs(loadTemplate("appointment-reminder"), vars);
-        send(to, "Appointment confirmed — " + date, html);
+        String subject = "Appointment confirmed — " + date;
+        for (String to : recipients) {
+            send(to, subject, html);
+        }
     }
 
     @Async

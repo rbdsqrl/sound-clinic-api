@@ -289,7 +289,16 @@ public class InvitationService {
         invitationRepository.save(invitation);
 
         log.info("Linked invitation created for {} ({}) → patient {}", email, effectiveRole, patientId);
-        return "/accept-invite?token=" + rawToken;
+
+        String acceptPath = "/accept-invite?token=" + rawToken;
+        String orgName = organisationRepository.findById(orgId)
+                .map(o -> o.getName()).orElse("Simple Hearing");
+        String clinicName = clinicId != null
+                ? clinicRepository.findById(clinicId).map(c -> c.getName()).orElse(null)
+                : null;
+        emailService.sendInvitationEmail(email, acceptPath, effectiveRole, orgName, clinicName);
+
+        return acceptPath;
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────
