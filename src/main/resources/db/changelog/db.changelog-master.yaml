@@ -116,3 +116,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/039-iep-goal-progress-tag.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/040-create-iep-templates.sql
+      relativeToChangelogFile: false
