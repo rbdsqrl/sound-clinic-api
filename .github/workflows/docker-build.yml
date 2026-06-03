@@ -115,7 +115,7 @@ jobs:
             SMTP_STARTTLS=true
             SMTP_USERNAME=${{ secrets.SMTP_USERNAME }}
             SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}
-            EMAIL_FROM=noreply@simplehearing.com
+            EMAIL_FROM=contact@naprsolutions.com
 
   # ── Publish coverage to GitHub Pages ─────────────────────────────────────────
   publish-pages:
