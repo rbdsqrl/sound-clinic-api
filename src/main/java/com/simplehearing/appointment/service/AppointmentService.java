@@ -11,6 +11,7 @@ import com.simplehearing.clinic.entity.Clinic;
 import com.simplehearing.clinic.repository.ClinicRepository;
 import com.simplehearing.common.exception.ApiException;
 import com.simplehearing.notification.EmailService;
+import com.simplehearing.organisation.repository.OrganisationRepository;
 import com.simplehearing.patient.entity.Patient;
 import com.simplehearing.patient.repository.PatientRepository;
 import com.simplehearing.patient.repository.TherapistPatientRepository;
@@ -40,6 +41,7 @@ public class AppointmentService {
     private final ClinicRepository clinicRepository;
     private final TherapistPatientRepository therapistPatientRepository;
     private final EmailService emailService;
+    private final OrganisationRepository organisationRepository;
 
     public AppointmentService(TherapistSlotRepository slotRepository,
                               AppointmentRepository appointmentRepository,
@@ -47,7 +49,8 @@ public class AppointmentService {
                               PatientRepository patientRepository,
                               ClinicRepository clinicRepository,
                               TherapistPatientRepository therapistPatientRepository,
-                              EmailService emailService) {
+                              EmailService emailService,
+                              OrganisationRepository organisationRepository) {
         this.slotRepository = slotRepository;
         this.appointmentRepository = appointmentRepository;
         this.userRepository = userRepository;
@@ -55,6 +58,7 @@ public class AppointmentService {
         this.clinicRepository = clinicRepository;
         this.therapistPatientRepository = therapistPatientRepository;
         this.emailService = emailService;
+        this.organisationRepository = organisationRepository;
     }
 
     // ── Therapist Slots ───────────────────────────────────────────────────────
@@ -188,13 +192,16 @@ public class AppointmentService {
 
         Appointment saved = appointmentRepository.save(appt);
 
+        String orgName = organisationRepository.findById(principal.getOrgId())
+                .map(o -> o.getName()).orElse("Simple Hearing");
         emailService.sendAppointmentReminderEmail(
                 principal.getUser().getEmail(),
                 patient.getFirstName() + " " + patient.getLastName(),
                 therapist.getFirstName() + " " + therapist.getLastName(),
                 req.appointmentDate().toString(),
                 req.startTime().toString(),
-                clinic.getName()
+                clinic.getName(),
+                orgName
         );
 
         return AppointmentResponse.from(saved,

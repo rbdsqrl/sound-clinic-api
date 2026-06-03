@@ -11,6 +11,7 @@ import com.simplehearing.leave.entity.Leave;
 import com.simplehearing.leave.enums.LeaveStatus;
 import com.simplehearing.leave.repository.LeaveRepository;
 import com.simplehearing.notification.EmailService;
+import com.simplehearing.organisation.repository.OrganisationRepository;
 import com.simplehearing.session.enums.RescheduleReason;
 import com.simplehearing.session.enums.TherapySessionStatus;
 import com.simplehearing.session.repository.TherapySessionRepository;
@@ -42,13 +43,16 @@ public class LeaveController {
     private final UserRepository userRepository;
     private final EmailService emailService;
     private final TherapySessionRepository sessionRepository;
+    private final OrganisationRepository organisationRepository;
 
     public LeaveController(LeaveRepository leaveRepository, UserRepository userRepository,
-                           EmailService emailService, TherapySessionRepository sessionRepository) {
+                           EmailService emailService, TherapySessionRepository sessionRepository,
+                           OrganisationRepository organisationRepository) {
         this.leaveRepository = leaveRepository;
         this.userRepository = userRepository;
         this.emailService = emailService;
         this.sessionRepository = sessionRepository;
+        this.organisationRepository = organisationRepository;
     }
 
     // ── Apply for leave ──────────────────────────────────────────────────────
@@ -217,13 +221,16 @@ public class LeaveController {
             String reviewerName = (reviewer != null)
                     ? reviewer.getFirstName() + " " + reviewer.getLastName()
                     : "Administrator";
+            String orgName = organisationRepository.findById(principal.getOrgId())
+                    .map(o -> o.getName()).orElse("Simple Hearing");
             emailService.sendLeaveStatusEmail(
                     therapist.getEmail(),
                     therapist.getFirstName() + " " + therapist.getLastName(),
                     saved.getLeaveDate().toString(),
                     saved.getLeaveType().name(),
                     newStatus.name(),
-                    reviewerName
+                    reviewerName,
+                    orgName
             );
         }
 

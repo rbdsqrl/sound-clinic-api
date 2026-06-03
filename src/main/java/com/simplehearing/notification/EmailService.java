@@ -75,39 +75,49 @@ public class EmailService {
 
     @Async
     public void sendWelcomeEmail(String to, String firstName, String orgName) {
-        String html = fillStubs(loadTemplate("welcome"), Map.of(
-                "FIRST_NAME", firstName,
-                "ORG_NAME", orgName,
-                "LOGIN_URL", props.getBaseUrl() + "/login"
-        ));
+        Map<String, String> vars = new java.util.HashMap<>();
+        vars.put("FIRST_NAME", firstName);
+        vars.put("ORG_NAME", orgName);
+        vars.put("LOGIN_URL", props.getBaseUrl() + "/login");
+        vars.put("LOGO_URL", props.getBaseUrl() + "/logo.png");
+        String html = fillStubs(loadTemplate("welcome"), vars);
         send(to, "Welcome to " + orgName, html);
     }
 
     @Async
     public void sendAppointmentReminderEmail(String to, String patientName, String therapistName,
-                                              String date, String time, String clinicName) {
-        String html = fillStubs(loadTemplate("appointment-reminder"), Map.of(
-                "PATIENT_NAME", patientName,
-                "THERAPIST_NAME", therapistName,
-                "DATE", date,
-                "TIME", time,
-                "CLINIC_NAME", clinicName
-        ));
+                                              String date, String time, String clinicName,
+                                              String orgName) {
+        Map<String, String> vars = new java.util.HashMap<>();
+        vars.put("ORG_NAME", orgName);
+        vars.put("LOGO_URL", props.getBaseUrl() + "/logo.png");
+        vars.put("PATIENT_NAME", patientName);
+        vars.put("THERAPIST_NAME", therapistName);
+        vars.put("DATE", date);
+        vars.put("TIME", time);
+        vars.put("CLINIC_NAME", clinicName);
+        String html = fillStubs(loadTemplate("appointment-reminder"), vars);
         send(to, "Appointment confirmed — " + date, html);
     }
 
     @Async
     public void sendLeaveStatusEmail(String to, String therapistName, String leaveDate,
-                                      String leaveType, String status, String reviewerName) {
-        String statusClass = "APPROVED".equalsIgnoreCase(status) ? "approved" : "rejected";
-        String html = fillStubs(loadTemplate("leave-status"), Map.of(
-                "THERAPIST_NAME", therapistName,
-                "LEAVE_DATE", leaveDate,
-                "LEAVE_TYPE", formatLeaveType(leaveType),
-                "STATUS", status,
-                "STATUS_CLASS", statusClass,
-                "REVIEWER_NAME", reviewerName
-        ));
+                                      String leaveType, String status, String reviewerName,
+                                      String orgName) {
+        boolean approved = "APPROVED".equalsIgnoreCase(status);
+        Map<String, String> vars = new java.util.HashMap<>();
+        vars.put("ORG_NAME", orgName);
+        vars.put("LOGO_URL", props.getBaseUrl() + "/logo.png");
+        vars.put("THERAPIST_NAME", therapistName);
+        vars.put("LEAVE_DATE", leaveDate);
+        vars.put("LEAVE_TYPE", formatLeaveType(leaveType));
+        vars.put("STATUS", status.toUpperCase());
+        vars.put("STATUS_LABEL", approved ? "approved" : "rejected");
+        vars.put("STATUS_COLOR", approved ? "#166534" : "#991b1b");
+        vars.put("STATUS_BG", approved ? "#dcfce7" : "#fee2e2");
+        vars.put("STATUS_BORDER", approved ? "#bbf7d0" : "#fecaca");
+        vars.put("REVIEWER_NAME", reviewerName);
+        String html = fillStubs(loadTemplate("leave-status"), vars);
         send(to, "Leave request " + status.toLowerCase() + " — " + leaveDate, html);
     }
 
