@@ -109,6 +109,13 @@ jobs:
             DB_PASS=${{ secrets.DB_PASS }}
             JWT_SECRET=${{ secrets.JWT_SECRET }}
             ORG_ID=${{ secrets.ORG_ID }}
+            SMTP_HOST=smtp-relay.brevo.com
+            SMTP_PORT=587
+            SMTP_AUTH=true
+            SMTP_STARTTLS=true
+            SMTP_USERNAME=${{ secrets.SMTP_USERNAME }}
+            SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}
+            EMAIL_FROM=noreply@simplehearing.com
 
   # ── Publish coverage to GitHub Pages ─────────────────────────────────────────
   publish-pages:
