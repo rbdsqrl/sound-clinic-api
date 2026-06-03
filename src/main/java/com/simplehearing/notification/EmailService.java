@@ -35,13 +35,20 @@ public class EmailService {
     }
 
     @Async
-    public void sendInvitationEmail(String to, String acceptPath, Role role, String orgName) {
-        String html = fillStubs(loadTemplate("invitation"), Map.of(
-                "ORG_NAME", orgName,
-                "ROLE", formatRole(role),
-                "ACCEPT_LINK", props.getBaseUrl() + acceptPath,
-                "EXPIRY_HOURS", "72"
-        ));
+    public void sendInvitationEmail(String to, String acceptPath, Role role, String orgName, String clinicName) {
+        String clinicSection = (clinicName != null && !clinicName.isBlank())
+                ? "<p style=\"margin:0 0 16px;font-size:15px;color:#374151;line-height:1.6;\">You'll be based at <strong style=\"color:#111827;\">" + clinicName + "</strong>.</p>"
+                : "";
+        String clinicSubtitle = (clinicName != null && !clinicName.isBlank()) ? " &middot; " + clinicName : "";
+        Map<String, String> vars = new java.util.HashMap<>();
+        vars.put("ORG_NAME", orgName);
+        vars.put("ROLE", formatRole(role));
+        vars.put("ACCEPT_LINK", props.getBaseUrl() + acceptPath);
+        vars.put("EXPIRY_HOURS", "72");
+        vars.put("LOGO_URL", props.getBaseUrl() + "/logo.png");
+        vars.put("CLINIC_SECTION", clinicSection);
+        vars.put("CLINIC_SUBTITLE", clinicSubtitle);
+        String html = fillStubs(loadTemplate("invitation"), vars);
         send(to, "You're invited to join " + orgName, html);
     }
 

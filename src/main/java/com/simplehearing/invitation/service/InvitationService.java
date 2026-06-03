@@ -125,12 +125,11 @@ public class InvitationService {
         String acceptPath = "/accept-invite?token=" + rawToken;
         String orgName = organisationRepository.findById(caller.getOrgId())
                 .map(o -> o.getName()).orElse("Simple Hearing");
-        emailService.sendInvitationEmail(request.email(), acceptPath, request.role(), orgName);
-
         String clinicName = invitation.getClinicId() != null
                 ? clinicRepository.findById(invitation.getClinicId())
                         .map(c -> c.getName()).orElse(null)
                 : null;
+        emailService.sendInvitationEmail(request.email(), acceptPath, request.role(), orgName, clinicName);
 
         return InviteResponse.from(invitation, acceptPath, clinicName);
     }
@@ -247,13 +246,12 @@ public class InvitationService {
         String acceptPath = "/accept-invite?token=" + rawToken;
         String orgName = organisationRepository.findById(orgId)
                 .map(o -> o.getName()).orElse("Simple Hearing");
-        emailService.sendInvitationEmail(invitation.getEmail(), acceptPath, invitation.getRole(), orgName);
-
-        log.info("Invitation resent for {} by regenerating token", invitation.getEmail());
-
         String clinicName = invitation.getClinicId() != null
                 ? clinicRepository.findById(invitation.getClinicId()).map(c -> c.getName()).orElse(null)
                 : null;
+        emailService.sendInvitationEmail(invitation.getEmail(), acceptPath, invitation.getRole(), orgName, clinicName);
+
+        log.info("Invitation resent for {} by regenerating token", invitation.getEmail());
 
         return InviteResponse.from(invitation, acceptPath, clinicName);
     }
