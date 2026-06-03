@@ -13,11 +13,13 @@ import com.simplehearing.common.exception.ApiException;
 import com.simplehearing.inquiry.repository.InquiryLogRepository;
 import com.simplehearing.inquiry.repository.InquiryRepository;
 import com.simplehearing.invitation.service.InvitationService;
+import com.simplehearing.notification.EmailService;
 import com.simplehearing.organisation.repository.OrganisationRepository;
 import com.simplehearing.patient.entity.Patient;
 import com.simplehearing.patient.enums.PatientStage;
 import com.simplehearing.patient.repository.PatientRepository;
 import com.simplehearing.user.enums.Role;
+import com.simplehearing.user.repository.UserRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -44,6 +46,8 @@ public class InquiryController {
     private final OrganisationRepository organisationRepository;
     private final PatientRepository patientRepository;
     private final InvitationService invitationService;
+    private final UserRepository userRepository;
+    private final EmailService emailService;
 
     @Value("${app.org-id:}")
     private String defaultOrgId;
@@ -52,12 +56,16 @@ public class InquiryController {
                              InquiryLogRepository inquiryLogRepository,
                              OrganisationRepository organisationRepository,
                              PatientRepository patientRepository,
-                             InvitationService invitationService) {
+                             InvitationService invitationService,
+                             UserRepository userRepository,
+                             EmailService emailService) {
         this.inquiryRepository = inquiryRepository;
         this.inquiryLogRepository = inquiryLogRepository;
         this.organisationRepository = organisationRepository;
         this.patientRepository = patientRepository;
         this.invitationService = invitationService;
+        this.userRepository = userRepository;
+        this.emailService = emailService;
     }
 
     // ── Analytics ─────────────────────────────────────────────────────────────
@@ -154,6 +162,23 @@ public class InquiryController {
         inquiry.setOrgId(resolvedOrgId);
 
         Inquiry saved = inquiryRepository.save(inquiry);
+
+        // Notify all admins asynchronously
+        final UUID orgIdForEmail = resolvedOrgId;
+        if (orgIdForEmail != null) {
+            String orgName = organisationRepository.findById(orgIdForEmail)
+                    .map(o -> o.getName()).orElse("Simple Hearing");
+            List<String> adminEmails = userRepository.findByOrgIdAndRoleIn(
+                    orgIdForEmail,
+                    List.of(Role.BUSINESS_OWNER, Role.ADMIN, Role.OFFICE_ADMIN)
+            ).stream().map(u -> u.getEmail()).filter(e -> e != null && !e.isBlank()).toList();
+            if (!adminEmails.isEmpty()) {
+                String preferredTime = saved.getPreferredTime() != null ? saved.getPreferredTime().name() : null;
+                emailService.sendNewInquiryNotification(adminEmails, saved.getName(), saved.getPhone(),
+                        saved.getEmail(), saved.getReason(), preferredTime, orgName);
+            }
+        }
+
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(InquiryResponse.from(saved)));
     }
 

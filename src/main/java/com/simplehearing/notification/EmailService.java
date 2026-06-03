@@ -53,6 +53,26 @@ public class EmailService {
     }
 
     @Async
+    public void sendNewInquiryNotification(List<String> recipients, String name, String phone,
+                                            String email, String reason, String preferredTime,
+                                            String orgName) {
+        Map<String, String> vars = new java.util.HashMap<>();
+        vars.put("ORG_NAME", orgName);
+        vars.put("LOGO_URL", props.getBaseUrl() + "/logo.png");
+        vars.put("NAME", name);
+        vars.put("PHONE", phone);
+        vars.put("EMAIL", email != null && !email.isBlank() ? email : "Not provided");
+        vars.put("REASON", reason != null && !reason.isBlank() ? reason : "Not provided");
+        vars.put("PREFERRED_TIME", preferredTime != null ? preferredTime.charAt(0) + preferredTime.substring(1).toLowerCase() : "No preference");
+        vars.put("DASHBOARD_URL", props.getBaseUrl() + "/inquiries");
+        String html = fillStubs(loadTemplate("new-inquiry"), vars);
+        String subject = "New consultation request from " + name;
+        for (String to : recipients) {
+            send(to, subject, html);
+        }
+    }
+
+    @Async
     public void sendWelcomeEmail(String to, String firstName, String orgName) {
         String html = fillStubs(loadTemplate("welcome"), Map.of(
                 "FIRST_NAME", firstName,
