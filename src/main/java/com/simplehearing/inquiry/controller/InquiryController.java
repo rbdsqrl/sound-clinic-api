@@ -223,6 +223,14 @@ public class InquiryController {
 
         String actorName = principal.getUser().getFirstName() + " " + principal.getUser().getLastName();
 
+        // Prevent reverting a converted inquiry's status
+        if (inquiry.getStatus() == InquiryStatus.CONVERTED
+                && request.status() != null
+                && request.status() != InquiryStatus.CONVERTED) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "Cannot change the status of a converted inquiry");
+        }
+
         // Status change → auto-log
         if (request.status() != null && request.status() != inquiry.getStatus()) {
             InquiryStatus oldStatus = inquiry.getStatus();
@@ -309,6 +317,11 @@ public class InquiryController {
 
         Inquiry inquiry = inquiryRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Inquiry not found"));
+
+        if (inquiry.getStatus() == InquiryStatus.CONVERTED) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "This inquiry has already been converted to a patient");
+        }
 
         // Create the patient record
         Patient patient = new Patient();
