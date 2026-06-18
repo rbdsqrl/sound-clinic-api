@@ -1,6 +1,7 @@
 spring:
   application:
     name: simple-hearing-api
+    # redeploy trigger
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/simplehearing}
     username: ${DB_USER:simplehearing}
