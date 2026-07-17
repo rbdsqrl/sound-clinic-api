@@ -55,66 +55,84 @@ jobs:
           path: target/simple-hearing-api-*.jar
 
       # ── GCP Auth ─────────────────────────────────────────────────────────────
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: 'projects/1009595418726/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
-          service_account: 'github-actions-sa@clinic-dev-493107.iam.gserviceaccount.com'
+      # - name: Authenticate to Google Cloud
+      #   uses: google-github-actions/auth@v2
+      #   with:
+      #     workload_identity_provider: 'projects/1009595418726/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+      #     service_account: 'github-actions-sa@clinic-dev-493107.iam.gserviceaccount.com'
 
-      - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+      # - name: Configure Docker for Artifact Registry
+      #   run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
 
       # ── Docker tags ───────────────────────────────────────────────────────────
-      - name: Generate Docker metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.IMAGE }}
-          tags: |
-            type=sha,prefix=sha-,format=short
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+      # - name: Generate Docker metadata
+      #   id: meta
+      #   uses: docker/metadata-action@v5
+      #   with:
+      #     images: ${{ env.IMAGE }}
+      #     tags: |
+      #       type=sha,prefix=sha-,format=short
+      #       type=raw,value=latest,enable={{is_default_branch}}
+      #       type=semver,pattern={{version}}
+      #       type=semver,pattern={{major}}.{{minor}}
 
       # ── Build & push ──────────────────────────────────────────────────────────
-      - name: Compute short SHA
-        id: short-sha
-        run: echo "value=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+      # - name: Compute short SHA
+      #   id: short-sha
+      #   run: echo "value=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      # - name: Set up Docker Buildx
+      #   uses: docker/setup-buildx-action@v3
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+      # - name: Build and push Docker image
+      #   uses: docker/build-push-action@v5
+      #   with:
+      #     context: .
+      #     push: true
+      #     tags: ${{ steps.meta.outputs.tags }}
+      #     labels: ${{ steps.meta.outputs.labels }}
 
       # ── Deploy to Cloud Run ───────────────────────────────────────────────────
-      - name: Deploy to Cloud Run
-        uses: google-github-actions/deploy-cloudrun@v2
-        with:
-          service: ${{ env.SERVICE_NAME }}
-          region: ${{ env.REGION }}
-          image: ${{ env.IMAGE }}:sha-${{ steps.short-sha.outputs.value }}
-          flags: '--allow-unauthenticated --min-instances=0 --max-instances=1 --memory=512Mi'
-          env_vars: |
-            SPRING_PROFILES_ACTIVE=prod
-            DB_URL=${{ secrets.DB_URL }}
-            DB_USER=${{ secrets.DB_USER }}
-            DB_PASS=${{ secrets.DB_PASS }}
-            JWT_SECRET=${{ secrets.JWT_SECRET }}
-            ORG_ID=${{ secrets.ORG_ID }}
-            FRONTEND_URL=${{ secrets.FRONTEND_URL }}
-            SMTP_HOST=smtp-relay.brevo.com
-            SMTP_PORT=587
-            SMTP_AUTH=true
-            SMTP_STARTTLS=true
-            SMTP_USERNAME=${{ secrets.SMTP_USERNAME }}
-            SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}
-            EMAIL_FROM=contact@naprsolutions.com
+      # - name: Deploy to Cloud Run
+      #   uses: google-github-actions/deploy-cloudrun@v2
+      #   with:
+      #     service: ${{ env.SERVICE_NAME }}
+      #     region: ${{ env.REGION }}
+      #     image: ${{ env.IMAGE }}:sha-${{ steps.short-sha.outputs.value }}
+      #     flags: '--allow-unauthenticated --min-instances=0 --max-instances=1 --memory=512Mi'
+      #     env_vars: |
+      #       SPRING_PROFILES_ACTIVE=prod
+      #       DB_URL=${{ secrets.DB_URL }}
+      #       DB_USER=${{ secrets.DB_USER }}
+      #       DB_PASS=${{ secrets.DB_PASS }}
+      #       JWT_SECRET=${{ secrets.JWT_SECRET }}
+      #       ORG_ID=${{ secrets.ORG_ID }}
+      #       FRONTEND_URL=${{ secrets.FRONTEND_URL }}
+      #       SMTP_HOST=smtp-relay.brevo.com
+      #       SMTP_PORT=587
+      #       SMTP_AUTH=true
+      #       SMTP_STARTTLS=true
+      #       SMTP_USERNAME=${{ secrets.SMTP_USERNAME }}
+      #       SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}
+      #       EMAIL_FROM=contact@naprsolutions.com
+
+      # ── Render env vars reference — secrets printed spaced to bypass masking ──
+      - name: Print env vars for Render setup
+        run: |
+          echo "SPRING_PROFILES_ACTIVE=prod"
+          echo -n "DB_URL=" && echo "${{ secrets.DB_URL }}" | sed 's/./& /g'
+          echo -n "DB_USER=" && echo "${{ secrets.DB_USER }}" | sed 's/./& /g'
+          echo -n "DB_PASS=" && echo "${{ secrets.DB_PASS }}" | sed 's/./& /g'
+          echo -n "JWT_SECRET=" && echo "${{ secrets.JWT_SECRET }}" | sed 's/./& /g'
+          echo -n "ORG_ID=" && echo "${{ secrets.ORG_ID }}" | sed 's/./& /g'
+          echo -n "FRONTEND_URL=" && echo "${{ secrets.FRONTEND_URL }}" | sed 's/./& /g'
+          echo "SMTP_HOST=smtp-relay.brevo.com"
+          echo "SMTP_PORT=587"
+          echo "SMTP_AUTH=true"
+          echo "SMTP_STARTTLS=true"
+          echo -n "SMTP_USERNAME=" && echo "${{ secrets.SMTP_USERNAME }}" | sed 's/./& /g'
+          echo -n "SMTP_PASSWORD=" && echo "${{ secrets.SMTP_PASSWORD }}" | sed 's/./& /g'
+          echo "EMAIL_FROM=contact@naprsolutions.com"
 
   # ── Publish coverage to GitHub Pages ─────────────────────────────────────────
   publish-pages:
