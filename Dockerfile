@@ -1,17 +1,23 @@
-# ── Runtime image ─────────────────────────────────────────────────────────────
-# The JAR is built by the CI workflow (mvn package) before docker build runs.
-# .dockerignore passes target/*.jar through so we just copy it here.
+# ── Build stage ────────────────────────────────────────────────────────────────
+FROM maven:3.9-eclipse-temurin-21-alpine AS builder
+WORKDIR /app
+
+# Download dependencies first — this layer is cached unless pom.xml changes
+COPY pom.xml .
+RUN mvn dependency:go-offline -q
+
+COPY src ./src
+RUN mvn -B package -DskipTests -q
+
+# ── Runtime stage ──────────────────────────────────────────────────────────────
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
-# Non-root user for security
 RUN addgroup -S spring && adduser -S spring -G spring
 USER spring
 
-COPY target/simple-hearing-api-*.jar app.jar
+COPY --from=builder /app/target/simple-hearing-api-*.jar app.jar
 
-# Always run with the prod Spring profile inside the container.
-# Override by passing -e SPRING_PROFILES_ACTIVE=local at docker run time if needed.
 ENV SPRING_PROFILES_ACTIVE=prod
 
 EXPOSE 8080
