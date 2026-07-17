@@ -10,6 +10,7 @@ public class EmailProperties {
     private String fromAddress = "noreply@simplehearing.com";
     private String fromName = "Simple Hearing";
     private String baseUrl = "http://localhost:3000";
+    private String apiKey;
 
     public String getFromAddress() { return fromAddress; }
     public void setFromAddress(String fromAddress) { this.fromAddress = fromAddress; }
@@ -19,4 +20,7 @@ public class EmailProperties {
 
     public String getBaseUrl() { return baseUrl; }
     public void setBaseUrl(String baseUrl) { this.baseUrl = baseUrl; }
+
+    public String getApiKey() { return apiKey; }
+    public void setApiKey(String apiKey) { this.apiKey = apiKey; }
 }

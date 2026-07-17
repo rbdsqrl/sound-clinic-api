@@ -1,38 +1,33 @@
 package com.simplehearing.notification;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.simplehearing.user.enums.Role;
-import jakarta.mail.MessagingException;
-import jakarta.mail.internet.MimeMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ClassPathResource;
-import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.http.MediaType;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClient;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.UnsupportedEncodingException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 @Service
 public class EmailService {
 
     private static final Logger log = LoggerFactory.getLogger(EmailService.class);
+    private static final String BREVO_SMTP_URL = "https://api.brevo.com/v3/smtp/email";
 
-    private final JavaMailSender mailSender;
+    private final RestClient restClient;
     private final EmailProperties props;
 
-    public EmailService(Optional<JavaMailSender> mailSender, EmailProperties props) {
-        this.mailSender = mailSender.orElse(null);
+    public EmailService(EmailProperties props) {
         this.props = props;
-        if (this.mailSender == null) {
-            log.warn("No JavaMailSender configured — email sending is disabled");
-        }
+        this.restClient = RestClient.create();
     }
 
     @Async
@@ -143,23 +138,40 @@ public class EmailService {
     }
 
     private void send(String to, String subject, String htmlBody) {
-        if (mailSender == null) {
-            log.warn("Email skipped (no SMTP configured) — to={} subject={}", to, subject);
+        if (props.getApiKey() == null || props.getApiKey().isBlank()) {
+            log.warn("Email skipped (BREVO_API_KEY not set) — to={} subject={}", to, subject);
             return;
         }
         try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, "utf-8");
-            helper.setFrom(props.getFromAddress(), props.getFromName());
-            helper.setTo(to);
-            helper.setSubject(subject);
-            helper.setText(htmlBody, true);
-            mailSender.send(message);
+            var request = new BrevoEmailRequest(
+                new BrevoSender(props.getFromName(), props.getFromAddress()),
+                List.of(new BrevoRecipient(to)),
+                subject,
+                htmlBody
+            );
+            restClient.post()
+                .uri(BREVO_SMTP_URL)
+                .header("api-key", props.getApiKey())
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(request)
+                .retrieve()
+                .toBodilessEntity();
             log.info("Email sent to {} — {}", to, subject);
-        } catch (MessagingException | UnsupportedEncodingException e) {
+        } catch (Exception e) {
             log.error("Failed to send email to {}: {}", to, e.getMessage());
         }
     }
+
+    private record BrevoEmailRequest(
+        BrevoSender sender,
+        List<BrevoRecipient> to,
+        String subject,
+        @JsonProperty("htmlContent") String htmlContent
+    ) {}
+
+    private record BrevoSender(String name, String email) {}
+
+    private record BrevoRecipient(String email) {}
 
     private String formatRole(Role role) {
         return switch (role) {

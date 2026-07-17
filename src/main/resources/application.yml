@@ -16,15 +16,6 @@ spring:
     show-sql: false
   liquibase:
     change-log: classpath:db/changelog/db.changelog-master.yaml
-  mail:
-    host: ${SMTP_HOST:localhost}
-    port: ${SMTP_PORT:1025}
-    username: ${SMTP_USERNAME:}
-    password: ${SMTP_PASSWORD:}
-    test-connection: false
-    properties:
-      mail.smtp.auth: ${SMTP_AUTH:false}
-      mail.smtp.starttls.enable: ${SMTP_STARTTLS:false}
   servlet:
     multipart:
       max-file-size: 100MB
@@ -75,6 +66,7 @@ app:
     from-address: ${EMAIL_FROM:noreply@simplehearing.com}
     from-name: ${EMAIL_FROM_NAME:Simple Hearing}
     base-url: ${FRONTEND_URL:http://localhost:3000}
+    api-key: ${BREVO_API_KEY:}
   # Single-org deployment: the org-id assigned to all public (unauthenticated) inquiries.
   # Set ORG_ID env var in production. Leave blank during dev — controller handles null gracefully.
   org-id: ${ORG_ID:}
