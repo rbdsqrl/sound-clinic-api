@@ -55,10 +55,6 @@ public class AttendanceService {
     public AttendanceResponse checkIn(CheckInRequest request, UserPrincipal principal) {
         LocalDate today = LocalDate.now();
 
-        if (attendanceRepository.findByUserIdAndAttendanceDate(principal.getId(), today).isPresent()) {
-            throw new ApiException(HttpStatus.CONFLICT, "Already checked in today");
-        }
-
         if (request.latitude() == null || request.longitude() == null) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Location is required for check-in");
         }
@@ -72,7 +68,14 @@ public class AttendanceService {
         Clinic clinic = clinicRepository.findByIdAndOrgId(request.clinicId(), principal.getOrgId())
                 .orElseThrow(() -> new ResourceNotFoundException("Clinic not found"));
 
-        Attendance attendance = new Attendance();
+        Attendance attendance = attendanceRepository
+                .findByUserIdAndAttendanceDate(principal.getId(), today)
+                .orElseGet(Attendance::new);
+
+        if (attendance.getId() != null && attendance.getStatus() == AttendanceStatus.CHECKED_IN) {
+            throw new ApiException(HttpStatus.CONFLICT, "Already checked in today");
+        }
+
         attendance.setOrgId(principal.getOrgId());
         attendance.setUserId(principal.getId());
         attendance.setClinicId(clinic.getId());
@@ -80,6 +83,9 @@ public class AttendanceService {
         attendance.setCheckInTime(Instant.now());
         attendance.setCheckInLat(request.latitude());
         attendance.setCheckInLon(request.longitude());
+        attendance.setCheckOutTime(null);
+        attendance.setCheckOutLat(null);
+        attendance.setCheckOutLon(null);
         attendance.setGeoVerified(verifyGeoFence(request.latitude(), request.longitude(), clinic));
         attendance.setFaceVerified(verifyFace(request.faceDescriptor(), currentUser));
         attendance.setStatus(AttendanceStatus.CHECKED_IN);
