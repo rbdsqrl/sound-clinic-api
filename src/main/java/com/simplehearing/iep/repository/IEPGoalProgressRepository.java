@@ -13,4 +13,6 @@ public interface IEPGoalProgressRepository extends JpaRepository<IEPGoalProgress
     List<IEPGoalProgress> findByGoalIdOrderBySessionDateDesc(UUID goalId);
 
     int countByGoalId(UUID goalId);
+
+    void deleteByGoalId(UUID goalId);
 }

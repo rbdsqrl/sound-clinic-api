@@ -138,7 +138,7 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success(results));
     }
 
-    @Operation(summary = "Delete a member from the organisation")
+    @Operation(summary = "Deactivate a member — revokes login access while preserving audit records")
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('BUSINESS_OWNER')")
     public ResponseEntity<ApiResponse<Void>> deleteMember(
@@ -146,14 +146,15 @@ public class UserController {
             @AuthenticationPrincipal UserPrincipal principal) {
 
         if (id.equals(principal.getId())) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "You cannot delete your own account");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "You cannot deactivate your own account");
         }
         User target = userRepository.findById(id)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "User not found"));
         if (!target.getOrgId().equals(principal.getOrgId())) {
             throw new ApiException(HttpStatus.FORBIDDEN, "User does not belong to this organisation");
         }
-        userRepository.delete(target);
+        target.setActive(false);
+        userRepository.save(target);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 

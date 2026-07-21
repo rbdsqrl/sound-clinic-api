@@ -10,4 +10,6 @@ public interface SubscriptionRepository extends JpaRepository<Subscription, UUID
 
     /** All subscriptions for a patient within the org, newest first */
     List<Subscription> findByOrgIdAndPatientIdOrderByCreatedAtDesc(UUID orgId, UUID patientId);
+
+    void deleteByPatientId(UUID patientId);
 }

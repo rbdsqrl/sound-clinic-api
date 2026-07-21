@@ -32,4 +32,6 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
     boolean existsByTherapistIdAndAppointmentDateAndStartTime(UUID therapistId, LocalDate date, LocalTime startTime);
 
     Optional<Appointment> findByIdAndOrgId(UUID id, UUID orgId);
+
+    void deleteByPatientId(UUID patientId);
 }

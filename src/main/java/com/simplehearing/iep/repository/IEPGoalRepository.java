@@ -17,4 +17,8 @@ public interface IEPGoalRepository extends JpaRepository<IEPGoal, UUID> {
     Optional<IEPGoal> findByIdAndOrgId(UUID id, UUID orgId);
 
     int countByPlanIdAndStatus(UUID planId, IEPGoalStatus status);
+
+    void deleteByPlanId(UUID planId);
+
+    List<IEPGoal> findByPlanId(UUID planId);
 }

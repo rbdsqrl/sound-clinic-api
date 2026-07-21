@@ -1,13 +1,22 @@
 package com.simplehearing.patient.service;
 
+import com.simplehearing.appointment.repository.AppointmentRepository;
 import com.simplehearing.auth.security.UserPrincipal;
 import com.simplehearing.clinic.repository.ClinicRepository;
 import com.simplehearing.common.exception.ApiException;
 import com.simplehearing.condition.entity.Condition;
 import com.simplehearing.condition.repository.ConditionRepository;
+import com.simplehearing.enrollment.repository.EnrollmentRepository;
+import com.simplehearing.iep.repository.IEPGoalProgressRepository;
+import com.simplehearing.iep.repository.IEPGoalRepository;
+import com.simplehearing.iep.repository.IEPPlanRepository;
+import com.simplehearing.invitation.repository.InvitationRepository;
 import com.simplehearing.patient.dto.*;
 import com.simplehearing.patient.entity.*;
 import com.simplehearing.patient.repository.*;
+import com.simplehearing.session.repository.SessionAttachmentRepository;
+import com.simplehearing.session.repository.TherapySessionRepository;
+import com.simplehearing.subscription.repository.SubscriptionRepository;
 import com.simplehearing.user.entity.User;
 import com.simplehearing.user.enums.Role;
 import com.simplehearing.user.repository.UserRepository;
@@ -35,6 +44,15 @@ public class PatientService {
     private final ConditionRepository conditionRepository;
     private final UserRepository userRepository;
     private final ClinicRepository clinicRepository;
+    private final AppointmentRepository appointmentRepository;
+    private final SubscriptionRepository subscriptionRepository;
+    private final EnrollmentRepository enrollmentRepository;
+    private final TherapySessionRepository therapySessionRepository;
+    private final SessionAttachmentRepository sessionAttachmentRepository;
+    private final IEPPlanRepository iepPlanRepository;
+    private final IEPGoalRepository iepGoalRepository;
+    private final IEPGoalProgressRepository iepGoalProgressRepository;
+    private final InvitationRepository invitationRepository;
 
     public PatientService(PatientRepository patientRepository,
                           PatientConditionRepository patientConditionRepository,
@@ -42,7 +60,16 @@ public class PatientService {
                           TherapistPatientRepository therapistPatientRepository,
                           ConditionRepository conditionRepository,
                           UserRepository userRepository,
-                          ClinicRepository clinicRepository) {
+                          ClinicRepository clinicRepository,
+                          AppointmentRepository appointmentRepository,
+                          SubscriptionRepository subscriptionRepository,
+                          EnrollmentRepository enrollmentRepository,
+                          TherapySessionRepository therapySessionRepository,
+                          SessionAttachmentRepository sessionAttachmentRepository,
+                          IEPPlanRepository iepPlanRepository,
+                          IEPGoalRepository iepGoalRepository,
+                          IEPGoalProgressRepository iepGoalProgressRepository,
+                          InvitationRepository invitationRepository) {
         this.patientRepository = patientRepository;
         this.patientConditionRepository = patientConditionRepository;
         this.patientParentRepository = patientParentRepository;
@@ -50,6 +77,15 @@ public class PatientService {
         this.conditionRepository = conditionRepository;
         this.userRepository = userRepository;
         this.clinicRepository = clinicRepository;
+        this.appointmentRepository = appointmentRepository;
+        this.subscriptionRepository = subscriptionRepository;
+        this.enrollmentRepository = enrollmentRepository;
+        this.therapySessionRepository = therapySessionRepository;
+        this.sessionAttachmentRepository = sessionAttachmentRepository;
+        this.iepPlanRepository = iepPlanRepository;
+        this.iepGoalRepository = iepGoalRepository;
+        this.iepGoalProgressRepository = iepGoalProgressRepository;
+        this.invitationRepository = invitationRepository;
     }
 
     // ── CRUD ─────────────────────────────────────────────────────────────────
@@ -250,9 +286,41 @@ public class PatientService {
 
     public void delete(UUID patientId, UserPrincipal principal) {
         Patient patient = findPatient(patientId, principal.getOrgId());
-        patientConditionRepository.deleteById_PatientId(patient.getId());
-        patientParentRepository.deleteById_PatientId(patient.getId());
-        therapistPatientRepository.deleteByPatientId(patient.getId());
+        UUID id = patient.getId();
+
+        // IEP: progress → goals → plans
+        iepPlanRepository.findByPatientId(id).forEach(plan -> {
+            iepGoalRepository.findByPlanId(plan.getId())
+                    .forEach(goal -> iepGoalProgressRepository.deleteByGoalId(goal.getId()));
+            iepGoalRepository.deleteByPlanId(plan.getId());
+        });
+        iepPlanRepository.deleteByPatientId(id);
+
+        // Sessions + attachments (attachments must go first)
+        therapySessionRepository.findByPatientId(id)
+                .forEach(s -> sessionAttachmentRepository.deleteBySessionId(s.getId()));
+        // Enrollments must be deleted before sessions (sessions reference enrollments)
+        // Actually sessions reference enrollment_id, enrollments reference patient_id
+        // Delete sessions first, then enrollments
+        therapySessionRepository.findByPatientId(id)
+                .forEach(therapySessionRepository::delete);
+        enrollmentRepository.deleteByPatientId(id);
+
+        // Subscriptions
+        subscriptionRepository.deleteByPatientId(id);
+
+        // Appointments
+        appointmentRepository.deleteByPatientId(id);
+
+        // Nullify patient_id on invitations (nullable FK)
+        invitationRepository.findByPatientId(id)
+                .forEach(inv -> { inv.setPatientId(null); invitationRepository.save(inv); });
+
+        // Join tables (conditions, parents, therapist assignments)
+        patientConditionRepository.deleteById_PatientId(id);
+        patientParentRepository.deleteById_PatientId(id);
+        therapistPatientRepository.deleteByPatientId(id);
+
         patientRepository.delete(patient);
     }
 

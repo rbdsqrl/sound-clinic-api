@@ -14,4 +14,6 @@ public interface InvitationRepository extends JpaRepository<Invitation, UUID> {
     boolean existsByEmailAndOrgIdAndStatus(String email, UUID orgId, Invitation.Status status);
 
     List<Invitation> findByOrgIdOrderByCreatedAtDesc(UUID orgId);
+
+    List<Invitation> findByPatientId(UUID patientId);
 }

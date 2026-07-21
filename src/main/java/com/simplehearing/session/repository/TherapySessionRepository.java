@@ -53,4 +53,6 @@ public interface TherapySessionRepository extends JpaRepository<TherapySession, 
     List<TherapySession> findByOrgIdAndTherapistIdAndSessionDateAndStatus(
             @Param("orgId") UUID orgId, @Param("therapistId") UUID therapistId,
             @Param("sessionDate") LocalDate sessionDate, @Param("status") TherapySessionStatus status);
+
+    List<TherapySession> findByPatientId(UUID patientId);
 }

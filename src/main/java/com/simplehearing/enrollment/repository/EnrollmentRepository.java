@@ -13,4 +13,6 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, UUID> {
 
     /** All active enrollments for a therapist within the org */
     List<Enrollment> findByOrgIdAndTherapistId(UUID orgId, UUID therapistId);
+
+    void deleteByPatientId(UUID patientId);
 }
