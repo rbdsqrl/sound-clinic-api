@@ -19,4 +19,6 @@ public interface TherapistPatientRepository extends JpaRepository<TherapistPatie
 
     @Query("SELECT tp.therapistId, COUNT(tp) FROM TherapistPatient tp WHERE tp.therapistId IN :ids AND tp.isActive = true GROUP BY tp.therapistId")
     List<Object[]> countCasesByTherapistIds(@Param("ids") List<UUID> ids);
+
+    void deleteByPatientId(UUID patientId);
 }

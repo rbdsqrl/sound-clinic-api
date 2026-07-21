@@ -248,6 +248,14 @@ public class PatientService {
                 });
     }
 
+    public void delete(UUID patientId, UserPrincipal principal) {
+        Patient patient = findPatient(patientId, principal.getOrgId());
+        patientConditionRepository.deleteById_PatientId(patient.getId());
+        patientParentRepository.deleteById_PatientId(patient.getId());
+        therapistPatientRepository.deleteByPatientId(patient.getId());
+        patientRepository.delete(patient);
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────────
 
     private Patient findPatient(UUID patientId, UUID orgId) {

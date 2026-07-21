@@ -4,6 +4,9 @@ import com.simplehearing.auth.security.UserPrincipal;
 import com.simplehearing.common.dto.ApiResponse;
 import com.simplehearing.common.exception.ApiException;
 import com.simplehearing.common.exception.ResourceNotFoundException;
+import com.simplehearing.notification.EmailService;
+import com.simplehearing.organisation.entity.Organisation;
+import com.simplehearing.organisation.repository.OrganisationRepository;
 import com.simplehearing.task.dto.*;
 import com.simplehearing.task.entity.Task;
 import com.simplehearing.task.entity.TaskAssignee;
@@ -42,19 +45,25 @@ public class TaskController {
     private final TaskAttachmentRepository attachmentRepository;
     private final UserRepository userRepository;
     private final StorageService storageService;
+    private final EmailService emailService;
+    private final OrganisationRepository organisationRepository;
 
     public TaskController(TaskRepository taskRepository,
                           TaskAssigneeRepository assigneeRepository,
                           TaskCommentRepository commentRepository,
                           TaskAttachmentRepository attachmentRepository,
                           UserRepository userRepository,
-                          StorageService storageService) {
-        this.taskRepository      = taskRepository;
-        this.assigneeRepository  = assigneeRepository;
-        this.commentRepository   = commentRepository;
-        this.attachmentRepository = attachmentRepository;
-        this.userRepository      = userRepository;
-        this.storageService      = storageService;
+                          StorageService storageService,
+                          EmailService emailService,
+                          OrganisationRepository organisationRepository) {
+        this.taskRepository        = taskRepository;
+        this.assigneeRepository    = assigneeRepository;
+        this.commentRepository     = commentRepository;
+        this.attachmentRepository  = attachmentRepository;
+        this.userRepository        = userRepository;
+        this.storageService        = storageService;
+        this.emailService          = emailService;
+        this.organisationRepository = organisationRepository;
     }
 
     // ── List tasks ─────────────────────────────────────────────────────────────
@@ -108,6 +117,23 @@ public class TaskController {
                 .toList();
         assigneeRepository.saveAll(assignees);
 
+        User assigner = principal.getUser();
+        String assignerName = assigner.getFirstName() + " " + assigner.getLastName();
+        String orgName = organisationRepository.findById(principal.getOrgId())
+                .map(Organisation::getName).orElse("SimpleHearing");
+        String dueDateStr = saved.getDueDate() != null ? saved.getDueDate().toString() : null;
+        String priority = saved.getPriority() != null ? saved.getPriority().name() : "NORMAL";
+
+        assigneeUsers.forEach(u -> emailService.sendTaskAssignmentEmail(
+                u.getEmail(),
+                u.getFirstName() + " " + u.getLastName(),
+                assignerName,
+                saved.getTitle(),
+                saved.getDescription(),
+                dueDateStr,
+                priority,
+                orgName));
+
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(enrich(List.of(saved)).get(0)));
     }
@@ -147,6 +173,24 @@ public class TaskController {
                     .map(uid -> new TaskAssignee(task.getId(), uid))
                     .toList();
             assigneeRepository.saveAll(newAssignees);
+
+            List<User> newAssigneeUsers = userRepository.findAllById(req.assignedTo());
+            User assigner = principal.getUser();
+            String assignerName = assigner.getFirstName() + " " + assigner.getLastName();
+            String orgName = organisationRepository.findById(principal.getOrgId())
+                    .map(Organisation::getName).orElse("SimpleHearing");
+            String dueDateStr = task.getDueDate() != null ? task.getDueDate().toString() : null;
+            String priority = task.getPriority() != null ? task.getPriority().name() : "NORMAL";
+
+            newAssigneeUsers.forEach(u -> emailService.sendTaskAssignmentEmail(
+                    u.getEmail(),
+                    u.getFirstName() + " " + u.getLastName(),
+                    assignerName,
+                    task.getTitle(),
+                    task.getDescription(),
+                    dueDateStr,
+                    priority,
+                    orgName));
         }
 
         Task saved = taskRepository.save(task);

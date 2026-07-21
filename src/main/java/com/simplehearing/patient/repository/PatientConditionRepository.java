@@ -11,4 +11,6 @@ public interface PatientConditionRepository extends JpaRepository<PatientConditi
     List<PatientCondition> findById_PatientId(UUID patientId);
 
     void deleteById_PatientIdAndId_ConditionId(UUID patientId, UUID conditionId);
+
+    void deleteById_PatientId(UUID patientId);
 }

@@ -92,6 +92,16 @@ public class PatientController {
         return ResponseEntity.ok(ApiResponse.success(patientService.updateStage(id, request, principal)));
     }
 
+    @Operation(summary = "Delete a patient and all associated records")
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('BUSINESS_OWNER')")
+    public ResponseEntity<ApiResponse<Void>> delete(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        patientService.delete(id, principal);
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
     // ── Conditions ────────────────────────────────────────────────────────────
 
     @Operation(summary = "Add a condition to a patient")

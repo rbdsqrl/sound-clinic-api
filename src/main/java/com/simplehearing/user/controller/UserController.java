@@ -138,6 +138,25 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success(results));
     }
 
+    @Operation(summary = "Delete a member from the organisation")
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('BUSINESS_OWNER')")
+    public ResponseEntity<ApiResponse<Void>> deleteMember(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        if (id.equals(principal.getId())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "You cannot delete your own account");
+        }
+        User target = userRepository.findById(id)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "User not found"));
+        if (!target.getOrgId().equals(principal.getOrgId())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "User does not belong to this organisation");
+        }
+        userRepository.delete(target);
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
     @Operation(summary = "Get my profile")
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<UserResponse>> me(@AuthenticationPrincipal UserPrincipal principal) {

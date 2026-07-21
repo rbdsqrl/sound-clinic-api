@@ -99,6 +99,30 @@ public class EmailService {
     }
 
     @Async
+    public void sendTaskAssignmentEmail(String to, String assigneeName, String assignerName,
+                                        String taskTitle, String description, String dueDate,
+                                        String priority, String orgName) {
+        String descriptionRow = (description != null && !description.isBlank())
+                ? "<tr style=\"border-top:1px solid #e5e7eb;\"><td style=\"padding:10px 16px;font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;\">Description</td><td style=\"padding:10px 16px;font-size:14px;color:#111827;\">" + description + "</td></tr>"
+                : "";
+        String dueDateRow = (dueDate != null && !dueDate.isBlank())
+                ? "<tr style=\"border-top:1px solid #e5e7eb;\"><td style=\"padding:10px 16px;font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;\">Due Date</td><td style=\"padding:10px 16px;font-size:14px;color:#111827;font-weight:600;\">" + dueDate + "</td></tr>"
+                : "";
+        Map<String, String> vars = new java.util.HashMap<>();
+        vars.put("ORG_NAME", orgName);
+        vars.put("LOGO_URL", props.getBaseUrl() + "/logo.png");
+        vars.put("ASSIGNEE_NAME", assigneeName);
+        vars.put("ASSIGNER_NAME", assignerName);
+        vars.put("TASK_TITLE", taskTitle);
+        vars.put("DESCRIPTION_ROW", descriptionRow);
+        vars.put("DUE_DATE_ROW", dueDateRow);
+        vars.put("PRIORITY", priority);
+        vars.put("DASHBOARD_URL", props.getBaseUrl() + "/dashboard");
+        String html = fillStubs(loadTemplate("task-assignment"), vars);
+        send(to, "New task assigned: " + taskTitle, html);
+    }
+
+    @Async
     public void sendLeaveStatusEmail(String to, String therapistName, String leaveDate,
                                       String leaveType, String status, String reviewerName,
                                       String orgName) {

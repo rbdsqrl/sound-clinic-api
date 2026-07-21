@@ -13,4 +13,6 @@ public interface PatientParentRepository extends JpaRepository<PatientParent, Pa
     List<PatientParent> findById_ParentId(UUID parentId);
 
     void deleteById_PatientIdAndId_ParentId(UUID patientId, UUID parentId);
+
+    void deleteById_PatientId(UUID patientId);
 }
