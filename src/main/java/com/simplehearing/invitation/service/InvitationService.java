@@ -98,7 +98,7 @@ public class InvitationService {
                             "Clinic not found in your organisation"));
         }
 
-        if (userRepository.existsByEmail(request.email())) {
+        if (userRepository.existsByEmailAndIsActive(request.email(), true)) {
             throw new ApiException(HttpStatus.CONFLICT, "A user with this email already exists");
         }
 
@@ -193,13 +193,14 @@ public class InvitationService {
             throw new ApiException(HttpStatus.GONE, "This invitation has expired");
         }
 
-        if (userRepository.existsByEmail(invitation.getEmail())) {
+        if (userRepository.existsByEmailAndIsActive(invitation.getEmail(), true)) {
             throw new ApiException(HttpStatus.CONFLICT, "A user with this email already exists");
         }
 
-        User user = new User();
+        // Reactivate existing deactivated account, or create a fresh one
+        User user = userRepository.findByEmail(invitation.getEmail()).orElseGet(User::new);
         user.setOrgId(invitation.getOrgId());
-        user.setClinicId(invitation.getClinicId()); // null for BUSINESS_OWNER — that's fine
+        user.setClinicId(invitation.getClinicId());
         user.setEmail(invitation.getEmail());
         user.setFirstName(request.firstName());
         user.setLastName(request.lastName());
@@ -267,7 +268,7 @@ public class InvitationService {
 
         Role effectiveRole = (role == Role.PATIENT || role == Role.PARENT) ? role : Role.PARENT;
 
-        if (userRepository.existsByEmail(email)) {
+        if (userRepository.existsByEmailAndIsActive(email, true)) {
             throw new ApiException(HttpStatus.CONFLICT, "A user with this email already exists");
         }
         if (invitationRepository.existsByEmailAndOrgIdAndStatus(email, orgId, Invitation.Status.PENDING)) {
