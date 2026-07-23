@@ -14,12 +14,12 @@ public record SessionAttachmentResponse(
         Long fileSizeBytes,
         Instant createdAt
 ) {
-    public static SessionAttachmentResponse from(SessionAttachment a) {
+    public static SessionAttachmentResponse from(SessionAttachment a, String presignedUrl) {
         return new SessionAttachmentResponse(
                 a.getId(),
                 a.getSessionId(),
                 a.getFileName(),
-                a.getFileUrl(),
+                presignedUrl,
                 a.getContentType(),
                 a.getFileSizeBytes(),
                 a.getCreatedAt());

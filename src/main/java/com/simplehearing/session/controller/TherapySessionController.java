@@ -40,6 +40,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.*;
@@ -384,8 +385,9 @@ public class TherapySessionController {
         att.setFileSizeBytes(file.getSize());
 
         SessionAttachment saved = attachmentRepository.save(att);
+        String presignedUrl = storageService.presign(saved.getFileUrl(), Duration.ofHours(1));
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success(SessionAttachmentResponse.from(saved)));
+                .body(ApiResponse.success(SessionAttachmentResponse.from(saved, presignedUrl)));
     }
 
     // ── List attachments ───────────────────────────────────────────────────────
@@ -401,7 +403,8 @@ public class TherapySessionController {
 
         List<SessionAttachmentResponse> result = attachmentRepository
                 .findBySessionIdOrderByCreatedAtAsc(session.getId())
-                .stream().map(SessionAttachmentResponse::from).toList();
+                .stream().map(a -> SessionAttachmentResponse.from(
+                        a, storageService.presign(a.getFileUrl(), Duration.ofHours(1)))).toList();
 
         return ResponseEntity.ok(ApiResponse.success(result));
     }

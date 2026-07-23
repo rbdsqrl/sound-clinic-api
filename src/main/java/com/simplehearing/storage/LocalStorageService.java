@@ -7,6 +7,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.nio.file.*;
+import java.time.Duration;
 import java.util.UUID;
 
 @Service
@@ -38,6 +39,11 @@ public class LocalStorageService implements StorageService {
         Files.copy(file.getInputStream(), targetDir.resolve(filename), StandardCopyOption.REPLACE_EXISTING);
 
         return baseUrl + "/api/v1/files/" + folder + "/" + filename;
+    }
+
+    @Override
+    public String presign(String storedUrl, Duration duration) {
+        return storedUrl;
     }
 
     @Override

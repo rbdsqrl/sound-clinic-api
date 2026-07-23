@@ -31,6 +31,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -332,9 +333,10 @@ public class TaskController {
 
         TaskAttachment saved = attachmentRepository.save(att);
         User uploader = principal.getUser();
+        String presignedUrl = storageService.presign(saved.getFileUrl(), Duration.ofHours(1));
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(TaskAttachmentResponse.from(
-                        saved, uploader.getFirstName(), uploader.getLastName())));
+                        saved, uploader.getFirstName(), uploader.getLastName(), presignedUrl)));
     }
 
     // ── Delete attachment ──────────────────────────────────────────────────────
@@ -458,9 +460,11 @@ public class TaskController {
                 .collect(Collectors.toMap(User::getId, u -> u));
         return atts.stream().map(a -> {
             User uploader = userMap.get(a.getUploadedBy());
+            String presignedUrl = storageService.presign(a.getFileUrl(), Duration.ofHours(1));
             return TaskAttachmentResponse.from(a,
                     uploader != null ? uploader.getFirstName() : "",
-                    uploader != null ? uploader.getLastName()  : "");
+                    uploader != null ? uploader.getLastName()  : "",
+                    presignedUrl);
         }).toList();
     }
 }

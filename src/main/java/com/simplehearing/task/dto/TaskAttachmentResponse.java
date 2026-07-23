@@ -17,11 +17,11 @@ public record TaskAttachmentResponse(
         Long fileSizeBytes,
         Instant createdAt
 ) {
-    public static TaskAttachmentResponse from(TaskAttachment a, String firstName, String lastName) {
+    public static TaskAttachmentResponse from(TaskAttachment a, String firstName, String lastName, String presignedUrl) {
         return new TaskAttachmentResponse(
                 a.getId(), a.getTaskId(), a.getUploadedBy(),
                 firstName, lastName,
-                a.getFileName(), a.getFileUrl(), a.getContentType(),
+                a.getFileName(), presignedUrl, a.getContentType(),
                 a.getFileSizeBytes(), a.getCreatedAt());
     }
 }
