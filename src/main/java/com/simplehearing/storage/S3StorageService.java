@@ -9,10 +9,13 @@ import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.S3ClientBuilder;
+import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import java.io.IOException;
+import java.net.URI;
 import java.util.UUID;
 
 @Service
@@ -22,16 +25,31 @@ public class S3StorageService implements StorageService {
     private final S3Client s3;
     private final String bucket;
     private final String region;
+    private final String publicUrlBase;
 
     public S3StorageService(StorageProperties props) {
-        StorageProperties.S3Props s3Props = props.getS3();
-        this.bucket = s3Props.getBucket();
-        this.region = s3Props.getRegion();
-        this.s3 = S3Client.builder()
+        StorageProperties.S3Props p = props.getS3();
+        this.bucket       = p.getBucket();
+        this.region       = p.getRegion();
+        this.publicUrlBase = p.getPublicUrlBase();
+
+        S3ClientBuilder builder = S3Client.builder()
                 .region(Region.of(region))
                 .credentialsProvider(StaticCredentialsProvider.create(
-                        AwsBasicCredentials.create(s3Props.getAccessKeyId(), s3Props.getSecretAccessKey())))
-                .build();
+                        AwsBasicCredentials.create(p.getAccessKeyId(), p.getSecretAccessKey())));
+
+        // Custom endpoint — required for Supabase, MinIO, etc.
+        if (p.getEndpoint() != null && !p.getEndpoint().isBlank()) {
+            builder.endpointOverride(URI.create(p.getEndpoint()));
+        }
+
+        // Path-style access — required for Supabase (uses /<bucket>/<key> not <bucket>.host/<key>)
+        if (p.isForcePathStyle()) {
+            builder.serviceConfiguration(
+                    S3Configuration.builder().pathStyleAccessEnabled(true).build());
+        }
+
+        this.s3 = builder.build();
     }
 
     @Override
@@ -50,17 +68,32 @@ public class S3StorageService implements StorageService {
                         .build(),
                 RequestBody.fromInputStream(file.getInputStream(), file.getSize()));
 
-        return "https://" + bucket + ".s3." + region + ".amazonaws.com/" + key;
+        return buildPublicUrl(key);
     }
 
     @Override
     public void delete(String fileUrl) {
-        String prefix = "https://" + bucket + ".s3." + region + ".amazonaws.com/";
-        if (fileUrl != null && fileUrl.startsWith(prefix)) {
-            String key = fileUrl.substring(prefix.length());
+        if (fileUrl == null) return;
+        String base = urlPrefix();
+        if (fileUrl.startsWith(base)) {
+            String key = fileUrl.substring(base.length());
             try {
                 s3.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(key).build());
             } catch (Exception ignored) {}
         }
+    }
+
+    // ── helpers ───────────────────────────────────────────────────────────────
+
+    private String buildPublicUrl(String key) {
+        String base = urlPrefix();
+        return base + key;
+    }
+
+    private String urlPrefix() {
+        if (publicUrlBase != null && !publicUrlBase.isBlank()) {
+            return publicUrlBase.endsWith("/") ? publicUrlBase : publicUrlBase + "/";
+        }
+        return "https://" + bucket + ".s3." + region + ".amazonaws.com/";
     }
 }

@@ -51,17 +51,20 @@ app:
     access-token-expiry: 900       # 15 minutes in seconds
     refresh-token-expiry: 604800   # 7 days in seconds
   storage:
-    provider: local            # 'local' (default) or 's3'
+    provider: local            # dev default — override to 's3' in production via STORAGE_PROVIDER env var
     base-url: ${BASE_URL:http://localhost:8080}
     local:
       base-dir: ${user.home}/.simplehearing/uploads
-    # ── Switch to S3 in production ──────────────────────────────────────────
-    # provider: s3
-    # s3:
-    #   bucket: ${STORAGE_S3_BUCKET}
-    #   region: ${STORAGE_S3_REGION:ap-south-1}
-    #   access-key-id: ${AWS_ACCESS_KEY_ID}
-    #   secret-access-key: ${AWS_SECRET_ACCESS_KEY}
+    # ── S3 / Supabase Storage (active when provider=s3) ─────────────────────
+    # Set STORAGE_PROVIDER=s3 and the vars below in production:
+    s3:
+      endpoint: ${STORAGE_S3_ENDPOINT:}           # Supabase: https://<ref>.supabase.co/storage/v1/s3
+      bucket: ${STORAGE_S3_BUCKET:}               # bucket name in Supabase Storage
+      region: ${STORAGE_S3_REGION:ap-south-1}     # any valid region string (Supabase ignores it)
+      access-key-id: ${STORAGE_S3_ACCESS_KEY_ID:}
+      secret-access-key: ${STORAGE_S3_SECRET_KEY:}
+      force-path-style: ${STORAGE_S3_FORCE_PATH_STYLE:true}  # must be true for Supabase
+      public-url-base: ${STORAGE_S3_PUBLIC_URL_BASE:}        # https://<ref>.supabase.co/storage/v1/object/public/<bucket>
   email:
     from-address: ${EMAIL_FROM:noreply@simplehearing.com}
     from-name: ${EMAIL_FROM_NAME:Simple Hearing}

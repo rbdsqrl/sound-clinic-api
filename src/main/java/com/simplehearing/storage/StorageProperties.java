@@ -40,6 +40,16 @@ public class StorageProperties {
         private String region = "ap-south-1";
         private String accessKeyId;
         private String secretAccessKey;
+        /** Custom S3-compatible endpoint (e.g. Supabase, MinIO). Omit for native AWS. */
+        private String endpoint;
+        /** Required for Supabase and MinIO — they use path-style URLs, not virtual-hosted. */
+        private boolean forcePathStyle = false;
+        /**
+         * Base URL used to build the public access URL for stored files.
+         * For Supabase: https://&lt;project&gt;.supabase.co/storage/v1/object/public/&lt;bucket&gt;
+         * Leave blank to auto-generate a standard AWS S3 URL.
+         */
+        private String publicUrlBase;
 
         public String getBucket()                        { return bucket; }
         public void setBucket(String bucket)             { this.bucket = bucket; }
@@ -52,5 +62,14 @@ public class StorageProperties {
 
         public String getSecretAccessKey()               { return secretAccessKey; }
         public void setSecretAccessKey(String v)         { this.secretAccessKey = v; }
+
+        public String getEndpoint()                      { return endpoint; }
+        public void setEndpoint(String endpoint)         { this.endpoint = endpoint; }
+
+        public boolean isForcePathStyle()                { return forcePathStyle; }
+        public void setForcePathStyle(boolean v)         { this.forcePathStyle = v; }
+
+        public String getPublicUrlBase()                 { return publicUrlBase; }
+        public void setPublicUrlBase(String v)           { this.publicUrlBase = v; }
     }
 }
