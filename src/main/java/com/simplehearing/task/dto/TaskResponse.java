@@ -24,7 +24,8 @@ public record TaskResponse(
         int commentCount,
         int attachmentCount,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        Instant completedAt
 ) {
     public record AssigneeInfo(UUID id, String firstName, String lastName) {}
 }

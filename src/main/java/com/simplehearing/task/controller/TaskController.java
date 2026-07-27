@@ -12,9 +12,14 @@ import com.simplehearing.task.entity.Task;
 import com.simplehearing.task.entity.TaskAssignee;
 import com.simplehearing.task.entity.TaskAttachment;
 import com.simplehearing.task.entity.TaskComment;
+import com.simplehearing.task.entity.TaskLog;
+import com.simplehearing.task.enums.TaskLogType;
+import com.simplehearing.task.enums.TaskPriority;
+import com.simplehearing.task.enums.TaskStatus;
 import com.simplehearing.task.repository.TaskAssigneeRepository;
 import com.simplehearing.task.repository.TaskAttachmentRepository;
 import com.simplehearing.task.repository.TaskCommentRepository;
+import com.simplehearing.task.repository.TaskLogRepository;
 import com.simplehearing.task.repository.TaskRepository;
 import com.simplehearing.storage.StorageService;
 import com.simplehearing.user.entity.User;
@@ -32,6 +37,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -44,6 +50,7 @@ public class TaskController {
     private final TaskAssigneeRepository assigneeRepository;
     private final TaskCommentRepository commentRepository;
     private final TaskAttachmentRepository attachmentRepository;
+    private final TaskLogRepository logRepository;
     private final UserRepository userRepository;
     private final StorageService storageService;
     private final EmailService emailService;
@@ -53,6 +60,7 @@ public class TaskController {
                           TaskAssigneeRepository assigneeRepository,
                           TaskCommentRepository commentRepository,
                           TaskAttachmentRepository attachmentRepository,
+                          TaskLogRepository logRepository,
                           UserRepository userRepository,
                           StorageService storageService,
                           EmailService emailService,
@@ -61,6 +69,7 @@ public class TaskController {
         this.assigneeRepository    = assigneeRepository;
         this.commentRepository     = commentRepository;
         this.attachmentRepository  = attachmentRepository;
+        this.logRepository         = logRepository;
         this.userRepository        = userRepository;
         this.storageService        = storageService;
         this.emailService          = emailService;
@@ -92,7 +101,6 @@ public class TaskController {
             @Valid @RequestBody CreateTaskRequest req,
             @AuthenticationPrincipal UserPrincipal principal) {
 
-        // Validate assignees belong to org
         List<User> assigneeUsers = userRepository.findAllById(req.assignedTo());
         if (assigneeUsers.size() != req.assignedTo().size()) {
             throw new ApiException(HttpStatus.NOT_FOUND, "One or more assignees not found");
@@ -163,11 +171,17 @@ public class TaskController {
             @AuthenticationPrincipal UserPrincipal principal) {
 
         Task task = findOwned(id, principal);
+
+        String oldTitle       = task.getTitle();
+        String oldDescription = task.getDescription();
+        TaskPriority oldPriority = task.getPriority();
+
         if (req.title()       != null) task.setTitle(req.title());
         if (req.description() != null) task.setDescription(req.description());
         if (req.dueDate()     != null) task.setDueDate(req.dueDate());
         if (req.priority()    != null) task.setPriority(req.priority());
 
+        List<User> newAssigneeUsers = List.of();
         if (req.assignedTo() != null && !req.assignedTo().isEmpty()) {
             assigneeRepository.deleteById_TaskId(task.getId());
             List<TaskAssignee> newAssignees = req.assignedTo().stream()
@@ -175,26 +189,55 @@ public class TaskController {
                     .toList();
             assigneeRepository.saveAll(newAssignees);
 
-            List<User> newAssigneeUsers = userRepository.findAllById(req.assignedTo());
+            newAssigneeUsers = userRepository.findAllById(req.assignedTo());
             User assigner = principal.getUser();
             String assignerName = assigner.getFirstName() + " " + assigner.getLastName();
             String orgName = organisationRepository.findById(principal.getOrgId())
                     .map(Organisation::getName).orElse("SimpleHearing");
             String dueDateStr = task.getDueDate() != null ? task.getDueDate().toString() : null;
-            String priority = task.getPriority() != null ? task.getPriority().name() : "NORMAL";
+            String pri = task.getPriority() != null ? task.getPriority().name() : "NORMAL";
 
-            newAssigneeUsers.forEach(u -> emailService.sendTaskAssignmentEmail(
+            final List<User> finalAssigneeUsers = newAssigneeUsers;
+            finalAssigneeUsers.forEach(u -> emailService.sendTaskAssignmentEmail(
                     u.getEmail(),
                     u.getFirstName() + " " + u.getLastName(),
                     assignerName,
                     task.getTitle(),
                     task.getDescription(),
                     dueDateStr,
-                    priority,
+                    pri,
                     orgName));
         }
 
         Task saved = taskRepository.save(task);
+
+        User actor = principal.getUser();
+        String actorName = actor.getFirstName() + " " + actor.getLastName();
+
+        if (req.title() != null && !req.title().equals(oldTitle)) {
+            logRepository.save(makeLog(saved.getOrgId(), saved.getId(),
+                    TaskLogType.NAME_CHANGED, principal.getId(), actorName,
+                    "renamed to \"" + req.title() + "\""));
+        }
+        if (req.description() != null && !req.description().equals(oldDescription)) {
+            logRepository.save(makeLog(saved.getOrgId(), saved.getId(),
+                    TaskLogType.DESCRIPTION_CHANGED, principal.getId(), actorName,
+                    "updated description"));
+        }
+        if (req.priority() != null && req.priority() != oldPriority) {
+            logRepository.save(makeLog(saved.getOrgId(), saved.getId(),
+                    TaskLogType.PRIORITY_CHANGED, principal.getId(), actorName,
+                    "changed priority from " + label(oldPriority) + " to " + label(req.priority())));
+        }
+        if (!newAssigneeUsers.isEmpty()) {
+            String names = newAssigneeUsers.stream()
+                    .map(u -> u.getFirstName() + " " + u.getLastName())
+                    .collect(Collectors.joining(", "));
+            logRepository.save(makeLog(saved.getOrgId(), saved.getId(),
+                    TaskLogType.ASSIGNEE_CHANGED, principal.getId(), actorName,
+                    "reassigned to " + names));
+        }
+
         return ResponseEntity.ok(ApiResponse.success(enrich(List.of(saved)).get(0)));
     }
 
@@ -209,8 +252,23 @@ public class TaskController {
             @AuthenticationPrincipal UserPrincipal principal) {
 
         Task task = findAccessible(id, principal);
+        TaskStatus oldStatus = task.getStatus();
+
         task.setStatus(req.status());
+        if (req.status() == TaskStatus.COMPLETED) {
+            task.setCompletedAt(Instant.now());
+        } else if (oldStatus == TaskStatus.COMPLETED) {
+            task.setCompletedAt(null);
+        }
+
         Task saved = taskRepository.save(task);
+
+        User actor = principal.getUser();
+        String actorName = actor.getFirstName() + " " + actor.getLastName();
+        logRepository.save(makeLog(saved.getOrgId(), saved.getId(),
+                TaskLogType.STATUS_CHANGED, principal.getId(), actorName,
+                "changed status from " + label(oldStatus) + " to " + label(req.status())));
+
         return ResponseEntity.ok(ApiResponse.success(enrich(List.of(saved)).get(0)));
     }
 
@@ -228,6 +286,21 @@ public class TaskController {
                 .forEach(a -> storageService.delete(a.getFileUrl()));
         taskRepository.delete(task);
         return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    // ── List task logs ─────────────────────────────────────────────────────────
+
+    @Operation(summary = "List activity log for a task")
+    @GetMapping("/{id}/logs")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST', 'DOCTOR')")
+    public ResponseEntity<ApiResponse<List<TaskLogResponse>>> listLogs(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        Task task = findAccessible(id, principal);
+        List<TaskLog> logs = logRepository.findByTaskIdOrderByCreatedAtAsc(task.getId());
+        return ResponseEntity.ok(ApiResponse.success(
+                logs.stream().map(TaskLogResponse::from).toList()));
     }
 
     // ── List comments ──────────────────────────────────────────────────────────
@@ -332,11 +405,17 @@ public class TaskController {
         att.setFileSizeBytes(file.getSize());
 
         TaskAttachment saved = attachmentRepository.save(att);
-        User uploader = principal.getUser();
+
+        User actor = principal.getUser();
+        logRepository.save(makeLog(task.getOrgId(), task.getId(),
+                TaskLogType.ATTACHMENT_ADDED, principal.getId(),
+                actor.getFirstName() + " " + actor.getLastName(),
+                "added attachment \"" + saved.getFileName() + "\""));
+
         String presignedUrl = storageService.presign(saved.getFileUrl(), Duration.ofHours(1));
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(TaskAttachmentResponse.from(
-                        saved, uploader.getFirstName(), uploader.getLastName(), presignedUrl)));
+                        saved, actor.getFirstName(), actor.getLastName(), presignedUrl)));
     }
 
     // ── Delete attachment ──────────────────────────────────────────────────────
@@ -361,8 +440,16 @@ public class TaskController {
             throw new ApiException(HttpStatus.FORBIDDEN, "You can only delete your own attachments");
         }
 
+        String fileName = att.getFileName();
         storageService.delete(att.getFileUrl());
         attachmentRepository.delete(att);
+
+        User actor = principal.getUser();
+        logRepository.save(makeLog(att.getOrgId(), att.getTaskId(),
+                TaskLogType.ATTACHMENT_DELETED, principal.getId(),
+                actor.getFirstName() + " " + actor.getLastName(),
+                "removed attachment \"" + fileName + "\""));
+
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
@@ -392,6 +479,26 @@ public class TaskController {
 
     private static boolean isManager(Role role) {
         return role == Role.BUSINESS_OWNER || role == Role.ADMIN;
+    }
+
+    private TaskLog makeLog(UUID orgId, UUID taskId, TaskLogType type,
+                            UUID actorId, String actorName, String details) {
+        TaskLog log = new TaskLog();
+        log.setOrgId(orgId);
+        log.setTaskId(taskId);
+        log.setLogType(type);
+        log.setActorId(actorId);
+        log.setActorName(actorName);
+        log.setDetails(details);
+        return log;
+    }
+
+    private static String label(TaskStatus s) {
+        return s.name().replace('_', ' ').toLowerCase();
+    }
+
+    private static String label(TaskPriority p) {
+        return p.name().charAt(0) + p.name().substring(1).toLowerCase();
     }
 
     private List<TaskResponse> enrich(List<Task> tasks) {
@@ -438,7 +545,8 @@ public class TaskController {
                     t.getDueDate(), t.getPriority(), t.getStatus(),
                     commentCounts.getOrDefault(t.getId(), 0L).intValue(),
                     attachmentCounts.getOrDefault(t.getId(), 0L).intValue(),
-                    t.getCreatedAt(), t.getUpdatedAt());
+                    t.getCreatedAt(), t.getUpdatedAt(),
+                    t.getCompletedAt());
         }).toList();
     }
 

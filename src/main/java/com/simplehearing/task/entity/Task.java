@@ -41,6 +41,9 @@ public class Task {
     @Column(nullable = false, length = 20)
     private TaskStatus status = TaskStatus.OPEN;
 
+    @Column(name = "completed_at")
+    private Instant completedAt;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -64,6 +67,8 @@ public class Task {
     public void setPriority(TaskPriority p)    { this.priority = p; }
     public TaskStatus getStatus()              { return status; }
     public void setStatus(TaskStatus status)   { this.status = status; }
+    public Instant getCompletedAt()            { return completedAt; }
+    public void setCompletedAt(Instant t)      { this.completedAt = t; }
     public Instant getCreatedAt()              { return createdAt; }
     public Instant getUpdatedAt()              { return updatedAt; }
 }
