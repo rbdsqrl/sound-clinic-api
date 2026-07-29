@@ -19,6 +19,10 @@ public record AttendanceResponse(
         Instant checkOutTime,
         boolean geoVerified,
         boolean faceVerified,
+        boolean faceOverride,
+        Boolean overrideApproved,
+        String overrideReviewedByName,
+        Instant overrideReviewedAt,
         AttendanceStatus status,
         Instant createdAt
 ) {
@@ -26,7 +30,8 @@ public record AttendanceResponse(
             Attendance a,
             String userFirstName,
             String userLastName,
-            String clinicName) {
+            String clinicName,
+            String overrideReviewedByName) {
         return new AttendanceResponse(
                 a.getId(),
                 a.getUserId(),
@@ -39,6 +44,10 @@ public record AttendanceResponse(
                 a.getCheckOutTime(),
                 a.isGeoVerified(),
                 a.isFaceVerified(),
+                a.isFaceOverride(),
+                a.getOverrideApproved(),
+                overrideReviewedByName,
+                a.getOverrideReviewedAt(),
                 a.getStatus(),
                 a.getCreatedAt()
         );

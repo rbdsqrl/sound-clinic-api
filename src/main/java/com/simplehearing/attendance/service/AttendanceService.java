@@ -14,7 +14,11 @@ import com.simplehearing.clinic.entity.Clinic;
 import com.simplehearing.clinic.repository.ClinicRepository;
 import com.simplehearing.common.exception.ApiException;
 import com.simplehearing.common.exception.ResourceNotFoundException;
+import com.simplehearing.notification.EmailService;
+import com.simplehearing.organisation.entity.Organisation;
+import com.simplehearing.organisation.repository.OrganisationRepository;
 import com.simplehearing.user.entity.User;
+import com.simplehearing.user.enums.Role;
 import com.simplehearing.user.repository.UserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -22,6 +26,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -35,19 +41,25 @@ public class AttendanceService {
     private static final double FACE_MATCH_THRESHOLD = 0.6;
     private static final double EARTH_RADIUS_METERS  = 6_371_000.0;
 
-    private final AttendanceRepository attendanceRepository;
-    private final ClinicRepository     clinicRepository;
-    private final UserRepository       userRepository;
-    private final ObjectMapper         objectMapper;
+    private final AttendanceRepository   attendanceRepository;
+    private final ClinicRepository       clinicRepository;
+    private final UserRepository         userRepository;
+    private final OrganisationRepository organisationRepository;
+    private final EmailService           emailService;
+    private final ObjectMapper           objectMapper;
 
     public AttendanceService(AttendanceRepository attendanceRepository,
                              ClinicRepository clinicRepository,
                              UserRepository userRepository,
+                             OrganisationRepository organisationRepository,
+                             EmailService emailService,
                              ObjectMapper objectMapper) {
-        this.attendanceRepository = attendanceRepository;
-        this.clinicRepository     = clinicRepository;
-        this.userRepository       = userRepository;
-        this.objectMapper         = objectMapper;
+        this.attendanceRepository   = attendanceRepository;
+        this.clinicRepository       = clinicRepository;
+        this.userRepository         = userRepository;
+        this.organisationRepository = organisationRepository;
+        this.emailService           = emailService;
+        this.objectMapper           = objectMapper;
     }
 
     // ── Check-in ──────────────────────────────────────────────────────────────
@@ -60,9 +72,21 @@ public class AttendanceService {
         }
 
         User currentUser = principal.getUser();
-        if (currentUser.getFaceDescriptor() != null
-                && (request.faceDescriptor() == null || request.faceDescriptor().isEmpty())) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Face verification is required for check-in");
+
+        boolean faceVerified = false;
+        boolean faceOverride = false;
+
+        if (currentUser.getFaceDescriptor() != null) {
+            if (request.faceDescriptor() == null || request.faceDescriptor().isEmpty()) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "Face verification is required for check-in");
+            }
+            faceVerified = verifyFace(request.faceDescriptor(), currentUser);
+            if (!faceVerified) {
+                if (!request.forceCheckIn()) {
+                    throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "FACE_MISMATCH");
+                }
+                faceOverride = true;
+            }
         }
 
         Clinic clinic = clinicRepository.findByIdAndOrgId(request.clinicId(), principal.getOrgId())
@@ -87,11 +111,38 @@ public class AttendanceService {
         attendance.setCheckOutLat(null);
         attendance.setCheckOutLon(null);
         attendance.setGeoVerified(verifyGeoFence(request.latitude(), request.longitude(), clinic));
-        attendance.setFaceVerified(verifyFace(request.faceDescriptor(), currentUser));
+        attendance.setFaceVerified(faceVerified);
+        attendance.setFaceOverride(faceOverride);
         attendance.setStatus(AttendanceStatus.CHECKED_IN);
 
         Attendance saved = attendanceRepository.save(attendance);
-        return AttendanceResponse.from(saved, currentUser.getFirstName(), currentUser.getLastName(), clinic.getName());
+
+        if (faceOverride) {
+            List<User> businessOwners = userRepository.findByOrgIdAndRoleIn(
+                    principal.getOrgId(), List.of(Role.BUSINESS_OWNER));
+            List<String> recipients = businessOwners.stream()
+                    .map(User::getEmail)
+                    .collect(Collectors.toList());
+            if (!recipients.isEmpty()) {
+                Organisation org = organisationRepository.findById(principal.getOrgId()).orElse(null);
+                String orgName = org != null ? org.getName() : "";
+                String employeeName = currentUser.getFirstName() + " " + currentUser.getLastName();
+                String checkInTime = DateTimeFormatter.ofPattern("HH:mm 'UTC'")
+                        .withZone(ZoneOffset.UTC)
+                        .format(saved.getCheckInTime());
+                String attendanceDate = saved.getAttendanceDate().toString();
+                emailService.sendUnverifiedCheckInEmail(
+                        recipients,
+                        employeeName,
+                        currentUser.getEmail(),
+                        checkInTime,
+                        clinic.getName(),
+                        attendanceDate,
+                        orgName);
+            }
+        }
+
+        return AttendanceResponse.from(saved, currentUser.getFirstName(), currentUser.getLastName(), clinic.getName(), null);
     }
 
     // ── Check-out ─────────────────────────────────────────────────────────────
@@ -117,7 +168,7 @@ public class AttendanceService {
 
         Attendance saved = attendanceRepository.save(attendance);
         User user = principal.getUser();
-        return AttendanceResponse.from(saved, user.getFirstName(), user.getLastName(), clinic.getName());
+        return AttendanceResponse.from(saved, user.getFirstName(), user.getLastName(), clinic.getName(), null);
     }
 
     // ── My attendance ─────────────────────────────────────────────────────────
@@ -160,7 +211,7 @@ public class AttendanceService {
 
         Attendance saved = attendanceRepository.save(attendance);
         User user = principal.getUser();
-        return AttendanceResponse.from(saved, user.getFirstName(), user.getLastName(), clinic.getName());
+        return AttendanceResponse.from(saved, user.getFirstName(), user.getLastName(), clinic.getName(), null);
     }
 
     // ── All org attendance (admin view) ───────────────────────────────────────
@@ -186,6 +237,25 @@ public class AttendanceService {
         } catch (Exception e) {
             throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to save face descriptor");
         }
+    }
+
+    // ── Review face-override check-in ─────────────────────────────────────────
+
+    public AttendanceResponse reviewOverride(UUID id, boolean approved, UserPrincipal principal) {
+        Attendance attendance = attendanceRepository.findById(id)
+                .filter(a -> a.getOrgId().equals(principal.getOrgId()))
+                .orElseThrow(() -> new ResourceNotFoundException("Attendance record not found"));
+
+        if (attendance.getOverrideApproved() != null) {
+            throw new ApiException(HttpStatus.CONFLICT, "Override has already been reviewed");
+        }
+
+        attendance.setOverrideApproved(approved);
+        attendance.setOverrideReviewedBy(principal.getId());
+        attendance.setOverrideReviewedAt(Instant.now());
+
+        Attendance saved = attendanceRepository.save(attendance);
+        return enrich(List.of(saved)).get(0);
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
@@ -229,7 +299,16 @@ public class AttendanceService {
         Set<UUID> userIds   = records.stream().map(Attendance::getUserId).collect(Collectors.toSet());
         Set<UUID> clinicIds = records.stream().map(Attendance::getClinicId).collect(Collectors.toSet());
 
-        Map<UUID, User>   userMap   = userRepository.findAllById(userIds).stream()
+        // also collect reviewer UUIDs for override enrichment
+        Set<UUID> reviewerIds = records.stream()
+                .map(Attendance::getOverrideReviewedBy)
+                .filter(id -> id != null)
+                .collect(Collectors.toSet());
+
+        Set<UUID> allUserIds = new java.util.HashSet<>(userIds);
+        allUserIds.addAll(reviewerIds);
+
+        Map<UUID, User>   userMap   = userRepository.findAllById(allUserIds).stream()
                 .collect(Collectors.toMap(User::getId, u -> u));
         Map<UUID, Clinic> clinicMap = clinicRepository.findAllById(clinicIds).stream()
                 .collect(Collectors.toMap(Clinic::getId, c -> c));
@@ -237,11 +316,19 @@ public class AttendanceService {
         return records.stream().map(a -> {
             User   u = userMap.get(a.getUserId());
             Clinic c = clinicMap.get(a.getClinicId());
+            String reviewerName = null;
+            if (a.getOverrideReviewedBy() != null) {
+                User reviewer = userMap.get(a.getOverrideReviewedBy());
+                if (reviewer != null) {
+                    reviewerName = reviewer.getFirstName() + " " + reviewer.getLastName();
+                }
+            }
             return AttendanceResponse.from(
                     a,
                     u != null ? u.getFirstName() : "",
                     u != null ? u.getLastName()  : "",
-                    c != null ? c.getName()      : "");
+                    c != null ? c.getName()      : "",
+                    reviewerName);
         }).toList();
     }
 }

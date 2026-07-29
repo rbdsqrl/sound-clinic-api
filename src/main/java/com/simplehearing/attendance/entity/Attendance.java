@@ -53,6 +53,18 @@ public class Attendance {
     @Column(name = "face_verified", nullable = false)
     private boolean faceVerified = false;
 
+    @Column(name = "face_override", nullable = false)
+    private boolean faceOverride = false;
+
+    @Column(name = "override_approved")
+    private Boolean overrideApproved;
+
+    @Column(name = "override_reviewed_by")
+    private UUID overrideReviewedBy;
+
+    @Column(name = "override_reviewed_at")
+    private Instant overrideReviewedAt;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private AttendanceStatus status = AttendanceStatus.CHECKED_IN;
@@ -92,6 +104,14 @@ public class Attendance {
     public void setGeoVerified(boolean geoVerified) { this.geoVerified = geoVerified; }
     public boolean isFaceVerified() { return faceVerified; }
     public void setFaceVerified(boolean faceVerified) { this.faceVerified = faceVerified; }
+    public boolean isFaceOverride() { return faceOverride; }
+    public void setFaceOverride(boolean faceOverride) { this.faceOverride = faceOverride; }
+    public Boolean getOverrideApproved() { return overrideApproved; }
+    public void setOverrideApproved(Boolean overrideApproved) { this.overrideApproved = overrideApproved; }
+    public UUID getOverrideReviewedBy() { return overrideReviewedBy; }
+    public void setOverrideReviewedBy(UUID overrideReviewedBy) { this.overrideReviewedBy = overrideReviewedBy; }
+    public Instant getOverrideReviewedAt() { return overrideReviewedAt; }
+    public void setOverrideReviewedAt(Instant overrideReviewedAt) { this.overrideReviewedAt = overrideReviewedAt; }
     public AttendanceStatus getStatus() { return status; }
     public void setStatus(AttendanceStatus status) { this.status = status; }
     public Instant getCreatedAt() { return createdAt; }

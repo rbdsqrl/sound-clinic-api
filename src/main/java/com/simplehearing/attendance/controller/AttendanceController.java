@@ -4,6 +4,7 @@ import com.simplehearing.attendance.dto.AttendanceResponse;
 import com.simplehearing.attendance.dto.CheckInRequest;
 import com.simplehearing.attendance.dto.CheckOutRequest;
 import com.simplehearing.attendance.dto.EnrollFaceRequest;
+import com.simplehearing.attendance.dto.ReviewOverrideRequest;
 import com.simplehearing.attendance.dto.VerifyAttendanceRequest;
 import com.simplehearing.attendance.service.AttendanceService;
 import com.simplehearing.auth.security.UserPrincipal;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.UUID;
 
 @Tag(name = "Attendance", description = "Attendance check-in, check-out and management")
 @RestController
@@ -95,5 +97,16 @@ public class AttendanceController {
             @AuthenticationPrincipal UserPrincipal principal) {
         attendanceService.enrollFace(request.faceDescriptor(), principal);
         return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    @Operation(summary = "Review a face-override check-in (approve or reject)")
+    @PatchMapping("/{id}/review-override")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER','ADMIN')")
+    public ResponseEntity<ApiResponse<AttendanceResponse>> reviewOverride(
+            @PathVariable UUID id,
+            @RequestBody ReviewOverrideRequest request,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                attendanceService.reviewOverride(id, request.approved(), principal)));
     }
 }

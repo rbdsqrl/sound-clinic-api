@@ -123,6 +123,26 @@ public class EmailService {
     }
 
     @Async
+    public void sendUnverifiedCheckInEmail(List<String> recipients, String employeeName, String employeeEmail,
+                                            String checkInTime, String clinicName, String attendanceDate,
+                                            String orgName) {
+        Map<String, String> vars = new java.util.HashMap<>();
+        vars.put("ORG_NAME", orgName);
+        vars.put("LOGO_URL", props.getBaseUrl() + "/logo.png");
+        vars.put("EMPLOYEE_NAME", employeeName);
+        vars.put("EMPLOYEE_EMAIL", employeeEmail);
+        vars.put("CHECK_IN_TIME", checkInTime);
+        vars.put("CLINIC_NAME", clinicName);
+        vars.put("ATTENDANCE_DATE", attendanceDate);
+        vars.put("DASHBOARD_URL", props.getBaseUrl() + "/workforce");
+        String html = fillStubs(loadTemplate("unverified-checkin"), vars);
+        String subject = "Unverified check-in — " + employeeName;
+        for (String to : recipients) {
+            send(to, subject, html);
+        }
+    }
+
+    @Async
     public void sendLeaveStatusEmail(String to, String therapistName, String leaveDate,
                                       String leaveType, String status, String reviewerName,
                                       String orgName) {

@@ -122,3 +122,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/041-task-logs-and-completion.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/042-attendance-face-override.sql
+      relativeToChangelogFile: false

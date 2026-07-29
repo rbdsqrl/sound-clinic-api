@@ -11,5 +11,6 @@ public record CheckInRequest(
 
         Double latitude,
         Double longitude,
-        List<Double> faceDescriptor
+        List<Double> faceDescriptor,
+        boolean forceCheckIn
 ) {}
