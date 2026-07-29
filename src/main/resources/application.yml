@@ -45,7 +45,7 @@ logging:
 
 app:
   cors:
-    allowed-origins: http://localhost:3000,http://localhost:5173,https://sound-clinic-website.nanil-mines.workers.dev
+    allowed-origins: http://localhost:4321,http://localhost:5173,https://sound-clinic-website.nanil-mines.workers.dev
   jwt:
     secret: ${JWT_SECRET:bXlTdXBlclNlY3JldEtleUZvckpXVEFuZEl0SXNWZXJ5TG9uZ0Vub3VnaA==}
     access-token-expiry: 900       # 15 minutes in seconds
@@ -68,7 +68,7 @@ app:
   email:
     from-address: ${EMAIL_FROM:noreply@simplehearing.com}
     from-name: ${EMAIL_FROM_NAME:Simple Hearing}
-    base-url: ${FRONTEND_URL:http://localhost:3000}
+    base-url: ${FRONTEND_URL:http://localhost:4321}
     api-key: ${BREVO_API_KEY:}
   # Single-org deployment: the org-id assigned to all public (unauthenticated) inquiries.
   # Set ORG_ID env var in production. Leave blank during dev — controller handles null gracefully.
