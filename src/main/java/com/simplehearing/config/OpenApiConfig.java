@@ -31,8 +31,10 @@ public class OpenApiConfig {
                                 - `THERAPIST` — manages assigned patients, sessions, homework and reports
                                 - `PATIENT` / `PARENT` — read-only access to their own progress data
 
-                                **Authentication:** All endpoints (except `/api/v1/auth/login` and `/api/v1/auth/refresh`) \
-                                require a Bearer JWT in the `Authorization` header.
+                                **Authentication:** Most endpoints require a Bearer JWT in the `Authorization` header. \
+                                Endpoints shown without a padlock are public and take no token — registration, login, \
+                                token refresh, the whole forgot-password flow, invitation preview and acceptance, \
+                                public organisation details, and the website inquiry form.
                                 """)
                         .version("1.0.0")
                         .contact(new Contact()

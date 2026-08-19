@@ -137,7 +137,7 @@ public class InquiryController {
 
     // ── Submit inquiry (public — no auth) ─────────────────────────────────────
 
-    @Operation(summary = "Submit a new inquiry from the public website")
+    @Operation(summary = "Submit a new inquiry from the public website", security = {})
     @PostMapping
     public ResponseEntity<ApiResponse<InquiryResponse>> submit(
             @Valid @RequestBody CreateInquiryRequest request) {

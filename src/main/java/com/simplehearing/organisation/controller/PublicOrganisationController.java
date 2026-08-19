@@ -24,7 +24,7 @@ public class PublicOrganisationController {
         this.organisationRepository = organisationRepository;
     }
 
-    @Operation(summary = "Get basic organisation info for the public website")
+    @Operation(summary = "Get basic organisation info for the public website", security = {})
     @GetMapping("/organisation")
     public ResponseEntity<ApiResponse<PublicOrgInfo>> getPublicOrgInfo() {
         return organisationRepository.findAll().stream()

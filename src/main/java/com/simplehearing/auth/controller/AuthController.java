@@ -34,20 +34,25 @@ public class AuthController {
     }
 
     @Operation(summary = "Register a new clinic",
-               description = "Creates a clinic and its first BUSINESS_OWNER account. Returns tokens — the owner is immediately logged in.")
+               description = "Creates a clinic and its first BUSINESS_OWNER account. Returns tokens — the owner is immediately logged in.",
+               security = {})
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<LoginResponse>> register(@Valid @RequestBody RegisterRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Clinic registered successfully", registrationService.register(request)));
     }
 
-    @Operation(summary = "Login with email and password", description = "Returns a short-lived access token and a 7-day refresh token.")
+    @Operation(summary = "Login with email and password",
+               description = "Returns a short-lived access token and a 7-day refresh token.",
+               security = {})
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest request) {
         return ResponseEntity.ok(ApiResponse.success(authService.login(request)));
     }
 
-    @Operation(summary = "Refresh access token", description = "Exchanges a valid refresh token for a new access token. The old refresh token is rotated.")
+    @Operation(summary = "Refresh access token",
+               description = "Exchanges a valid refresh token for a new access token. The old refresh token is rotated.",
+               security = {})
     @PostMapping("/refresh")
     public ResponseEntity<ApiResponse<RefreshResponse>> refresh(@Valid @RequestBody RefreshRequest request) {
         return ResponseEntity.ok(ApiResponse.success(authService.refresh(request)));
@@ -62,7 +67,8 @@ public class AuthController {
 
     @Operation(summary = "Request a password reset link",
                description = "Mails a single-use reset link to the address if it belongs to an active account. "
-                           + "Always returns the same response so the endpoint cannot be used to discover registered emails.")
+                           + "Always returns the same response so the endpoint cannot be used to discover registered emails.",
+               security = {})   // public — the caller is locked out of their account by definition
     @PostMapping("/forgot-password")
     public ResponseEntity<ApiResponse<Void>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request,
                                                             HttpServletRequest servletRequest) {
@@ -72,14 +78,16 @@ public class AuthController {
     }
 
     @Operation(summary = "Validate a password reset link",
-               description = "Checks a reset token and returns the masked email it belongs to. 404 if unknown, 410 if expired or already used.")
+               description = "Checks a reset token and returns the masked email it belongs to. 404 if unknown, 410 if expired or already used.",
+               security = {})   // public — the emailed token is the credential
     @GetMapping("/reset-password/validate")
     public ResponseEntity<ApiResponse<ResetTokenPreviewResponse>> validateResetToken(@RequestParam String token) {
         return ResponseEntity.ok(ApiResponse.success(passwordResetService.validateToken(token)));
     }
 
     @Operation(summary = "Set a new password",
-               description = "Consumes the reset token, sets the new password, and revokes all existing sessions for that user.")
+               description = "Consumes the reset token, sets the new password, and revokes all existing sessions for that user.",
+               security = {})   // public — the emailed token is the credential
     @PostMapping("/reset-password")
     public ResponseEntity<ApiResponse<Void>> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
         passwordResetService.resetPassword(request);

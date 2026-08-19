@@ -7,6 +7,7 @@ import com.simplehearing.invitation.dto.InvitePreviewResponse;
 import com.simplehearing.invitation.dto.InviteRequest;
 import com.simplehearing.invitation.dto.InviteResponse;
 import com.simplehearing.invitation.service.InvitationService;
+import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -63,6 +64,7 @@ public class InvitationController {
     /**
      * Returns the email and role for a token — public, used to prefill the accept-invite form.
      */
+    @Operation(summary = "Preview an invitation", security = {})
     @GetMapping("/preview")
     public ResponseEntity<ApiResponse<InvitePreviewResponse>> preview(
             @RequestParam String token) {
@@ -73,6 +75,7 @@ public class InvitationController {
      * Accept an invitation using the token sent in the invite link.
      * Public endpoint — the invited user has not yet registered.
      */
+    @Operation(summary = "Accept an invitation and create the account", security = {})
     @PostMapping("/accept")
     public ResponseEntity<ApiResponse<Void>> accept(
             @Valid @RequestBody AcceptInviteRequest request) {
