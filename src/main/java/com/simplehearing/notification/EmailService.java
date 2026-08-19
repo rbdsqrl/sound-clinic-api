@@ -80,6 +80,30 @@ public class EmailService {
     }
 
     @Async
+    public void sendPasswordResetEmail(String to, String resetPath, String firstName,
+                                       String orgName, long expiryMinutes) {
+        Map<String, String> vars = new java.util.HashMap<>();
+        vars.put("ORG_NAME", orgName);
+        vars.put("LOGO_URL", props.getBaseUrl() + "/logo.png");
+        vars.put("FIRST_NAME", firstName);
+        vars.put("RESET_LINK", props.getBaseUrl() + resetPath);
+        vars.put("EXPIRY_MINUTES", String.valueOf(expiryMinutes));
+        String html = fillStubs(loadTemplate("password-reset"), vars);
+        send(to, "Reset your " + orgName + " password", html);
+    }
+
+    @Async
+    public void sendPasswordChangedEmail(String to, String firstName, String orgName) {
+        Map<String, String> vars = new java.util.HashMap<>();
+        vars.put("ORG_NAME", orgName);
+        vars.put("LOGO_URL", props.getBaseUrl() + "/logo.png");
+        vars.put("FIRST_NAME", firstName);
+        vars.put("LOGIN_URL", props.getBaseUrl() + "/login");
+        String html = fillStubs(loadTemplate("password-changed"), vars);
+        send(to, "Your " + orgName + " password was changed", html);
+    }
+
+    @Async
     public void sendAppointmentReminderEmail(List<String> recipients, String patientName, String therapistName,
                                               String date, String time, String clinicName,
                                               String orgName) {

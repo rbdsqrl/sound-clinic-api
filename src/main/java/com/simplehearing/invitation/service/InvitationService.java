@@ -4,6 +4,7 @@ import com.simplehearing.auth.security.UserPrincipal;
 import com.simplehearing.clinic.repository.ClinicRepository;
 import com.simplehearing.common.exception.ApiException;
 import com.simplehearing.common.exception.ResourceNotFoundException;
+import com.simplehearing.common.util.TokenHasher;
 import com.simplehearing.invitation.dto.AcceptInviteRequest;
 import com.simplehearing.invitation.dto.InvitePreviewResponse;
 import com.simplehearing.invitation.dto.InviteRequest;
@@ -24,9 +25,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -107,7 +105,7 @@ public class InvitationService {
             throw new ApiException(HttpStatus.CONFLICT, "A pending invitation for this email already exists");
         }
 
-        String rawToken = UUID.randomUUID() + "-" + UUID.randomUUID();
+        String rawToken = TokenHasher.generateRawToken();
 
         Invitation invitation = new Invitation();
         invitation.setOrgId(caller.getOrgId());
@@ -239,7 +237,7 @@ public class InvitationService {
             throw new ApiException(HttpStatus.CONFLICT, "Only pending invitations can be resent");
         }
 
-        String rawToken = UUID.randomUUID() + "-" + UUID.randomUUID();
+        String rawToken = TokenHasher.generateRawToken();
         invitation.setTokenHash(sha256(rawToken));
         invitation.setExpiresAt(Instant.now().plus(EXPIRY_HOURS, ChronoUnit.HOURS));
         invitationRepository.save(invitation);
@@ -275,7 +273,7 @@ public class InvitationService {
             throw new ApiException(HttpStatus.CONFLICT, "A pending invitation for this email already exists");
         }
 
-        String rawToken = UUID.randomUUID() + "-" + UUID.randomUUID();
+        String rawToken = TokenHasher.generateRawToken();
 
         Invitation invitation = new Invitation();
         invitation.setOrgId(orgId);
@@ -305,18 +303,6 @@ public class InvitationService {
     // ── helpers ──────────────────────────────────────────────────────────────
 
     private String sha256(String input) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(input.getBytes(StandardCharsets.UTF_8));
-            StringBuilder hex = new StringBuilder(hash.length * 2);
-            for (byte b : hash) {
-                String h = Integer.toHexString(0xff & b);
-                if (h.length() == 1) hex.append('0');
-                hex.append(h);
-            }
-            return hex.toString();
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 not available", e);
-        }
+        return TokenHasher.sha256(input);
     }
 }

@@ -37,6 +37,9 @@ public class SecurityConfig {
         "/api/v1/auth/register",
         "/api/v1/auth/login",
         "/api/v1/auth/refresh",
+        "/api/v1/auth/forgot-password",          // password reset request — caller is locked out by definition
+        "/api/v1/auth/reset-password",           // set new password using an emailed token
+        "/api/v1/auth/reset-password/validate",  // check a reset link before showing the form
         "/api/v1/invitations/accept",   // invitation accept — user not yet registered
         "/api/v1/invitations/preview",  // invitation preview — prefill form with email before account creation
         "/api/v1/public/**",            // public org info for the landing page
