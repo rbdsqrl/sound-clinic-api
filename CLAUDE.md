@@ -176,6 +176,7 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | POST     | `/api/v1/auth/logout`                   | Authenticated                                           | Invalidate refresh token            |
 | GET      | `/api/v1/users/me`                      | Authenticated                                           | Caller's profile                    |
 | GET      | `/api/v1/users/therapists`              | BUSINESS_OWNER, ADMIN                                   | All therapists/doctors in org       |
+| GET      | `/api/v1/users/assignable`              | BUSINESS_OWNER, ADMIN, OFFICE_ADMIN, THERAPIST, DOCTOR  | Staff names + roles for assignee pickers |
 | GET      | `/api/v1/users/search`                  | BUSINESS_OWNER, ADMIN                                   | Search users by email               |
 | GET      | `/api/v1/organisation`                  | BUSINESS_OWNER, ADMIN                                   | Org profile                         |
 | PATCH    | `/api/v1/organisation`                  | BUSINESS_OWNER, ADMIN                                   | Update org profile                  |

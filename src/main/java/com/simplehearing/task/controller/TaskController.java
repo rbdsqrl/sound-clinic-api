@@ -78,7 +78,7 @@ public class TaskController {
 
     // ── List tasks ─────────────────────────────────────────────────────────────
 
-    @Operation(summary = "List tasks — admins see all, others see only their own")
+    @Operation(summary = "List tasks — admins see all, others see the ones they were assigned or raised")
     @GetMapping
     @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST', 'DOCTOR')")
     public ResponseEntity<ApiResponse<List<TaskResponse>>> list(
@@ -87,29 +87,22 @@ public class TaskController {
         Role role = principal.getUser().getRole();
         List<Task> tasks = isManager(role)
                 ? taskRepository.findByOrgIdOrderByCreatedAtDesc(principal.getOrgId())
-                : taskRepository.findByOrgIdAndAssignee(principal.getOrgId(), principal.getId());
+                : taskRepository.findByOrgIdAndAssigneeOrCreator(principal.getOrgId(), principal.getId());
 
         return ResponseEntity.ok(ApiResponse.success(enrich(tasks)));
     }
 
     // ── Create task ────────────────────────────────────────────────────────────
 
-    @Operation(summary = "Create a task and assign it to one or more users")
+    @Operation(summary = "Create a task and assign it to one or more staff members",
+               description = "Open to every staff member — anyone can raise work and assign it to a colleague.")
     @PostMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST', 'DOCTOR')")
     public ResponseEntity<ApiResponse<TaskResponse>> create(
             @Valid @RequestBody CreateTaskRequest req,
             @AuthenticationPrincipal UserPrincipal principal) {
 
-        List<User> assigneeUsers = userRepository.findAllById(req.assignedTo());
-        if (assigneeUsers.size() != req.assignedTo().size()) {
-            throw new ApiException(HttpStatus.NOT_FOUND, "One or more assignees not found");
-        }
-        assigneeUsers.forEach(u -> {
-            if (!u.getOrgId().equals(principal.getOrgId())) {
-                throw new ApiException(HttpStatus.FORBIDDEN, "Assignee does not belong to this organisation");
-            }
-        });
+        List<User> assigneeUsers = loadAssignees(req.assignedTo(), principal);
 
         Task task = new Task();
         task.setOrgId(principal.getOrgId());
@@ -162,15 +155,16 @@ public class TaskController {
 
     // ── Update task ────────────────────────────────────────────────────────────
 
-    @Operation(summary = "Update task details")
+    @Operation(summary = "Update task details",
+               description = "Managers may edit any task; everyone else only the tasks they raised.")
     @PatchMapping("/{id}")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST', 'DOCTOR')")
     public ResponseEntity<ApiResponse<TaskResponse>> update(
             @PathVariable UUID id,
             @RequestBody UpdateTaskRequest req,
             @AuthenticationPrincipal UserPrincipal principal) {
 
-        Task task = findOwned(id, principal);
+        Task task = findManageable(id, principal);
 
         String oldTitle       = task.getTitle();
         String oldDescription = task.getDescription();
@@ -183,13 +177,14 @@ public class TaskController {
 
         List<User> newAssigneeUsers = List.of();
         if (req.assignedTo() != null && !req.assignedTo().isEmpty()) {
+            newAssigneeUsers = loadAssignees(req.assignedTo(), principal);
+
             assigneeRepository.deleteById_TaskId(task.getId());
             List<TaskAssignee> newAssignees = req.assignedTo().stream()
                     .map(uid -> new TaskAssignee(task.getId(), uid))
                     .toList();
             assigneeRepository.saveAll(newAssignees);
 
-            newAssigneeUsers = userRepository.findAllById(req.assignedTo());
             User assigner = principal.getUser();
             String assignerName = assigner.getFirstName() + " " + assigner.getLastName();
             String orgName = organisationRepository.findById(principal.getOrgId())
@@ -274,14 +269,15 @@ public class TaskController {
 
     // ── Delete task ────────────────────────────────────────────────────────────
 
-    @Operation(summary = "Delete a task")
+    @Operation(summary = "Delete a task",
+               description = "Managers may delete any task; everyone else only the tasks they raised.")
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST', 'DOCTOR')")
     public ResponseEntity<ApiResponse<Void>> delete(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
 
-        Task task = findOwned(id, principal);
+        Task task = findManageable(id, principal);
         attachmentRepository.findByTaskIdOrderByCreatedAtAsc(task.getId())
                 .forEach(a -> storageService.delete(a.getFileUrl()));
         taskRepository.delete(task);
@@ -462,6 +458,34 @@ public class TaskController {
             throw new ApiException(HttpStatus.FORBIDDEN, "Access denied");
         }
         return task;
+    }
+
+    /**
+     * A task the caller may edit or delete: managers may touch any task in the org,
+     * everyone else only the ones they raised themselves.
+     */
+    private Task findManageable(UUID id, UserPrincipal principal) {
+        Task task = findOwned(id, principal);
+        if (!isManager(principal.getUser().getRole())
+                && !task.getAssignedBy().equals(principal.getId())) {
+            throw new ApiException(HttpStatus.FORBIDDEN,
+                    "Only the person who created this task, or an admin, can change it");
+        }
+        return task;
+    }
+
+    /** Resolves assignee ids, rejecting anyone outside the caller's organisation. */
+    private List<User> loadAssignees(List<UUID> assigneeIds, UserPrincipal principal) {
+        List<User> users = userRepository.findAllById(assigneeIds);
+        if (users.size() != assigneeIds.size()) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "One or more assignees not found");
+        }
+        users.forEach(u -> {
+            if (!u.getOrgId().equals(principal.getOrgId())) {
+                throw new ApiException(HttpStatus.FORBIDDEN, "Assignee does not belong to this organisation");
+            }
+        });
+        return users;
     }
 
     private Task findAccessible(UUID id, UserPrincipal principal) {

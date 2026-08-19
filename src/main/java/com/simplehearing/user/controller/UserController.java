@@ -4,6 +4,7 @@ import com.simplehearing.auth.security.UserPrincipal;
 import com.simplehearing.common.dto.ApiResponse;
 import com.simplehearing.common.exception.ApiException;
 import com.simplehearing.patient.repository.TherapistPatientRepository;
+import com.simplehearing.user.dto.AssignableUserResponse;
 import com.simplehearing.user.dto.StaffMemberResponse;
 import com.simplehearing.user.dto.UserResponse;
 import com.simplehearing.user.entity.User;
@@ -47,15 +48,17 @@ public class UserController {
     /** Roles that count as "clinical staff" for the therapists list. */
     private static final List<Role> CLINICAL_ROLES = List.of(Role.THERAPIST, Role.DOCTOR);
 
+    /** Everyone who works at the clinic — as opposed to parents and patients. */
+    private static final List<Role> STAFF_ROLES = List.of(
+            Role.ADMIN, Role.BUSINESS_OWNER, Role.OFFICE_ADMIN, Role.THERAPIST, Role.DOCTOR);
+
     @Operation(summary = "List all staff members in the organisation")
     @GetMapping("/members")
     @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN')")
     public ResponseEntity<ApiResponse<List<StaffMemberResponse>>> listMembers(
             @AuthenticationPrincipal UserPrincipal principal) {
 
-        List<Role> staffRoles = List.of(
-                Role.ADMIN, Role.BUSINESS_OWNER, Role.OFFICE_ADMIN, Role.THERAPIST, Role.DOCTOR);
-        List<User> staff = userRepository.findByOrgIdAndRoleIn(principal.getOrgId(), staffRoles)
+        List<User> staff = userRepository.findByOrgIdAndRoleIn(principal.getOrgId(), STAFF_ROLES)
                 .stream()
                 .sorted(Comparator.comparing(User::getFirstName).thenComparing(User::getLastName))
                 .toList();
@@ -72,6 +75,27 @@ public class UserController {
         List<StaffMemberResponse> results = staff.stream()
                 .map(u -> StaffMemberResponse.from(u,
                         caseCountByTherapist.getOrDefault(u.getId(), 0L).intValue()))
+                .toList();
+
+        return ResponseEntity.ok(ApiResponse.success(results));
+    }
+
+    @Operation(
+        summary = "List staff who can be assigned work",
+        description = "Names and roles only — used to populate assignee pickers. Any staff member may read it, "
+                    + "since anyone can create a task and assign it; personal details are deliberately left out."
+    )
+    @GetMapping("/assignable")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST', 'DOCTOR')")
+    public ResponseEntity<ApiResponse<List<AssignableUserResponse>>> listAssignable(
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        List<AssignableUserResponse> results = userRepository
+                .findByOrgIdAndRoleIn(principal.getOrgId(), STAFF_ROLES)
+                .stream()
+                .filter(User::isActive)
+                .sorted(Comparator.comparing(User::getFirstName).thenComparing(User::getLastName))
+                .map(AssignableUserResponse::from)
                 .toList();
 
         return ResponseEntity.ok(ApiResponse.success(results));
