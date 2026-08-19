@@ -177,6 +177,14 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | GET      | `/api/v1/users/me`                      | Authenticated                                           | Caller's profile                    |
 | GET      | `/api/v1/users/therapists`              | BUSINESS_OWNER, ADMIN                                   | All therapists/doctors in org       |
 | GET      | `/api/v1/users/assignable`              | BUSINESS_OWNER, ADMIN, OFFICE_ADMIN, THERAPIST, DOCTOR  | Staff names + roles for assignee pickers |
+| GET      | `/api/v1/review-meetings`               | All staff + PARENT (own children)                       | List review meetings                |
+| POST     | `/api/v1/review-meetings`               | BUSINESS_OWNER, ADMIN, OFFICE_ADMIN                     | Add one review meeting to a plan    |
+| POST     | `/api/v1/review-meetings/schedule/{enrollmentId}` | BUSINESS_OWNER, ADMIN, OFFICE_ADMIN           | Generate a recurring review schedule |
+| PATCH    | `/api/v1/review-meetings/{id}/reschedule` | BUSINESS_OWNER, ADMIN, OFFICE_ADMIN                   | Move a meeting; resends the invite  |
+| PATCH    | `/api/v1/review-meetings/{id}/cancel`   | BUSINESS_OWNER, ADMIN, OFFICE_ADMIN                     | Cancel; sends a CANCEL ics          |
+| PATCH    | `/api/v1/review-meetings/{id}/complete` | All staff                                               | Mark a meeting completed            |
+| PUT      | `/api/v1/review-meetings/{id}/parent-feedback`    | PARENT (linked to patient)                    | Rating + comments on the therapist  |
+| PUT      | `/api/v1/review-meetings/{id}/therapist-feedback` | THERAPIST, DOCTOR, ADMIN, BUSINESS_OWNER      | Summary + progress notes            |
 | GET      | `/api/v1/users/search`                  | BUSINESS_OWNER, ADMIN                                   | Search users by email               |
 | GET      | `/api/v1/organisation`                  | BUSINESS_OWNER, ADMIN                                   | Org profile                         |
 | PATCH    | `/api/v1/organisation`                  | BUSINESS_OWNER, ADMIN                                   | Update org profile                  |
@@ -230,6 +238,8 @@ Master file: `db.changelog-master.yaml` — lists migrations in order.
 | 014-create-therapist-slots.sql     | `therapist_slots` table                                           |
 | 015-create-appointments.sql        | `appointments` table                                              |
 | 016-create-leaves.sql              | `leaves` table (org_id, therapist_id, leave_date, leave_type, status, reason, reviewed_by, reviewed_at) |
+| 043-create-password-reset-tokens.sql | `password_reset_tokens` table (hashed single-use tokens) |
+| 044-create-review-meetings.sql     | `review_meetings` table + `enrollments.end_date`                  |
 
 **To add a migration:** create `NNN-description.sql` with the Liquibase header, then add it to the master YAML.
 

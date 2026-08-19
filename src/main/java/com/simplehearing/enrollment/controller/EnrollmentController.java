@@ -21,6 +21,8 @@ import com.simplehearing.patient.repository.PatientRepository;
 import com.simplehearing.patient.repository.TherapistPatientRepository;
 import com.simplehearing.program.entity.Program;
 import com.simplehearing.program.repository.ProgramRepository;
+import com.simplehearing.review.service.ReviewMeetingService;
+import com.simplehearing.session.entity.TherapySession;
 import com.simplehearing.session.service.SessionGenerationService;
 import com.simplehearing.subscription.entity.Subscription;
 import com.simplehearing.subscription.repository.SubscriptionRepository;
@@ -55,6 +57,7 @@ public class EnrollmentController {
     private final LeaveRepository leaveRepository;
     private final SessionGenerationService sessionGenerationService;
     private final TherapistPatientRepository therapistPatientRepository;
+    private final ReviewMeetingService reviewMeetingService;
 
     public EnrollmentController(
             EnrollmentRepository enrollmentRepository,
@@ -65,7 +68,8 @@ public class EnrollmentController {
             ClinicRepository clinicRepository,
             LeaveRepository leaveRepository,
             SessionGenerationService sessionGenerationService,
-            TherapistPatientRepository therapistPatientRepository) {
+            TherapistPatientRepository therapistPatientRepository,
+            ReviewMeetingService reviewMeetingService) {
         this.enrollmentRepository = enrollmentRepository;
         this.subscriptionRepository = subscriptionRepository;
         this.programRepository = programRepository;
@@ -75,6 +79,7 @@ public class EnrollmentController {
         this.leaveRepository = leaveRepository;
         this.sessionGenerationService = sessionGenerationService;
         this.therapistPatientRepository = therapistPatientRepository;
+        this.reviewMeetingService = reviewMeetingService;
     }
 
     // ── Available therapists for a given slot ─────────────────────────────────
@@ -210,7 +215,22 @@ public class EnrollmentController {
         });
 
         // Generate individual session records
-        sessionGenerationService.generateSessions(saved, sub.getNumSessions());
+        List<TherapySession> sessions = sessionGenerationService.generateSessions(saved, sub.getNumSessions());
+
+        // The plan's end is whatever the caller gave us, else the date the last session lands on
+        LocalDate endDate = request.endDate();
+        if (endDate == null && !sessions.isEmpty()) {
+            endDate = sessions.get(sessions.size() - 1).getSessionDate();
+        }
+        if (endDate != null) {
+            saved.setEndDate(endDate);
+            saved = enrollmentRepository.save(saved);
+        }
+
+        // Review meetings are opt-in — only generated when the setup flow asked for them
+        if (request.reviewSchedule() != null) {
+            reviewMeetingService.generateForEnrollment(saved, request.reviewSchedule(), principal.getId());
+        }
 
         // Build response with enriched names
         Program program = programRepository.findById(sub.getProgramId()).orElse(null);

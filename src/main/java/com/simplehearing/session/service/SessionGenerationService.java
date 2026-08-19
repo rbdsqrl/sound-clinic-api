@@ -29,8 +29,10 @@ public class SessionGenerationService {
      * Generates {@code numSessions} {@link TherapySession} records starting from
      * {@code enrollment.getStartDate()}, advancing one day at a time and skipping
      * any dates that are public holidays for the organisation.
+     *
+     * @return the saved sessions in date order — the last one's date is the plan's real end
      */
-    public void generateSessions(Enrollment enrollment, int numSessions) {
+    public List<TherapySession> generateSessions(Enrollment enrollment, int numSessions) {
         LocalTime startTime = enrollment.getStartTime();
         LocalTime endTime   = startTime.plusMinutes(enrollment.getSessionDurationMinutes());
 
@@ -61,6 +63,6 @@ public class SessionGenerationService {
             date = date.plusDays(1);
         }
 
-        sessionRepository.saveAll(sessions);
+        return sessionRepository.saveAll(sessions);
     }
 }

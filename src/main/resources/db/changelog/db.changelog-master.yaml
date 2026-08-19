@@ -128,3 +128,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/043-create-password-reset-tokens.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/044-create-review-meetings.sql
+      relativeToChangelogFile: false

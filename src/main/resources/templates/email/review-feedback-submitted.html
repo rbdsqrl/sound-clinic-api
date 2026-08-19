@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>New review feedback</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f4f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f4f5f7;padding:40px 16px;">
+    <tr>
+      <td align="center">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;">
+
+          <tr>
+            <td align="center" style="padding-bottom:24px;">
+              <img src="{{LOGO_URL}}" alt="{{ORG_NAME}}" height="44" style="height:44px;display:block;border:0;" />
+            </td>
+          </tr>
+
+          <tr>
+            <td style="background:#ffffff;border-radius:16px;padding:40px;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+
+              <h1 style="margin:0 0 6px;font-size:22px;font-weight:700;color:#111827;text-align:center;letter-spacing:-0.3px;">
+                New review feedback
+              </h1>
+              <p style="margin:0 0 32px;font-size:13px;color:#9ca3af;text-align:center;">
+                {{ORG_NAME}}
+              </p>
+
+              <p style="margin:0 0 12px;font-size:15px;color:#374151;line-height:1.65;">
+                Hi <strong style="color:#111827;">{{RECIPIENT_NAME}}</strong>,
+              </p>
+              <p style="margin:0 0 28px;font-size:15px;color:#374151;line-height:1.65;">
+                Feedback has been submitted for the review meeting for
+                <strong style="color:#111827;">{{PATIENT_NAME}}</strong> on
+                <strong style="color:#111827;">{{MEETING_DATE}}</strong>.
+              </p>
+
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td align="center" style="padding-bottom:8px;">
+                    <a href="{{MEETING_URL}}"
+                       style="display:inline-block;padding:14px 40px;background-color:#6366f1;color:#ffffff;text-decoration:none;border-radius:10px;font-size:15px;font-weight:600;letter-spacing:0.01em;mso-padding-alt:0;">
+                      <!--[if mso]><i style="mso-font-width:400%;letter-spacing:40px;mso-text-raise:10pt">&nbsp;</i><![endif]-->
+                      Read feedback
+                      <!--[if mso]><i style="mso-font-width:400%;letter-spacing:40px">&nbsp;</i><![endif]-->
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:20px 0 0;text-align:center;font-size:12px;color:#9ca3af;line-height:1.6;">
+              Feedback is only visible to the clinic and the people involved in this meeting.<br/>
+              &copy; {{ORG_NAME}}. All rights reserved.
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

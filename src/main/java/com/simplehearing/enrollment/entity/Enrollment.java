@@ -37,6 +37,13 @@ public class Enrollment {
     @Column(name = "start_date", nullable = false)
     private LocalDate startDate;
 
+    /**
+     * Last day of the therapy plan. Derived from the session count at creation time when
+     * the caller doesn't supply one — review meetings are scheduled inside this window.
+     */
+    @Column(name = "end_date")
+    private LocalDate endDate;
+
     /** Derived from start_date at creation time. Nullable — sessions are now daily. */
     @Enumerated(EnumType.STRING)
     @Column(name = "day_of_week")
@@ -78,6 +85,8 @@ public class Enrollment {
     public void setSessionDurationMinutes(int sessionDurationMinutes) { this.sessionDurationMinutes = sessionDurationMinutes; }
     public LocalDate getStartDate() { return startDate; }
     public void setStartDate(LocalDate startDate) { this.startDate = startDate; }
+    public LocalDate getEndDate() { return endDate; }
+    public void setEndDate(LocalDate endDate) { this.endDate = endDate; }
     public DayOfWeek getDayOfWeek() { return dayOfWeek; }
     public void setDayOfWeek(DayOfWeek dayOfWeek) { this.dayOfWeek = dayOfWeek; }
     public LocalTime getStartTime() { return startTime; }

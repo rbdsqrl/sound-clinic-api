@@ -1,5 +1,6 @@
 package com.simplehearing.notification;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.simplehearing.user.enums.Role;
 import org.slf4j.Logger;
@@ -13,6 +14,7 @@ import org.springframework.web.client.RestClient;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 
@@ -90,6 +92,68 @@ public class EmailService {
         vars.put("EXPIRY_MINUTES", String.valueOf(expiryMinutes));
         String html = fillStubs(loadTemplate("password-reset"), vars);
         send(to, "Reset your " + orgName + " password", html);
+    }
+
+    /**
+     * Sends a review-meeting invitation with an .ics attachment so it lands in the
+     * recipient's real calendar. Used for the first invite and for reschedules alike —
+     * the ics carries a bumped SEQUENCE, so clients update rather than duplicate.
+     *
+     * @param ics      calendar payload from {@link CalendarInviteService}
+     * @param rescheduled changes the wording from "invited" to "moved"
+     */
+    @Async
+    public void sendReviewMeetingInvite(String to, String recipientName, String patientName,
+                                        String therapistName, String dateLabel, String timeLabel,
+                                        String orgName, String meetingUrl, String ics,
+                                        boolean rescheduled) {
+        Map<String, String> vars = new java.util.HashMap<>();
+        vars.put("ORG_NAME", orgName);
+        vars.put("LOGO_URL", props.getBaseUrl() + "/logo.png");
+        vars.put("RECIPIENT_NAME", recipientName);
+        vars.put("PATIENT_NAME", patientName);
+        vars.put("THERAPIST_NAME", therapistName);
+        vars.put("MEETING_DATE", dateLabel);
+        vars.put("MEETING_TIME", timeLabel);
+        vars.put("MEETING_URL", props.getBaseUrl() + meetingUrl);
+        vars.put("INTRO", rescheduled
+                ? "This review meeting has been moved. Your calendar will update automatically."
+                : "A review meeting has been scheduled to discuss progress so far.");
+        String html = fillStubs(loadTemplate("review-meeting-invite"), vars);
+        String subject = (rescheduled ? "Updated: review meeting — " : "Review meeting — ")
+                + patientName + " on " + dateLabel;
+        send(to, subject, html, icsAttachment(ics, "review-meeting.ics"));
+    }
+
+    /** Sends a cancellation, with a CANCEL-method ics so the entry disappears from the calendar. */
+    @Async
+    public void sendReviewMeetingCancelled(String to, String recipientName, String patientName,
+                                           String dateLabel, String orgName, String reason, String ics) {
+        Map<String, String> vars = new java.util.HashMap<>();
+        vars.put("ORG_NAME", orgName);
+        vars.put("LOGO_URL", props.getBaseUrl() + "/logo.png");
+        vars.put("RECIPIENT_NAME", recipientName);
+        vars.put("PATIENT_NAME", patientName);
+        vars.put("MEETING_DATE", dateLabel);
+        vars.put("REASON", reason != null && !reason.isBlank() ? reason : "No reason given");
+        String html = fillStubs(loadTemplate("review-meeting-cancelled"), vars);
+        send(to, "Cancelled: review meeting — " + patientName + " on " + dateLabel,
+             html, icsAttachment(ics, "review-meeting.ics"));
+    }
+
+    /** Tells the therapist a parent has left feedback, without repeating the content in the mail. */
+    @Async
+    public void sendReviewFeedbackNotification(String to, String recipientName, String patientName,
+                                               String dateLabel, String orgName, String meetingUrl) {
+        Map<String, String> vars = new java.util.HashMap<>();
+        vars.put("ORG_NAME", orgName);
+        vars.put("LOGO_URL", props.getBaseUrl() + "/logo.png");
+        vars.put("RECIPIENT_NAME", recipientName);
+        vars.put("PATIENT_NAME", patientName);
+        vars.put("MEETING_DATE", dateLabel);
+        vars.put("MEETING_URL", props.getBaseUrl() + meetingUrl);
+        String html = fillStubs(loadTemplate("review-feedback-submitted"), vars);
+        send(to, "New review feedback — " + patientName, html);
     }
 
     @Async
@@ -206,6 +270,13 @@ public class EmailService {
     }
 
     private void send(String to, String subject, String htmlBody) {
+        send(to, subject, htmlBody, null);
+    }
+
+    /**
+     * @param attachment optional file to attach — used for .ics calendar invites. Null for plain mail.
+     */
+    private void send(String to, String subject, String htmlBody, BrevoAttachment attachment) {
         if (props.getApiKey() == null || props.getApiKey().isBlank()) {
             log.warn("Email skipped (BREVO_API_KEY not set) — to={} subject={}", to, subject);
             return;
@@ -215,7 +286,8 @@ public class EmailService {
                 new BrevoSender(props.getFromName(), props.getFromAddress()),
                 List.of(new BrevoRecipient(to)),
                 subject,
-                htmlBody
+                htmlBody,
+                attachment != null ? List.of(attachment) : null
             );
             restClient.post()
                 .uri(BREVO_SMTP_URL)
@@ -230,12 +302,22 @@ public class EmailService {
         }
     }
 
+    /** Wraps an .ics payload as a Brevo attachment. */
+    private static BrevoAttachment icsAttachment(String ics, String fileName) {
+        String base64 = Base64.getEncoder().encodeToString(ics.getBytes(StandardCharsets.UTF_8));
+        return new BrevoAttachment(base64, fileName);
+    }
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     private record BrevoEmailRequest(
         BrevoSender sender,
         List<BrevoRecipient> to,
         String subject,
-        @JsonProperty("htmlContent") String htmlContent
+        @JsonProperty("htmlContent") String htmlContent,
+        @JsonProperty("attachment") List<BrevoAttachment> attachment
     ) {}
+
+    private record BrevoAttachment(String content, String name) {}
 
     private record BrevoSender(String name, String email) {}
 
