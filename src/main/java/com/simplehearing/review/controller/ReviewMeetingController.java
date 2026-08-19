@@ -77,13 +77,16 @@ public class ReviewMeetingController {
             meetings = meetingRepository.findByEnrollmentIdOrderByMeetingNumberAsc(enrollmentId);
         } else if (patientId != null) {
             meetings = meetingRepository.findByOrgIdAndPatientIdOrderByMeetingDateAsc(principal.getOrgId(), patientId);
+        } else if (isManager(principal)) {
+            // Unfiltered: admins get the whole organisation — this is what the calendar asks for
+            meetings = meetingRepository.findByOrgIdOrderByMeetingDateAsc(principal.getOrgId());
         } else if (isParent(principal)) {
             meetings = meetingRepository.findForParent(principal.getOrgId(), principal.getId());
         } else if (isClinician(principal)) {
             meetings = meetingRepository.findByOrgIdAndTherapistIdOrderByMeetingDateAsc(
                     principal.getOrgId(), principal.getId());
         } else {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Provide an enrollmentId or patientId");
+            meetings = List.of();
         }
 
         meetings = meetings.stream()

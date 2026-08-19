@@ -15,6 +15,8 @@ public interface ReviewMeetingRepository extends JpaRepository<ReviewMeeting, UU
 
     List<ReviewMeeting> findByEnrollmentIdOrderByMeetingNumberAsc(UUID enrollmentId);
 
+    List<ReviewMeeting> findByOrgIdOrderByMeetingDateAsc(UUID orgId);
+
     List<ReviewMeeting> findByOrgIdAndPatientIdOrderByMeetingDateAsc(UUID orgId, UUID patientId);
 
     List<ReviewMeeting> findByOrgIdAndTherapistIdOrderByMeetingDateAsc(UUID orgId, UUID therapistId);
