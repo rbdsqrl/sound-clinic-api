@@ -2,6 +2,7 @@ package com.simplehearing.review.controller;
 
 import com.simplehearing.auth.security.UserPrincipal;
 import com.simplehearing.common.dto.ApiResponse;
+import com.simplehearing.common.dto.ParticipantResponse;
 import com.simplehearing.common.exception.ApiException;
 import com.simplehearing.common.exception.ResourceNotFoundException;
 import com.simplehearing.enrollment.entity.Enrollment;
@@ -28,6 +29,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -353,8 +355,25 @@ public class ReviewMeetingController {
                 patientNames.put(p.getId(), p.getFirstName() + " " + p.getLastName()));
 
         Map<UUID, String> therapistNames = new HashMap<>();
-        userRepository.findAllById(therapistIds).forEach(u ->
-                therapistNames.put(u.getId(), u.getFirstName() + " " + u.getLastName()));
+        Map<UUID, User> therapistsById = new HashMap<>();
+        userRepository.findAllById(therapistIds).forEach(u -> {
+            therapistNames.put(u.getId(), u.getFirstName() + " " + u.getLastName());
+            therapistsById.put(u.getId(), u);
+        });
+
+        // A review meeting's attendees are implicit: the assigned therapist plus every
+        // parent linked to the patient — the same people the invite emails go to.
+        Map<UUID, List<UUID>> parentIdsByPatient = new HashMap<>();
+        for (UUID patientId : patientIds) {
+            parentIdsByPatient.put(patientId,
+                    patientParentRepository.findById_PatientId(patientId).stream()
+                            .map(pp -> pp.getId().getParentId())
+                            .toList());
+        }
+        Set<UUID> allParentIds = parentIdsByPatient.values().stream()
+                .flatMap(List::stream).collect(Collectors.toSet());
+        Map<UUID, User> parentsById = new HashMap<>();
+        userRepository.findAllById(allParentIds).forEach(u -> parentsById.put(u.getId(), u));
 
         boolean staff = isManager(principal);
         boolean clinician = isClinician(principal);
@@ -378,10 +397,21 @@ public class ReviewMeetingController {
                 seeTherapistSide = false;
             }
 
+            List<ParticipantResponse> participants = new ArrayList<>();
+            User therapist = therapistsById.get(m.getTherapistId());
+            if (therapist != null) {
+                participants.add(ParticipantResponse.from(therapist, true));
+            }
+            for (UUID parentId : parentIdsByPatient.getOrDefault(m.getPatientId(), List.of())) {
+                User parentUser = parentsById.get(parentId);
+                if (parentUser != null) participants.add(ParticipantResponse.from(parentUser, false));
+            }
+
             return ReviewMeetingResponse.from(
                     m,
                     patientNames.getOrDefault(m.getPatientId(), ""),
                     therapistNames.getOrDefault(m.getTherapistId(), ""),
+                    participants,
                     seeParentSide,
                     seeTherapistSide);
         }).toList();

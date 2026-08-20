@@ -197,6 +197,10 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | PATCH    | `/api/v1/review-meetings/{id}/complete` | All staff                                               | Mark a meeting completed            |
 | PUT      | `/api/v1/review-meetings/{id}/parent-feedback`    | PARENT (linked to patient)                    | Rating + comments on the therapist  |
 | PUT      | `/api/v1/review-meetings/{id}/therapist-feedback` | THERAPIST, DOCTOR, ADMIN, BUSINESS_OWNER      | Summary + progress notes            |
+| POST     | `/api/v1/meetings`                      | All staff (not PARENT/PATIENT)                          | Schedule a meeting + email invites  |
+| GET      | `/api/v1/meetings`                      | Authenticated                                           | Meetings in a date range (scoped)   |
+| GET      | `/api/v1/meetings/{id}`                 | Authenticated                                           | One meeting with participants       |
+| PATCH    | `/api/v1/meetings/{id}/cancel`          | All staff (not PARENT/PATIENT)                          | Cancel + send CANCEL ics            |
 | GET      | `/api/v1/users/search`                  | BUSINESS_OWNER, ADMIN                                   | Search users by email               |
 | GET      | `/api/v1/organisation`                  | BUSINESS_OWNER, ADMIN                                   | Org profile                         |
 | PATCH    | `/api/v1/organisation`                  | BUSINESS_OWNER, ADMIN                                   | Update org profile                  |
@@ -254,6 +258,7 @@ Master file: `db.changelog-master.yaml` — lists migrations in order.
 | 044-create-review-meetings.sql     | `review_meetings` table + `enrollments.end_date`                  |
 | 045-analytics-indexes-and-score-scale.sql | 1-5 CHECK on `therapy_sessions.performance_score` + date-range indexes |
 | 046-normalise-emails.sql            | Lower-cases existing user/invitation emails; unique index on `lower(email)` |
+| 047-create-meetings.sql             | `meetings` + `meeting_participants` tables (general meetings with attendees) |
 
 **To add a migration:** create `NNN-description.sql` with the Liquibase header, then add it to the master YAML.
 

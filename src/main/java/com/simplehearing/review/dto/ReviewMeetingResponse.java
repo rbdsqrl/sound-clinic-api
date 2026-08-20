@@ -6,6 +6,9 @@ import com.simplehearing.review.enums.ReviewMeetingStatus;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import com.simplehearing.common.dto.ParticipantResponse;
+
+import java.util.List;
 import java.util.UUID;
 
 public record ReviewMeetingResponse(
@@ -31,6 +34,8 @@ public record ReviewMeetingResponse(
         Instant therapistFeedbackAt,
 
         String cancelledReason,
+        /** Therapist plus every parent linked to the patient. */
+        List<ParticipantResponse> participants,
         Instant createdAt
 ) {
 
@@ -43,6 +48,7 @@ public record ReviewMeetingResponse(
     public static ReviewMeetingResponse from(ReviewMeeting m,
                                              String patientName,
                                              String therapistName,
+                                             List<ParticipantResponse> participants,
                                              boolean canSeeParentFeedback,
                                              boolean canSeeTherapistFeedback) {
         return new ReviewMeetingResponse(
@@ -68,6 +74,7 @@ public record ReviewMeetingResponse(
                 m.getTherapistFeedbackAt(),
 
                 m.getCancelledReason(),
+                participants,
                 m.getCreatedAt()
         );
     }

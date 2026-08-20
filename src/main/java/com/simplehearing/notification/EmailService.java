@@ -125,6 +125,46 @@ public class EmailService {
         send(to, subject, html, icsAttachment(ics, "review-meeting.ics"));
     }
 
+    /** Invite for a general meeting — carries the participant list rather than a patient. */
+    @Async
+    public void sendMeetingInvite(String to, String recipientName, String title,
+                                  String organiserName, String participants, String location,
+                                  String dateLabel, String timeLabel, String orgName,
+                                  String meetingUrl, String ics, boolean rescheduled) {
+        Map<String, String> vars = new java.util.HashMap<>();
+        vars.put("ORG_NAME", orgName);
+        vars.put("LOGO_URL", props.getBaseUrl() + "/logo.png");
+        vars.put("RECIPIENT_NAME", recipientName);
+        vars.put("MEETING_TITLE", title);
+        vars.put("ORGANISER_NAME", organiserName);
+        vars.put("PARTICIPANTS", participants);
+        vars.put("LOCATION_LINE", location != null && !location.isBlank()
+                ? "Location: " + location : "");
+        vars.put("MEETING_DATE", dateLabel);
+        vars.put("MEETING_TIME", timeLabel);
+        vars.put("MEETING_URL", props.getBaseUrl() + meetingUrl);
+        vars.put("INTRO", rescheduled
+                ? "This meeting has been moved. Your calendar will update automatically."
+                : "You have been invited to a meeting.");
+        String html = fillStubs(loadTemplate("meeting-invite"), vars);
+        String subject = (rescheduled ? "Updated: " : "") + title + " on " + dateLabel;
+        send(to, subject, html, icsAttachment(ics, "meeting.ics"));
+    }
+
+    @Async
+    public void sendMeetingCancelled(String to, String recipientName, String title,
+                                     String dateLabel, String orgName, String reason, String ics) {
+        Map<String, String> vars = new java.util.HashMap<>();
+        vars.put("ORG_NAME", orgName);
+        vars.put("LOGO_URL", props.getBaseUrl() + "/logo.png");
+        vars.put("RECIPIENT_NAME", recipientName);
+        vars.put("MEETING_TITLE", title);
+        vars.put("MEETING_DATE", dateLabel);
+        vars.put("REASON", reason != null && !reason.isBlank() ? reason : "No reason given");
+        String html = fillStubs(loadTemplate("meeting-cancelled"), vars);
+        send(to, "Cancelled: " + title + " on " + dateLabel, html, icsAttachment(ics, "meeting.ics"));
+    }
+
     /** Sends a cancellation, with a CANCEL-method ics so the entry disappears from the calendar. */
     @Async
     public void sendReviewMeetingCancelled(String to, String recipientName, String patientName,

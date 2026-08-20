@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Stream;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -88,10 +89,17 @@ public class UserController {
     @GetMapping("/assignable")
     @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST', 'DOCTOR')")
     public ResponseEntity<ApiResponse<List<AssignableUserResponse>>> listAssignable(
+            @RequestParam(defaultValue = "false") boolean includeParents,
             @AuthenticationPrincipal UserPrincipal principal) {
 
+        // Meeting participant pickers need parents as well as staff. Still names and
+        // roles only, so this stays safe to expose to every staff member.
+        List<Role> roles = includeParents
+                ? Stream.concat(STAFF_ROLES.stream(), Stream.of(Role.PARENT)).toList()
+                : STAFF_ROLES;
+
         List<AssignableUserResponse> results = userRepository
-                .findByOrgIdAndRoleIn(principal.getOrgId(), STAFF_ROLES)
+                .findByOrgIdAndRoleIn(principal.getOrgId(), roles)
                 .stream()
                 .filter(User::isActive)
                 .sorted(Comparator.comparing(User::getFirstName).thenComparing(User::getLastName))
