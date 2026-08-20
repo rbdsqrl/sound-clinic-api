@@ -113,16 +113,19 @@ public class UserController {
         summary = "List all therapists (and doctors) in the organisation",
         description = "Returns every THERAPIST and DOCTOR user in the caller's org. " +
                       "Pass an optional clinicId to scope the results to a single clinic. " +
-                      "Accessible by BUSINESS_OWNER and ADMIN only."
+                      "Office admins are included because they reassign therapists on ongoing plans."
     )
     @GetMapping("/therapists")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<List<UserResponse>>> listTherapists(
             @RequestParam(required = false) UUID clinicId,
             @AuthenticationPrincipal UserPrincipal principal) {
 
         if (!principal.getUser().hasRole(Role.BUSINESS_OWNER) &&
-                !principal.getUser().hasRole(Role.ADMIN)) {
-            throw new ApiException(HttpStatus.FORBIDDEN, "Only BUSINESS_OWNER or ADMIN may list therapists");
+                !principal.getUser().hasRole(Role.ADMIN) &&
+                !principal.getUser().hasRole(Role.OFFICE_ADMIN)) {
+            throw new ApiException(HttpStatus.FORBIDDEN,
+                    "Only a business owner, admin or office admin may list therapists");
         }
 
         List<UserResponse> results = (clinicId != null

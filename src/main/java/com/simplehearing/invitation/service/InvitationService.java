@@ -102,7 +102,7 @@ public class InvitationService {
         }
 
         if (invitationRepository.existsByEmailAndOrgIdAndStatus(
-                request.email(), caller.getOrgId(), Invitation.Status.PENDING)) {
+                request.email(), caller.getOrgId(), Invitation.Status.PENDING, Instant.now())) {
             throw new ApiException(HttpStatus.CONFLICT, "A pending invitation for this email already exists");
         }
 
@@ -236,9 +236,13 @@ public class InvitationService {
                 .filter(i -> i.getOrgId().equals(orgId))
                 .orElseThrow(() -> new ResourceNotFoundException("Invitation not found"));
 
-        if (invitation.getStatus() != Invitation.Status.PENDING) {
-            throw new ApiException(HttpStatus.CONFLICT, "Only pending invitations can be resent");
+        // An expired invitation is precisely the one worth resending, so allow both.
+        if (invitation.getStatus() != Invitation.Status.PENDING
+                && invitation.getStatus() != Invitation.Status.EXPIRED) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "Only pending or expired invitations can be resent");
         }
+        invitation.setStatus(Invitation.Status.PENDING);
 
         String rawToken = TokenHasher.generateRawToken();
         invitation.setTokenHash(sha256(rawToken));
@@ -273,7 +277,7 @@ public class InvitationService {
         if (userRepository.existsByEmailAndIsActive(email, true)) {
             throw new ApiException(HttpStatus.CONFLICT, "A user with this email already exists");
         }
-        if (invitationRepository.existsByEmailAndOrgIdAndStatus(email, orgId, Invitation.Status.PENDING)) {
+        if (invitationRepository.existsByEmailAndOrgIdAndStatus(email, orgId, Invitation.Status.PENDING, Instant.now())) {
             throw new ApiException(HttpStatus.CONFLICT, "A pending invitation for this email already exists");
         }
 

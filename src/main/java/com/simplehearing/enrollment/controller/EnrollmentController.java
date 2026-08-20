@@ -1,5 +1,13 @@
 package com.simplehearing.enrollment.controller;
 
+import com.simplehearing.enrollment.dto.ChangeTherapistRequest;
+import com.simplehearing.review.entity.ReviewMeeting;
+import com.simplehearing.review.enums.ReviewMeetingStatus;
+import com.simplehearing.review.repository.ReviewMeetingRepository;
+import com.simplehearing.session.enums.TherapySessionStatus;
+import com.simplehearing.session.repository.TherapySessionRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import com.simplehearing.auth.security.UserPrincipal;
 import com.simplehearing.clinic.repository.ClinicRepository;
 import com.simplehearing.common.dto.ApiResponse;
@@ -48,6 +56,8 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/v1/enrollments")
 public class EnrollmentController {
 
+    private static final Logger log = LoggerFactory.getLogger(EnrollmentController.class);
+
     private final EnrollmentRepository enrollmentRepository;
     private final SubscriptionRepository subscriptionRepository;
     private final ProgramRepository programRepository;
@@ -58,6 +68,8 @@ public class EnrollmentController {
     private final SessionGenerationService sessionGenerationService;
     private final TherapistPatientRepository therapistPatientRepository;
     private final ReviewMeetingService reviewMeetingService;
+    private final TherapySessionRepository therapySessionRepository;
+    private final ReviewMeetingRepository reviewMeetingRepository;
 
     public EnrollmentController(
             EnrollmentRepository enrollmentRepository,
@@ -69,7 +81,9 @@ public class EnrollmentController {
             LeaveRepository leaveRepository,
             SessionGenerationService sessionGenerationService,
             TherapistPatientRepository therapistPatientRepository,
-            ReviewMeetingService reviewMeetingService) {
+            ReviewMeetingService reviewMeetingService,
+            TherapySessionRepository therapySessionRepository,
+            ReviewMeetingRepository reviewMeetingRepository) {
         this.enrollmentRepository = enrollmentRepository;
         this.subscriptionRepository = subscriptionRepository;
         this.programRepository = programRepository;
@@ -80,6 +94,8 @@ public class EnrollmentController {
         this.sessionGenerationService = sessionGenerationService;
         this.therapistPatientRepository = therapistPatientRepository;
         this.reviewMeetingService = reviewMeetingService;
+        this.therapySessionRepository = therapySessionRepository;
+        this.reviewMeetingRepository = reviewMeetingRepository;
     }
 
     // ── Available therapists for a given slot ─────────────────────────────────
@@ -244,6 +260,98 @@ public class EnrollmentController {
                 sub.getNumSessions());
 
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
+    }
+
+    // ── Change the assigned therapist ─────────────────────────────────────────
+
+    @Operation(
+        summary = "Hand an ongoing plan to a different therapist",
+        description = "Moves the enrollment and everything still ahead of it — scheduled sessions and "
+                    + "upcoming review meetings — to the new therapist. Sessions already completed, "
+                    + "cancelled or marked no-show keep the therapist who actually took them, so the "
+                    + "clinical history stays accurate."
+    )
+    @PatchMapping("/{id}/therapist")
+    @PreAuthorize("hasAnyRole('OFFICE_ADMIN', 'ADMIN', 'BUSINESS_OWNER')")
+    public ResponseEntity<ApiResponse<EnrollmentResponse>> changeTherapist(
+            @PathVariable UUID id,
+            @Valid @RequestBody ChangeTherapistRequest request,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        Enrollment enrollment = enrollmentRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Enrollment not found"));
+
+        if (!enrollment.getOrgId().equals(principal.getOrgId())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Access denied");
+        }
+        if (enrollment.getStatus() == EnrollmentStatus.CANCELLED) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "This plan is cancelled — reassigning a therapist would have no effect");
+        }
+        if (enrollment.getTherapistId().equals(request.therapistId())) {
+            throw new ApiException(HttpStatus.CONFLICT, "That therapist is already assigned to this plan");
+        }
+
+        User therapist = userRepository.findById(request.therapistId())
+                .orElseThrow(() -> new ResourceNotFoundException("Therapist not found"));
+        if (!therapist.getOrgId().equals(principal.getOrgId())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Therapist belongs to another organisation");
+        }
+        if (!therapist.isActive()) {
+            throw new ApiException(HttpStatus.CONFLICT, "That therapist is deactivated");
+        }
+        if (!therapist.hasRole(Role.THERAPIST) && !therapist.hasRole(Role.DOCTOR)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "That user is not a therapist or doctor");
+        }
+
+        UUID previousTherapistId = enrollment.getTherapistId();
+        enrollment.setTherapistId(therapist.getId());
+        Enrollment saved = enrollmentRepository.save(enrollment);
+
+        // Only what is still ahead moves across; the past keeps its own record.
+        LocalDate today = LocalDate.now();
+        List<TherapySession> sessions = therapySessionRepository.findByEnrollmentIdOrderBySessionNumberAsc(id);
+        int movedSessions = 0;
+        for (TherapySession session : sessions) {
+            if (session.getStatus() == TherapySessionStatus.SCHEDULED
+                    && !session.getSessionDate().isBefore(today)) {
+                session.setTherapistId(therapist.getId());
+                therapySessionRepository.save(session);
+                movedSessions++;
+            }
+        }
+
+        int movedMeetings = 0;
+        for (ReviewMeeting meeting : reviewMeetingRepository.findByEnrollmentIdOrderByMeetingNumberAsc(id)) {
+            if (meeting.getStatus() == ReviewMeetingStatus.SCHEDULED
+                    && !meeting.getMeetingDate().isBefore(today)) {
+                meeting.setTherapistId(therapist.getId());
+                reviewMeetingRepository.save(meeting);
+                movedMeetings++;
+            }
+        }
+
+        // Keep the caseload link in step so the new therapist sees the patient.
+        therapistPatientRepository
+                .findByPatientIdAndTherapistId(enrollment.getPatientId(), therapist.getId())
+                .ifPresentOrElse(existing -> {
+                    if (!existing.isActive()) {
+                        existing.setActive(true);
+                        therapistPatientRepository.save(existing);
+                    }
+                }, () -> {
+                    TherapistPatient link = new TherapistPatient();
+                    link.setPatientId(enrollment.getPatientId());
+                    link.setTherapistId(therapist.getId());
+                    link.setAssignedBy(principal.getId());
+                    therapistPatientRepository.save(link);
+                });
+
+        log.info("Enrollment {} moved from therapist {} to {} — {} session(s), {} review meeting(s)",
+                id, previousTherapistId, therapist.getId(), movedSessions, movedMeetings);
+
+        List<EnrollmentResponse> enriched = enrichEnrollments(List.of(saved));
+        return ResponseEntity.ok(ApiResponse.success(enriched.get(0)));
     }
 
     // ── Cancel enrollment ─────────────────────────────────────────────────────
