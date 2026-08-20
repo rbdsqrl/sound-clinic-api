@@ -131,3 +131,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/044-create-review-meetings.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/045-analytics-indexes-and-score-scale.sql
+      relativeToChangelogFile: false

@@ -21,4 +21,9 @@ public interface IEPGoalRepository extends JpaRepository<IEPGoal, UUID> {
     void deleteByPlanId(UUID planId);
 
     List<IEPGoal> findByPlanId(UUID planId);
+
+    /** Goals across several plans at once — avoids an N+1 when building analytics series. */
+    List<IEPGoal> findByPlanIdIn(List<UUID> planIds);
+
+    List<IEPGoal> findByOrgId(UUID orgId);
 }

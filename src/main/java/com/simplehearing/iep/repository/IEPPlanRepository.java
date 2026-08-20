@@ -19,5 +19,7 @@ public interface IEPPlanRepository extends JpaRepository<IEPPlan, UUID> {
 
     List<IEPPlan> findByPatientId(UUID patientId);
 
+    List<IEPPlan> findByOrgIdAndTherapistId(UUID orgId, UUID therapistId);
+
     void deleteByPatientId(UUID patientId);
 }

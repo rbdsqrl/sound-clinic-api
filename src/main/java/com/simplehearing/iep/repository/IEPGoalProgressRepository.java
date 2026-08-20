@@ -4,6 +4,7 @@ import com.simplehearing.iep.entity.IEPGoalProgress;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -15,4 +16,11 @@ public interface IEPGoalProgressRepository extends JpaRepository<IEPGoalProgress
     int countByGoalId(UUID goalId);
 
     void deleteByGoalId(UUID goalId);
+
+    /** Every progress entry in an org inside a date window — the org-wide analytics scan. */
+    List<IEPGoalProgress> findByOrgIdAndSessionDateBetween(UUID orgId, LocalDate from, LocalDate to);
+
+    /** Progress entries for a known set of goals inside a date window (patient / therapist scope). */
+    List<IEPGoalProgress> findByGoalIdInAndSessionDateBetween(
+            List<UUID> goalIds, LocalDate from, LocalDate to);
 }

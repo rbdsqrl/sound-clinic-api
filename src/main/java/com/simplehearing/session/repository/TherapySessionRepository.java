@@ -55,4 +55,18 @@ public interface TherapySessionRepository extends JpaRepository<TherapySession, 
             @Param("sessionDate") LocalDate sessionDate, @Param("status") TherapySessionStatus status);
 
     List<TherapySession> findByPatientId(UUID patientId);
+
+    /** Readable alias used by the analytics module — same query as the derived name above. */
+    @Query("SELECT s FROM TherapySession s WHERE s.orgId = :orgId AND s.patientId = :patientId "
+         + "AND s.sessionDate BETWEEN :from AND :to ORDER BY s.sessionDate ASC, s.startTime ASC")
+    List<TherapySession> findByOrgIdAndPatientIdBetween(
+            @Param("orgId") UUID orgId, @Param("patientId") UUID patientId,
+            @Param("from") LocalDate from, @Param("to") LocalDate to);
+
+    /** Readable alias used by the analytics module — same query as the derived name above. */
+    @Query("SELECT s FROM TherapySession s WHERE s.orgId = :orgId AND s.therapistId = :therapistId "
+         + "AND s.sessionDate BETWEEN :from AND :to ORDER BY s.sessionDate ASC, s.startTime ASC")
+    List<TherapySession> findByOrgIdAndTherapistIdBetween(
+            @Param("orgId") UUID orgId, @Param("therapistId") UUID therapistId,
+            @Param("from") LocalDate from, @Param("to") LocalDate to);
 }

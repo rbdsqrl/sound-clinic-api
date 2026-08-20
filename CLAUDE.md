@@ -13,11 +13,11 @@ Developer context for AI assistants working on this codebase.
 | Build          | Maven                               |
 | ORM            | Hibernate / Spring Data JPA         |
 | Security       | Spring Security + JWT (jjwt 0.12.6) |
-| DB (local)     | H2 (file-based, PostgreSQL mode)    |
+| DB (local)     | PostgreSQL (Docker, port 5432)      |
 | DB (prod)      | PostgreSQL                          |
 | Migrations     | Liquibase (YAML master + SQL files) |
 | API Docs       | SpringDoc / Swagger UI              |
-| JSON           | Jackson (snake_case, NON_NULL)      |
+| JSON           | Jackson (camelCase, NON_NULL)       |
 
 ---
 
@@ -29,7 +29,8 @@ mvn spring-boot:run -Dspring-boot.run.profiles=local
 ```
 
 Server starts on **http://localhost:8080**.  
-H2 database persists at `~/.simplehearing/simplehearing.mv.db`.  
+The `local` profile connects to PostgreSQL on `localhost:5432` (see the Docker command in
+`application-local.yml`) — not H2, despite the leftover `~/.simplehearing/*.mv.db` file.  
 Liquibase runs on startup and applies any new migrations only.
 
 ---
@@ -157,6 +158,14 @@ com.simplehearing
 │   │   └── LeaveStatus.java             # PENDING, APPROVED, REJECTED
 │   └── repository/LeaveRepository.java  # findByOrgId*, findByOrgIdAndTherapistId*
 │
+├── analytics/
+│   ├── controller/AnalyticsController.java  # /api/v1/analytics/* — admin roles only
+│   ├── dto/
+│   │   ├── TimeSeriesResponse.java      # Shared envelope: buckets + domains + totals
+│   │   └── CaseloadResponse.java        # Therapist series + PatientRow list
+│   ├── enums/Granularity.java           # DAILY | WEEKLY | MONTHLY + ISO bucketing rules
+│   └── service/AnalyticsService.java    # Folds sessions + IEP progress into buckets
+│
 └── controller/
     └── HealthController.java            # GET /, GET /health (no auth required)
 ```
@@ -176,6 +185,9 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | POST     | `/api/v1/auth/logout`                   | Authenticated                                           | Invalidate refresh token            |
 | GET      | `/api/v1/users/me`                      | Authenticated                                           | Caller's profile                    |
 | GET      | `/api/v1/users/therapists`              | BUSINESS_OWNER, ADMIN                                   | All therapists/doctors in org       |
+| GET      | `/api/v1/analytics/patients/{id}/progress` | BUSINESS_OWNER, ADMIN, OFFICE_ADMIN                  | Mastery series + per-domain breakdown |
+| GET      | `/api/v1/analytics/therapists/{id}/caseload` | BUSINESS_OWNER, ADMIN, OFFICE_ADMIN                | Therapist series + a row per patient |
+| GET      | `/api/v1/analytics/overview`            | BUSINESS_OWNER, ADMIN, OFFICE_ADMIN                     | Org rollup (WEEKLY/MONTHLY only)    |
 | GET      | `/api/v1/users/assignable`              | BUSINESS_OWNER, ADMIN, OFFICE_ADMIN, THERAPIST, DOCTOR  | Staff names + roles for assignee pickers |
 | GET      | `/api/v1/review-meetings`               | All staff + PARENT (own children)                       | List review meetings                |
 | POST     | `/api/v1/review-meetings`               | BUSINESS_OWNER, ADMIN, OFFICE_ADMIN                     | Add one review meeting to a plan    |
@@ -240,6 +252,7 @@ Master file: `db.changelog-master.yaml` — lists migrations in order.
 | 016-create-leaves.sql              | `leaves` table (org_id, therapist_id, leave_date, leave_type, status, reason, reviewed_by, reviewed_at) |
 | 043-create-password-reset-tokens.sql | `password_reset_tokens` table (hashed single-use tokens) |
 | 044-create-review-meetings.sql     | `review_meetings` table + `enrollments.end_date`                  |
+| 045-analytics-indexes-and-score-scale.sql | 1-5 CHECK on `therapy_sessions.performance_score` + date-range indexes |
 
 **To add a migration:** create `NNN-description.sql` with the Liquibase header, then add it to the master YAML.
 
@@ -281,6 +294,13 @@ CREATE TABLE ... ;
 - `ResourceNotFoundException` for 404s
 - `ConflictException` for 409s
 - `GlobalExceptionHandler` maps them all to `ApiResponse`
+
+### Analytics
+- Mastery is **ratio of sums** (Σ`trials_passed` ÷ Σ`trials_total`), never an average of per-session ratios
+- A period with no data serialises `masteryPct` as null — never 0, which would read as a regression
+- Bucket on `LocalDate` fields (`session_date`, `meeting_date`), never on `created_at` (`Instant`)
+- Always return coverage alongside a trend; a series built on thin coverage is a sampling artefact
+- `performance_score` is a fixed 1-5 rubric (see `UpdateSessionNotesRequest`) — do not widen it
 
 ### Multi-Tenancy
 - Every query must filter by `orgId` from `principal.getOrgId()`

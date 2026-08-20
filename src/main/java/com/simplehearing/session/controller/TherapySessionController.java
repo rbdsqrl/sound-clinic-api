@@ -202,7 +202,7 @@ public class TherapySessionController {
     @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'ADMIN', 'BUSINESS_OWNER')")
     public ResponseEntity<ApiResponse<TherapySessionResponse>> updateNotes(
             @PathVariable UUID id,
-            @RequestBody UpdateSessionNotesRequest request,
+            @Valid @RequestBody UpdateSessionNotesRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
 
         TherapySession session = findOwned(id, principal);
