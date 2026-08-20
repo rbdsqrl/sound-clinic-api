@@ -7,6 +7,7 @@ import com.simplehearing.auth.entity.PasswordResetToken;
 import com.simplehearing.auth.repository.PasswordResetTokenRepository;
 import com.simplehearing.auth.repository.RefreshTokenRepository;
 import com.simplehearing.common.exception.ApiException;
+import com.simplehearing.common.util.EmailNormalizer;
 import com.simplehearing.common.util.TokenHasher;
 import com.simplehearing.notification.EmailService;
 import com.simplehearing.organisation.repository.OrganisationRepository;
@@ -66,7 +67,7 @@ public class PasswordResetService {
      */
     public void requestReset(ForgotPasswordRequest request, String requestIp) {
         // Matched exactly as login does — emails are stored as entered, never normalised.
-        Optional<User> maybeUser = userRepository.findByEmail(request.email().trim())
+        Optional<User> maybeUser = userRepository.findByEmail(EmailNormalizer.normalize(request.email()))
                 .filter(User::isActive);
 
         if (maybeUser.isEmpty()) {

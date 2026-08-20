@@ -3,6 +3,7 @@ package com.simplehearing.invitation.service;
 import com.simplehearing.auth.security.UserPrincipal;
 import com.simplehearing.clinic.repository.ClinicRepository;
 import com.simplehearing.common.exception.ApiException;
+import com.simplehearing.common.util.EmailNormalizer;
 import com.simplehearing.common.exception.ResourceNotFoundException;
 import com.simplehearing.common.util.TokenHasher;
 import com.simplehearing.invitation.dto.AcceptInviteRequest;
@@ -195,11 +196,13 @@ public class InvitationService {
             throw new ApiException(HttpStatus.CONFLICT, "A user with this email already exists");
         }
 
-        // Reactivate existing deactivated account, or create a fresh one
-        User user = userRepository.findByEmail(invitation.getEmail()).orElseGet(User::new);
+        // Reactivate existing deactivated account, or create a fresh one.
+        // Rows created before email normalisation may still hold mixed case.
+        String email = EmailNormalizer.normalize(invitation.getEmail());
+        User user = userRepository.findByEmail(email).orElseGet(User::new);
         user.setOrgId(invitation.getOrgId());
         user.setClinicId(invitation.getClinicId());
-        user.setEmail(invitation.getEmail());
+        user.setEmail(email);
         user.setFirstName(request.firstName());
         user.setLastName(request.lastName());
         user.setPasswordHash(passwordEncoder.encode(request.password()));
@@ -265,6 +268,7 @@ public class InvitationService {
             UUID orgId, UUID invitedBy) {
 
         Role effectiveRole = (role == Role.PATIENT || role == Role.PARENT) ? role : Role.PARENT;
+        email = EmailNormalizer.normalize(email);
 
         if (userRepository.existsByEmailAndIsActive(email, true)) {
             throw new ApiException(HttpStatus.CONFLICT, "A user with this email already exists");

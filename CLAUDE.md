@@ -253,6 +253,7 @@ Master file: `db.changelog-master.yaml` — lists migrations in order.
 | 043-create-password-reset-tokens.sql | `password_reset_tokens` table (hashed single-use tokens) |
 | 044-create-review-meetings.sql     | `review_meetings` table + `enrollments.end_date`                  |
 | 045-analytics-indexes-and-score-scale.sql | 1-5 CHECK on `therapy_sessions.performance_score` + date-range indexes |
+| 046-normalise-emails.sql            | Lower-cases existing user/invitation emails; unique index on `lower(email)` |
 
 **To add a migration:** create `NNN-description.sql` with the Liquibase header, then add it to the master YAML.
 

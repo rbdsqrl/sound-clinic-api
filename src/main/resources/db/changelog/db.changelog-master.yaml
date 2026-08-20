@@ -134,3 +134,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/045-analytics-indexes-and-score-scale.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/046-normalise-emails.sql
+      relativeToChangelogFile: false

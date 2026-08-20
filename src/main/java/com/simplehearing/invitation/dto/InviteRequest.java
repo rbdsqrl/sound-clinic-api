@@ -1,6 +1,7 @@
 package com.simplehearing.invitation.dto;
 
 import com.simplehearing.user.enums.Role;
+import com.simplehearing.common.util.EmailNormalizer;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -20,4 +21,9 @@ public record InviteRequest(
          * Omit (or null) for BUSINESS_OWNER invitations.
          */
         UUID clinicId
-) {}
+) {
+    /** Normalised before validation so a stray space or capital never reaches the lookup. */
+    public InviteRequest {
+        email = EmailNormalizer.normalize(email);
+    }
+}

@@ -1,5 +1,6 @@
 package com.simplehearing.auth.dto;
 
+import com.simplehearing.common.util.EmailNormalizer;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -33,4 +34,9 @@ public record RegisterRequest(
         @NotBlank(message = "Password is required")
         @Size(min = 8, message = "Password must be at least 8 characters")
         String password
-) {}
+) {
+    /** Normalised before validation so a stray space or capital never reaches the lookup. */
+    public RegisterRequest {
+        email = EmailNormalizer.normalize(email);
+    }
+}
