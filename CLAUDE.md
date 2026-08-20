@@ -218,6 +218,7 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | GET      | `/api/v1/conditions`                    | All authenticated                                       | List all conditions (lookup)        |
 | POST     | `/api/v1/invitations`                   | BUSINESS_OWNER, ADMIN                                   | Invite user by email + role         |
 | GET      | `/api/v1/invitations`                   | BUSINESS_OWNER, ADMIN                                   | List sent invitations               |
+| PATCH    | `/api/v1/invitations/{id}/cancel`       | BUSINESS_OWNER, ADMIN                                   | Withdraw an unaccepted invitation   |
 | POST     | `/api/v1/invitations/accept`            | Public                                                  | Accept invite → create account      |
 | GET      | `/api/v1/availability-slots`            | All authenticated                                       | List availability slots             |
 | POST     | `/api/v1/availability-slots`            | BUSINESS_OWNER, ADMIN                                   | Create availability slot            |

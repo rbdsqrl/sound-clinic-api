@@ -231,6 +231,37 @@ public class InvitationService {
      * Regenerates the token for a pending invitation and re-sends the invite email.
      * The old token is invalidated — only the new one is valid.
      */
+    /**
+     * Withdraws an invitation that was never taken up.
+     *
+     * The token is cleared as well as the status, so a link already sitting in someone's
+     * inbox stops working the moment the invite is cancelled.
+     */
+    public InviteResponse cancel(UUID invitationId, UUID orgId) {
+        Invitation invitation = invitationRepository.findById(invitationId)
+                .filter(i -> i.getOrgId().equals(orgId))
+                .orElseThrow(() -> new ResourceNotFoundException("Invitation not found"));
+
+        if (invitation.getStatus() == Invitation.Status.ACCEPTED) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "This invitation has already been accepted and cannot be cancelled");
+        }
+        if (invitation.getStatus() == Invitation.Status.CANCELLED) {
+            throw new ApiException(HttpStatus.CONFLICT, "This invitation is already cancelled");
+        }
+
+        invitation.setStatus(Invitation.Status.CANCELLED);
+        invitation.setTokenHash(sha256(TokenHasher.generateRawToken()));
+        invitationRepository.save(invitation);
+
+        log.info("Invitation for {} cancelled", invitation.getEmail());
+
+        String clinicName = invitation.getClinicId() != null
+                ? clinicRepository.findById(invitation.getClinicId()).map(c -> c.getName()).orElse(null)
+                : null;
+        return InviteResponse.from(invitation, null, clinicName);
+    }
+
     public InviteResponse resend(UUID invitationId, UUID orgId) {
         Invitation invitation = invitationRepository.findById(invitationId)
                 .filter(i -> i.getOrgId().equals(orgId))

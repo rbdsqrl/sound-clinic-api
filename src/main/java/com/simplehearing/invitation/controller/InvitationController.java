@@ -61,6 +61,22 @@ public class InvitationController {
         return ResponseEntity.ok(ApiResponse.success("Invitation resent", response));
     }
 
+    @Operation(
+        summary = "Cancel an invitation that was never accepted",
+        description = "Withdraws a pending or expired invitation and invalidates its link. "
+                    + "An invitation that has already been accepted cannot be cancelled — "
+                    + "deactivate the member instead."
+    )
+    @PatchMapping("/{id}/cancel")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN')")
+    public ResponseEntity<ApiResponse<InviteResponse>> cancel(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        InviteResponse response = invitationService.cancel(id, principal.getOrgId());
+        return ResponseEntity.ok(ApiResponse.success("Invitation cancelled", response));
+    }
+
     /**
      * Returns the email and role for a token — public, used to prefill the accept-invite form.
      */
