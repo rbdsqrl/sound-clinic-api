@@ -1,6 +1,7 @@
 package com.simplehearing.inquiry.dto;
 
 import com.simplehearing.inquiry.entity.Inquiry;
+import com.simplehearing.inquiry.enums.InquirySource;
 import com.simplehearing.inquiry.enums.InquiryStatus;
 import com.simplehearing.inquiry.enums.PreferredTime;
 
@@ -16,6 +17,7 @@ public record InquiryResponse(
         String reason,
         PreferredTime preferredTime,
         InquiryStatus status,
+        InquirySource source,
         String adminNotes,
         Instant appointmentDate,
         String appointmentNotes,
@@ -32,6 +34,7 @@ public record InquiryResponse(
                 inquiry.getReason(),
                 inquiry.getPreferredTime(),
                 inquiry.getStatus(),
+                inquiry.getSource(),
                 inquiry.getAdminNotes(),
                 inquiry.getAppointmentDate(),
                 inquiry.getAppointmentNotes(),

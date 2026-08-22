@@ -125,6 +125,25 @@ public class EmailService {
         send(to, subject, html, icsAttachment(ics, "review-meeting.ics"));
     }
 
+    /** Tells the family and the therapist that a session has moved. */
+    @Async
+    public void sendSessionRescheduledEmail(String to, String recipientName, String patientName,
+                                            String therapistName, String oldWhen, String newWhen,
+                                            String orgName, String sessionUrl, String intro) {
+        Map<String, String> vars = new java.util.HashMap<>();
+        vars.put("ORG_NAME", orgName);
+        vars.put("LOGO_URL", props.getBaseUrl() + "/logo.png");
+        vars.put("RECIPIENT_NAME", recipientName);
+        vars.put("PATIENT_NAME", patientName);
+        vars.put("THERAPIST_NAME", therapistName);
+        vars.put("OLD_WHEN", oldWhen);
+        vars.put("NEW_WHEN", newWhen);
+        vars.put("MEETING_URL", props.getBaseUrl() + sessionUrl);
+        vars.put("INTRO", intro);
+        String html = fillStubs(loadTemplate("session-rescheduled"), vars);
+        send(to, "Session moved — " + patientName + " is now " + newWhen, html);
+    }
+
     /** Invite for a general meeting — carries the participant list rather than a patient. */
     @Async
     public void sendMeetingInvite(String to, String recipientName, String title,

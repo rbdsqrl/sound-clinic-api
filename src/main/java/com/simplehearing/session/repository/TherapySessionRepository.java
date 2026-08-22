@@ -27,6 +27,9 @@ public interface TherapySessionRepository extends JpaRepository<TherapySession, 
     /** All sessions belonging to a specific enrollment (for detail view) */
     List<TherapySession> findByEnrollmentIdOrderBySessionNumberAsc(UUID enrollmentId);
 
+    /** How many sessions of a plan the parent has already asked to move. */
+    int countByEnrollmentIdAndParentRescheduleRequestedTrue(UUID enrollmentId);
+
     /** All sessions in a specific status for an org (e.g. PENDING_RESCHEDULE) */
     @Query("SELECT s FROM TherapySession s WHERE s.orgId = :orgId AND s.status = :status " +
            "ORDER BY s.sessionDate ASC, s.startTime ASC")

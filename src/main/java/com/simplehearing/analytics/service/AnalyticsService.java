@@ -258,9 +258,12 @@ public class AnalyticsService {
                 case COMPLETED             -> completed[i]++;
                 case NO_SHOW               -> noShow[i]++;
                 case CANCELLED, CANCELLATION_REQUESTED -> cancelled[i]++;
-                case PENDING_RESCHEDULE    -> rescheduled[i]++;
+                case PENDING_RESCHEDULE    -> { /* awaiting action — reported separately */ }
                 case SCHEDULED             -> { /* still ahead of us — counted only in scheduled total */ }
             }
+
+            // A move is a fact about the session, whatever state it ended in.
+            if (s.getRescheduleCount() > 0) rescheduled[i]++;
 
             if (s.getStatus() == TherapySessionStatus.COMPLETED && hasTherapistInput(s)) logged[i]++;
 
@@ -373,7 +376,30 @@ public class AnalyticsService {
                 mean(java.util.Arrays.stream(scoreSum).sum(), java.util.Arrays.stream(scoreCount).sum()),
                 mean(java.util.Arrays.stream(ratingSum).sum(), java.util.Arrays.stream(ratingCount).sum()));
 
-        return new TimeSeriesResponse(type, subjectId, subjectName, g, from, to, buckets, domains, totals);
+        // Raw per-session scores, in the order they were delivered.
+        List<TimeSeriesResponse.SessionPoint> sessionPoints = in.sessions().stream()
+                .filter(x -> x.getPerformanceScore() != null)
+                .sorted(Comparator.comparing(TherapySession::getSessionDate)
+                        .thenComparing(TherapySession::getSessionNumber))
+                .map(x -> new TimeSeriesResponse.SessionPoint(
+                        x.getId(), x.getSessionDate(), x.getSessionNumber(),
+                        x.getPerformanceScore(), x.isAdHoc()))
+                .toList();
+
+        int sessionsMoved   = (int) in.sessions().stream().filter(x -> x.getRescheduleCount() > 0).count();
+        int totalMoves      = in.sessions().stream().mapToInt(TherapySession::getRescheduleCount).sum();
+        int parentRequested = (int) in.sessions().stream().filter(TherapySession::isParentRescheduleRequested).count();
+        int awaitingAction  = (int) in.sessions().stream()
+                .filter(x -> x.getStatus() == TherapySessionStatus.PENDING_RESCHEDULE).count();
+        // Moves the clinic made off its own bat — the family never asked.
+        int clinicInitiated = (int) in.sessions().stream()
+                .filter(x -> x.getRescheduleCount() > 0 && !x.isParentRescheduleRequested()).count();
+
+        TimeSeriesResponse.RescheduleStats reschedules = new TimeSeriesResponse.RescheduleStats(
+                sessionsMoved, totalMoves, parentRequested, clinicInitiated, awaitingAction);
+
+        return new TimeSeriesResponse(type, subjectId, subjectName, g, from, to,
+                buckets, domains, sessionPoints, reschedules, totals);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

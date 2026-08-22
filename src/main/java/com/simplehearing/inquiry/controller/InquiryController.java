@@ -1,5 +1,7 @@
 package com.simplehearing.inquiry.controller;
 
+import org.slf4j.LoggerFactory;
+import org.slf4j.Logger;
 import com.simplehearing.auth.security.UserPrincipal;
 import com.simplehearing.common.dto.ApiResponse;
 import com.simplehearing.common.exception.ResourceNotFoundException;
@@ -8,6 +10,7 @@ import com.simplehearing.inquiry.entity.Inquiry;
 import com.simplehearing.inquiry.entity.InquiryLog;
 import com.simplehearing.inquiry.enums.InquiryActionOutcome;
 import com.simplehearing.inquiry.enums.InquiryLogType;
+import com.simplehearing.inquiry.enums.InquirySource;
 import com.simplehearing.inquiry.enums.InquiryStatus;
 import com.simplehearing.common.exception.ApiException;
 import com.simplehearing.inquiry.repository.InquiryLogRepository;
@@ -40,6 +43,8 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/v1/inquiries")
 public class InquiryController {
+
+    private static final Logger log = LoggerFactory.getLogger(InquiryController.class);
 
     private final InquiryRepository inquiryRepository;
     private final InquiryLogRepository inquiryLogRepository;
@@ -129,10 +134,83 @@ public class InquiryController {
             }
         }
 
+        // Per-channel conversion — every source is listed even at zero, so a channel
+        // that has stopped producing leads is visible rather than simply absent.
+        List<InquiryAnalyticsResponse.SourceBreakdown> bySource =
+                java.util.Arrays.stream(InquirySource.values())
+                        .map(src -> {
+                            List<Inquiry> ofSource = all.stream()
+                                    .filter(i -> i.getSource() == src)
+                                    .toList();
+                            int n = ofSource.size();
+                            int conv = (int) ofSource.stream()
+                                    .filter(i -> i.getStatus() == InquiryStatus.CONVERTED)
+                                    .count();
+                            double rate = n > 0 ? Math.round((double) conv / n * 1000.0) / 10.0 : 0.0;
+                            return new InquiryAnalyticsResponse.SourceBreakdown(src.name(), n, conv, rate);
+                        })
+                        .toList();
+
         return ResponseEntity.ok(ApiResponse.success(new InquiryAnalyticsResponse(
                 total, converted, conversionRate, avgResponseHours,
-                overdue, readyToConvert, byStatus
+                overdue, readyToConvert, byStatus, bySource
         )));
+    }
+
+    // ── Add an inquiry by hand (staff) ────────────────────────────────────────
+
+    @Operation(
+        summary = "Add an inquiry recorded by staff",
+        description = "For a walk-in at the front desk or a call taken by hand. The organisation "
+                    + "comes from the signed-in user rather than the request body, and an activity "
+                    + "log entry records who added it."
+    )
+    @PostMapping("/manual")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN')")
+    public ResponseEntity<ApiResponse<InquiryResponse>> addManual(
+            @Valid @RequestBody CreateManualInquiryRequest request,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        // Converting or dropping is a separate action with its own rules, so only the
+        // early stages can be chosen here.
+        InquiryStatus status = request.status() != null ? request.status() : InquiryStatus.VISITED;
+        if (status != InquiryStatus.NEW
+                && status != InquiryStatus.CONTACTED
+                && status != InquiryStatus.VISITED) {
+            throw new ApiException(HttpStatus.BAD_REQUEST,
+                    "An inquiry can only be added as New, Contacted or Visited");
+        }
+
+        InquirySource source = request.source() != null ? request.source() : InquirySource.WALK_IN;
+        if (source == InquirySource.WEBSITE) {
+            throw new ApiException(HttpStatus.BAD_REQUEST,
+                    "WEBSITE is reserved for inquiries submitted through the public form");
+        }
+
+        Inquiry inquiry = new Inquiry();
+        inquiry.setOrgId(principal.getOrgId());
+        inquiry.setSource(source);
+        inquiry.setName(request.name().trim());
+        inquiry.setPhone(request.phone().trim());
+        inquiry.setEmail(request.email() != null && !request.email().isBlank()
+                ? request.email().trim() : null);
+        inquiry.setReason(request.reason());
+        inquiry.setPreferredTime(request.preferredTime());
+        inquiry.setStatus(status);
+
+        Inquiry saved = inquiryRepository.save(inquiry);
+
+        String actorName = principal.getUser().getFirstName() + " " + principal.getUser().getLastName();
+        addLog(saved.getId(), InquiryLogType.NOTE,
+                (source == InquirySource.WALK_IN ? "Walk-in" : "Phone enquiry")
+                        + " recorded by " + actorName,
+                principal.getId(), actorName);
+
+        log.info("Manual inquiry {} added by {} — source {}, status {}",
+                saved.getId(), actorName, source, status);
+
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Inquiry added", InquiryResponse.from(saved)));
     }
 
     // ── Submit inquiry (public — no auth) ─────────────────────────────────────
@@ -149,6 +227,7 @@ public class InquiryController {
         inquiry.setReason(request.reason());
         inquiry.setPreferredTime(request.preferredTime());
         inquiry.setStatus(InquiryStatus.NEW);
+        inquiry.setSource(InquirySource.WEBSITE);
 
         // Resolve org: 1) from request body, 2) from app config, 3) first org in DB
         UUID resolvedOrgId = request.orgId();

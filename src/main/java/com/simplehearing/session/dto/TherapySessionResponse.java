@@ -30,7 +30,17 @@ public record TherapySessionResponse(
         String progressReport,
         Integer performanceScore,
         Instant completedAt,
-        RescheduleReason rescheduleReason
+        RescheduleReason rescheduleReason,
+
+        /** True once a parent has asked for this session to be moved. Never resets. */
+        boolean parentRescheduleRequested,
+        /** Sessions of this plan the parent may still ask to move. */
+        int parentReschedulesRemaining,
+
+        /** Booked by hand from the calendar rather than generated with the plan. */
+        boolean adHoc,
+        /** False when it is an extra, on top of the sessions the family paid for. */
+        boolean countsTowardPlan
 ) {
     public static TherapySessionResponse from(
             TherapySession session,
@@ -39,7 +49,8 @@ public record TherapySessionResponse(
             String therapistFirstName,
             String therapistLastName,
             String programName,
-            int totalSessions) {
+            int totalSessions,
+            int parentReschedulesRemaining) {
         return new TherapySessionResponse(
                 session.getId(),
                 session.getEnrollmentId(),
@@ -61,6 +72,10 @@ public record TherapySessionResponse(
                 session.getProgressReport(),
                 session.getPerformanceScore(),
                 session.getCompletedAt(),
-                session.getRescheduleReason());
+                session.getRescheduleReason(),
+                session.isParentRescheduleRequested(),
+                parentReschedulesRemaining,
+                session.isAdHoc(),
+                session.isCountsTowardPlan());
     }
 }

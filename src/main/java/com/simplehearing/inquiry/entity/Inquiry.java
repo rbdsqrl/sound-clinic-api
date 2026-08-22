@@ -1,5 +1,6 @@
 package com.simplehearing.inquiry.entity;
 
+import com.simplehearing.inquiry.enums.InquirySource;
 import com.simplehearing.inquiry.enums.InquiryStatus;
 import com.simplehearing.inquiry.enums.PreferredTime;
 import jakarta.persistence.*;
@@ -39,6 +40,10 @@ public class Inquiry {
     @Column(nullable = false)
     private InquiryStatus status = InquiryStatus.NEW;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private InquirySource source = InquirySource.WEBSITE;
+
     @Column(name = "admin_notes", columnDefinition = "TEXT")
     private String adminNotes;
 
@@ -71,6 +76,9 @@ public class Inquiry {
     public void setReason(String reason) { this.reason = reason; }
     public PreferredTime getPreferredTime() { return preferredTime; }
     public void setPreferredTime(PreferredTime preferredTime) { this.preferredTime = preferredTime; }
+    public InquirySource getSource() { return source; }
+    public void setSource(InquirySource source) { this.source = source; }
+
     public InquiryStatus getStatus() { return status; }
     public void setStatus(InquiryStatus status) { this.status = status; }
     public String getAdminNotes() { return adminNotes; }

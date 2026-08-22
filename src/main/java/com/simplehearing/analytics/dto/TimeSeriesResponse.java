@@ -23,8 +23,41 @@ public record TimeSeriesResponse(
         LocalDate   to,
         List<Bucket>       buckets,
         List<DomainSeries> domains,
+        /** One point per scored session, for plotting progress session by session. */
+        List<SessionPoint> sessions,
+        RescheduleStats    reschedules,
         Totals             totals
 ) {
+
+    /**
+     * A single scored session. Bucketed averages smooth the picture; this keeps the raw
+     * shape so a one-off dip is visible rather than averaged away.
+     */
+    public record SessionPoint(
+            UUID      sessionId,
+            LocalDate sessionDate,
+            int       sessionNumber,
+            /** 0-100, the therapist's score for the session. */
+            int       performanceScore,
+            boolean   adHoc
+    ) {}
+
+    /**
+     * How much moving around a plan has needed.
+     *
+     * @param sessionsMoved   sessions that have actually been rescheduled at least once
+     * @param totalMoves      total moves, counting a session moved twice as two
+     * @param parentRequested sessions the family asked to move
+     * @param clinicInitiated moves the clinic made without the family asking
+     * @param awaitingAction  requests still sitting unactioned right now
+     */
+    public record RescheduleStats(
+            int sessionsMoved,
+            int totalMoves,
+            int parentRequested,
+            int clinicInitiated,
+            int awaitingAction
+    ) {}
 
     public enum SubjectType { PATIENT, THERAPIST, ORGANISATION }
 

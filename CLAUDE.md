@@ -198,6 +198,7 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | PUT      | `/api/v1/review-meetings/{id}/parent-feedback`    | PARENT (linked to patient)                    | Rating + comments on the therapist  |
 | PUT      | `/api/v1/review-meetings/{id}/therapist-feedback` | THERAPIST, DOCTOR, ADMIN, BUSINESS_OWNER      | Summary + progress notes            |
 | PATCH    | `/api/v1/enrollments/{id}/therapist`    | BUSINESS_OWNER, ADMIN, OFFICE_ADMIN                     | Reassign an ongoing plan's therapist |
+| POST     | `/api/v1/therapy-sessions/ad-hoc`       | BUSINESS_OWNER, ADMIN, OFFICE_ADMIN                     | Book a one-off session from the calendar |
 | POST     | `/api/v1/meetings`                      | All staff (not PARENT/PATIENT)                          | Schedule a meeting + email invites  |
 | GET      | `/api/v1/meetings`                      | Authenticated                                           | Meetings in a date range (scoped)   |
 | GET      | `/api/v1/meetings/{id}`                 | Authenticated                                           | One meeting with participants       |
@@ -218,6 +219,7 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | GET      | `/api/v1/conditions`                    | All authenticated                                       | List all conditions (lookup)        |
 | POST     | `/api/v1/invitations`                   | BUSINESS_OWNER, ADMIN                                   | Invite user by email + role         |
 | GET      | `/api/v1/invitations`                   | BUSINESS_OWNER, ADMIN                                   | List sent invitations               |
+| POST     | `/api/v1/inquiries/manual`              | BUSINESS_OWNER, ADMIN, OFFICE_ADMIN                     | Record a walk-in / phoned-in inquiry |
 | PATCH    | `/api/v1/invitations/{id}/cancel`       | BUSINESS_OWNER, ADMIN                                   | Withdraw an unaccepted invitation   |
 | POST     | `/api/v1/invitations/accept`            | Public                                                  | Accept invite → create account      |
 | GET      | `/api/v1/availability-slots`            | All authenticated                                       | List availability slots             |
@@ -262,6 +264,10 @@ Master file: `db.changelog-master.yaml` — lists migrations in order.
 | 046-normalise-emails.sql            | Lower-cases existing user/invitation emails; unique index on `lower(email)` |
 | 047-create-meetings.sql             | `meetings` + `meeting_participants` tables (general meetings with attendees) |
 | 048-performance-score-percentage.sql | `performance_score` moves from a 1-5 rubric to 0-100; existing scores cleared |
+| 049-inquiry-source.sql              | `inquiries.source` — WEBSITE / WALK_IN / PHONE, existing rows backfilled to WEBSITE |
+| 050-parent-reschedule-limit.sql     | `therapy_sessions.parent_reschedule_requested` — durable flag backing the per-plan parent allowance |
+| 051-adhoc-sessions.sql              | `therapy_sessions.ad_hoc` + `counts_toward_plan` for sessions booked from the calendar |
+| 052-reschedule-history.sql          | `therapy_sessions.reschedule_count` — durable count of moves, for reschedule analytics |
 
 **To add a migration:** create `NNN-description.sql` with the Liquibase header, then add it to the master YAML.
 
@@ -305,10 +311,12 @@ CREATE TABLE ... ;
 - `GlobalExceptionHandler` maps them all to `ApiResponse`
 
 ### Analytics
+- Reschedules are counted from `reschedule_count`, not from the `PENDING_RESCHEDULE` status — status is cleared the moment the clinic actions a request
 - Mastery is **ratio of sums** (Σ`trials_passed` ÷ Σ`trials_total`), never an average of per-session ratios
 - A period with no data serialises `masteryPct` as null — never 0, which would read as a regression
 - Bucket on `LocalDate` fields (`session_date`, `meeting_date`), never on `created_at` (`Instant`)
 - Always return coverage alongside a trend; a series built on thin coverage is a sampling artefact
+- A parent may reschedule at most `PARENT_RESCHEDULE_LIMIT` (3) sessions per enrollment; the count comes from `parent_reschedule_requested`, which is never cleared
 - `performance_score` is a 0-100 percentage (see `UpdateSessionNotesRequest`), read through named bands in the UI — keep it bounded
 
 ### Multi-Tenancy

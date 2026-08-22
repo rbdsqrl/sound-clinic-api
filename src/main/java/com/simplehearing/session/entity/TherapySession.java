@@ -65,6 +65,25 @@ public class TherapySession {
     @Column(name = "reschedule_requested_by")
     private UUID rescheduleRequestedBy;
 
+    /**
+     * Set when a parent asks for this session to be moved, and never cleared — the
+     * per-plan allowance is counted from it, so it must outlive the reschedule itself.
+     */
+    @Column(name = "parent_reschedule_requested", nullable = false)
+    private boolean parentRescheduleRequested = false;
+
+    /** Booked by hand from the calendar rather than generated with the plan. */
+    @Column(name = "ad_hoc", nullable = false)
+    private boolean adHoc = false;
+
+    /** False when the session is an extra, on top of what the family paid for. */
+    @Column(name = "counts_toward_plan", nullable = false)
+    private boolean countsTowardPlan = true;
+
+    /** How many times this session has actually been moved. Never reset. */
+    @Column(name = "reschedule_count", nullable = false)
+    private int rescheduleCount = 0;
+
     @Column(name = "completed_by")
     private UUID completedBy;
 
@@ -106,6 +125,18 @@ public class TherapySession {
     public void setPerformanceScore(Integer performanceScore) { this.performanceScore = performanceScore; }
     public RescheduleReason getRescheduleReason() { return rescheduleReason; }
     public void setRescheduleReason(RescheduleReason rescheduleReason) { this.rescheduleReason = rescheduleReason; }
+    public int getRescheduleCount() { return rescheduleCount; }
+    public void setRescheduleCount(int rescheduleCount) { this.rescheduleCount = rescheduleCount; }
+
+    public boolean isAdHoc() { return adHoc; }
+    public void setAdHoc(boolean adHoc) { this.adHoc = adHoc; }
+
+    public boolean isCountsTowardPlan() { return countsTowardPlan; }
+    public void setCountsTowardPlan(boolean v) { this.countsTowardPlan = v; }
+
+    public boolean isParentRescheduleRequested() { return parentRescheduleRequested; }
+    public void setParentRescheduleRequested(boolean v) { this.parentRescheduleRequested = v; }
+
     public UUID getRescheduleRequestedBy() { return rescheduleRequestedBy; }
     public void setRescheduleRequestedBy(UUID rescheduleRequestedBy) { this.rescheduleRequestedBy = rescheduleRequestedBy; }
     public UUID getCompletedBy() { return completedBy; }
