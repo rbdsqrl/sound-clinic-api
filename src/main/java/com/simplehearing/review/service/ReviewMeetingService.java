@@ -1,5 +1,6 @@
 package com.simplehearing.review.service;
 
+import java.util.Comparator;
 import com.simplehearing.clinic.repository.ClinicRepository;
 import com.simplehearing.enrollment.entity.Enrollment;
 import com.simplehearing.holiday.repository.PublicHolidayRepository;
@@ -155,14 +156,11 @@ public class ReviewMeetingService {
     @Transactional
     public ReviewMeeting createSingle(Enrollment enrollment, LocalDate date, LocalTime startTime,
                                       int durationMinutes, UUID createdBy) {
-        int next = (int) meetingRepository.countByEnrollmentId(enrollment.getId()) + 1;
-
         ReviewMeeting m = new ReviewMeeting();
         m.setOrgId(enrollment.getOrgId());
         m.setEnrollmentId(enrollment.getId());
         m.setPatientId(enrollment.getPatientId());
         m.setTherapistId(enrollment.getTherapistId());
-        m.setMeetingNumber(next);
         m.setMeetingDate(date);
         m.setStartTime(startTime);
         m.setEndTime(startTime.plusMinutes(durationMinutes));
@@ -170,8 +168,37 @@ public class ReviewMeetingService {
         m.setCreatedBy(createdBy);
 
         ReviewMeeting saved = meetingRepository.save(m);
-        sendInvites(saved, false);
-        return saved;
+
+        // A meeting booked for an earlier date than existing ones would otherwise take the
+        // highest number, so "Review 3" could fall before "Review 1". Number the whole plan
+        // by date instead, which also corrects any sequence already out of order.
+        renumberByDate(enrollment.getId());
+        ReviewMeeting renumbered = meetingRepository.findById(saved.getId()).orElse(saved);
+
+        sendInvites(renumbered, false);
+        return renumbered;
+    }
+
+    /**
+     * Rewrites meetingNumber across a plan in date order. Cancelled meetings keep their
+     * place in the sequence so the numbers people have already been emailed still line up.
+     */
+    @Transactional
+    public void renumberByDate(UUID enrollmentId) {
+        List<ReviewMeeting> all = meetingRepository.findByEnrollmentIdOrderByMeetingNumberAsc(enrollmentId)
+                .stream()
+                .sorted(Comparator.comparing(ReviewMeeting::getMeetingDate)
+                        .thenComparing(ReviewMeeting::getStartTime))
+                .toList();
+
+        int n = 1;
+        for (ReviewMeeting m : all) {
+            if (m.getMeetingNumber() != n) {
+                m.setMeetingNumber(n);
+                meetingRepository.save(m);
+            }
+            n++;
+        }
     }
 
     // ── Calendar notifications ───────────────────────────────────────────────
@@ -329,8 +356,13 @@ public class ReviewMeetingService {
         meeting.setIcsSequence(meeting.getIcsSequence() + 1);   // makes clients update, not duplicate
 
         ReviewMeeting saved = meetingRepository.save(meeting);
-        sendInvites(saved, true);
-        return saved;
+
+        // Moving a meeting can change where it falls in the sequence.
+        renumberByDate(saved.getEnrollmentId());
+        ReviewMeeting renumbered = meetingRepository.findById(saved.getId()).orElse(saved);
+
+        sendInvites(renumbered, true);
+        return renumbered;
     }
 
     @Transactional
