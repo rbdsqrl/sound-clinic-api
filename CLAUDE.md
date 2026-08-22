@@ -268,6 +268,7 @@ Master file: `db.changelog-master.yaml` — lists migrations in order.
 | 050-parent-reschedule-limit.sql     | `therapy_sessions.parent_reschedule_requested` — durable flag backing the per-plan parent allowance |
 | 051-adhoc-sessions.sql              | `therapy_sessions.ad_hoc` + `counts_toward_plan` for sessions booked from the calendar |
 | 052-reschedule-history.sql          | `therapy_sessions.reschedule_count` — durable count of moves, for reschedule analytics |
+| 053-adhoc-payment.sql               | `therapy_sessions.requires_payment` — whether an extra session is chargeable |
 
 **To add a migration:** create `NNN-description.sql` with the Liquibase header, then add it to the master YAML.
 

@@ -84,6 +84,10 @@ public class TherapySession {
     @Column(name = "reschedule_count", nullable = false)
     private int rescheduleCount = 0;
 
+    /** Only meaningful for an extra session — one drawn from the plan is already paid for. */
+    @Column(name = "requires_payment", nullable = false)
+    private boolean requiresPayment = false;
+
     @Column(name = "completed_by")
     private UUID completedBy;
 
@@ -125,6 +129,9 @@ public class TherapySession {
     public void setPerformanceScore(Integer performanceScore) { this.performanceScore = performanceScore; }
     public RescheduleReason getRescheduleReason() { return rescheduleReason; }
     public void setRescheduleReason(RescheduleReason rescheduleReason) { this.rescheduleReason = rescheduleReason; }
+    public boolean isRequiresPayment() { return requiresPayment; }
+    public void setRequiresPayment(boolean v) { this.requiresPayment = v; }
+
     public int getRescheduleCount() { return rescheduleCount; }
     public void setRescheduleCount(int rescheduleCount) { this.rescheduleCount = rescheduleCount; }
 

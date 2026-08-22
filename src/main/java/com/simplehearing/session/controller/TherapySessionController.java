@@ -423,11 +423,13 @@ public class TherapySessionController {
         session.setStatus(TherapySessionStatus.SCHEDULED);
         session.setAdHoc(true);
         session.setCountsTowardPlan(request.countsTowardPlan());
+        // A session drawn from the plan is already paid for, whatever the caller sent.
+        session.setRequiresPayment(!request.countsTowardPlan() && request.requiresPayment());
         session.setNotes(request.notes());
 
         TherapySession saved = sessionRepository.save(session);
-        log.info("Ad-hoc session {} booked for patient {} — countsTowardPlan={}",
-                saved.getId(), saved.getPatientId(), request.countsTowardPlan());
+        log.info("Ad-hoc session {} booked for patient {} — countsTowardPlan={}, requiresPayment={}",
+                saved.getId(), saved.getPatientId(), saved.isCountsTowardPlan(), saved.isRequiresPayment());
 
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(enrich(List.of(saved)).get(0)));

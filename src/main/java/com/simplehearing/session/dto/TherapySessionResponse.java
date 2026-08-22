@@ -40,7 +40,9 @@ public record TherapySessionResponse(
         /** Booked by hand from the calendar rather than generated with the plan. */
         boolean adHoc,
         /** False when it is an extra, on top of the sessions the family paid for. */
-        boolean countsTowardPlan
+        boolean countsTowardPlan,
+        /** True when an extra session still has to be paid for. */
+        boolean requiresPayment
 ) {
     public static TherapySessionResponse from(
             TherapySession session,
@@ -76,6 +78,7 @@ public record TherapySessionResponse(
                 session.isParentRescheduleRequested(),
                 parentReschedulesRemaining,
                 session.isAdHoc(),
-                session.isCountsTowardPlan());
+                session.isCountsTowardPlan(),
+                session.isRequiresPayment());
     }
 }

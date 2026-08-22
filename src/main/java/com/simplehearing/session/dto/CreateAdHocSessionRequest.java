@@ -21,5 +21,10 @@ public record CreateAdHocSessionRequest(
         /** Defaults to the plan's therapist when omitted. */
         UUID therapistId,
         boolean countsTowardPlan,
+        /**
+         * Whether the family is charged for this session. Ignored when countsTowardPlan
+         * is true — that session is already covered by what they paid.
+         */
+        boolean requiresPayment,
         String notes
 ) {}
