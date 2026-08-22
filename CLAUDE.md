@@ -261,6 +261,7 @@ Master file: `db.changelog-master.yaml` — lists migrations in order.
 | 045-analytics-indexes-and-score-scale.sql | 1-5 CHECK on `therapy_sessions.performance_score` + date-range indexes |
 | 046-normalise-emails.sql            | Lower-cases existing user/invitation emails; unique index on `lower(email)` |
 | 047-create-meetings.sql             | `meetings` + `meeting_participants` tables (general meetings with attendees) |
+| 048-performance-score-percentage.sql | `performance_score` moves from a 1-5 rubric to 0-100; existing scores cleared |
 
 **To add a migration:** create `NNN-description.sql` with the Liquibase header, then add it to the master YAML.
 
@@ -308,7 +309,7 @@ CREATE TABLE ... ;
 - A period with no data serialises `masteryPct` as null — never 0, which would read as a regression
 - Bucket on `LocalDate` fields (`session_date`, `meeting_date`), never on `created_at` (`Instant`)
 - Always return coverage alongside a trend; a series built on thin coverage is a sampling artefact
-- `performance_score` is a fixed 1-5 rubric (see `UpdateSessionNotesRequest`) — do not widen it
+- `performance_score` is a 0-100 percentage (see `UpdateSessionNotesRequest`), read through named bands in the UI — keep it bounded
 
 ### Multi-Tenancy
 - Every query must filter by `orgId` from `principal.getOrgId()`

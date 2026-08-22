@@ -140,3 +140,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/047-create-meetings.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/048-performance-score-percentage.sql
+      relativeToChangelogFile: false
