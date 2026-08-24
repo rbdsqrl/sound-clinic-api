@@ -5,8 +5,8 @@ import com.simplehearing.activity.entity.*;
 import com.simplehearing.activity.repository.*;
 import com.simplehearing.common.exception.ApiException;
 import com.simplehearing.common.exception.ResourceNotFoundException;
-import com.simplehearing.therapy.entity.Therapy;
-import com.simplehearing.therapy.repository.TherapyRepository;
+import com.simplehearing.program.entity.Program;
+import com.simplehearing.program.repository.ProgramRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,7 +32,7 @@ public class ActivitySharingService {
     private final ActivitySkillRepository activitySkillRepository;
     private final ActivityLanguageRepository activityLanguageRepository;
     private final ActivityPropRepository activityPropRepository;
-    private final TherapyRepository therapyRepository;
+    private final ProgramRepository programRepository;
 
     public ActivitySharingService(ActivityRepository activityRepository, ActivityService activityService,
                                    ActivityInstructionRepository instructionRepository,
@@ -43,7 +43,7 @@ public class ActivitySharingService {
                                    SkillRepository skillRepository, LanguageRepository languageRepository,
                                    PropRepository propRepository, ActivitySkillRepository activitySkillRepository,
                                    ActivityLanguageRepository activityLanguageRepository,
-                                   ActivityPropRepository activityPropRepository, TherapyRepository therapyRepository) {
+                                   ActivityPropRepository activityPropRepository, ProgramRepository programRepository) {
         this.activityRepository = activityRepository;
         this.activityService = activityService;
         this.instructionRepository = instructionRepository;
@@ -57,7 +57,7 @@ public class ActivitySharingService {
         this.activitySkillRepository = activitySkillRepository;
         this.activityLanguageRepository = activityLanguageRepository;
         this.activityPropRepository = activityPropRepository;
-        this.therapyRepository = therapyRepository;
+        this.programRepository = programRepository;
     }
 
     public List<ActivityResponse> sharedLibrary(UUID viewerOrgId) {
@@ -79,7 +79,7 @@ public class ActivitySharingService {
         clone.setCreatedBy(userId);
         clone.setTitle(source.getTitle());
         clone.setAboutActivity(source.getAboutActivity());
-        clone.setTherapyId(matchOrCreateTherapy(source.getTherapyId(), destOrgId));
+        clone.setProgramId(matchProgram(source.getProgramId(), destOrgId));
         clone.setDurationWeeks(source.getDurationWeeks());
         clone.setAgeMinValue(source.getAgeMinValue());
         clone.setAgeMinUnit(source.getAgeMinUnit());
@@ -151,19 +151,17 @@ public class ActivitySharingService {
         return activityService.toResponse(saved, destOrgId);
     }
 
-    private UUID matchOrCreateTherapy(UUID sourceTherapyId, UUID destOrgId) {
-        if (sourceTherapyId == null) return null;
-        Therapy source = therapyRepository.findById(sourceTherapyId).orElse(null);
+    /** Programs carry pricing set by each clinic, so importing never invents one — if the
+     *  destination org doesn't already run a program with this name, the clone is left unset
+     *  and the importer picks one of their own. */
+    private UUID matchProgram(UUID sourceProgramId, UUID destOrgId) {
+        if (sourceProgramId == null) return null;
+        Program source = programRepository.findById(sourceProgramId).orElse(null);
         if (source == null) return null;
-        return therapyRepository.findByOrgIdAndIsActiveTrueOrderByNameAsc(destOrgId).stream()
-                .filter(t -> t.getName().equalsIgnoreCase(source.getName())).findFirst()
-                .map(Therapy::getId)
-                .orElseGet(() -> {
-                    Therapy t = new Therapy();
-                    t.setOrgId(destOrgId);
-                    t.setName(source.getName());
-                    return therapyRepository.save(t).getId();
-                });
+        return programRepository.findByOrgIdAndIsActiveTrueOrderByNameAsc(destOrgId).stream()
+                .filter(p -> p.getName().equalsIgnoreCase(source.getName())).findFirst()
+                .map(Program::getId)
+                .orElse(null);
     }
 
     private UUID matchOrCreateSkill(String name, UUID destOrgId) {

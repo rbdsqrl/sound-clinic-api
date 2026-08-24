@@ -15,8 +15,8 @@ public record ActivityResponse(
         boolean mine,
         String title,
         String aboutActivity,
-        UUID therapyId,
-        String therapyName,
+        UUID programId,
+        String programName,
         List<SkillResponse> skills,
         List<LanguageResponse> languages,
         Integer durationWeeks,
@@ -38,13 +38,13 @@ public record ActivityResponse(
         Instant updatedAt
 ) {
     public static ActivityResponse from(
-            Activity a, String orgName, boolean mine, String therapyName,
+            Activity a, String orgName, boolean mine, String programName,
             List<SkillResponse> skills, List<LanguageResponse> languages,
             List<String> instructions, List<ChecklistQuestionResponse> checklist,
             List<PropResponse> props, List<ActivityResourceResponse> resources, List<String> links) {
         return new ActivityResponse(
                 a.getId(), a.getOrgId(), orgName, mine,
-                a.getTitle(), a.getAboutActivity(), a.getTherapyId(), therapyName,
+                a.getTitle(), a.getAboutActivity(), a.getProgramId(), programName,
                 skills, languages,
                 a.getDurationWeeks(), a.getAgeMinValue(), a.getAgeMinUnit(), a.getAgeMaxValue(), a.getAgeMaxUnit(),
                 a.getDifficulty(), instructions, checklist, props, a.getTipsAndSuggestions(),

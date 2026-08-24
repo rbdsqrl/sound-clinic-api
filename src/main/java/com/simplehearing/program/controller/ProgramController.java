@@ -36,7 +36,7 @@ public class ProgramController {
 
     @Operation(summary = "List all programs for the org")
     @GetMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST')")
     public ResponseEntity<ApiResponse<List<ProgramResponse>>> list(
             @RequestParam(required = false, defaultValue = "false") boolean activeOnly,
             @AuthenticationPrincipal UserPrincipal principal) {

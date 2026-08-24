@@ -26,8 +26,8 @@ public class Activity {
     @Column(name = "about_activity", nullable = false, columnDefinition = "TEXT")
     private String aboutActivity;
 
-    @Column(name = "therapy_id")
-    private UUID therapyId;
+    @Column(name = "program_id")
+    private UUID programId;
 
     @Column(name = "duration_weeks", nullable = false)
     private Integer durationWeeks;
@@ -82,8 +82,8 @@ public class Activity {
     public void setTitle(String title) { this.title = title; }
     public String getAboutActivity() { return aboutActivity; }
     public void setAboutActivity(String aboutActivity) { this.aboutActivity = aboutActivity; }
-    public UUID getTherapyId() { return therapyId; }
-    public void setTherapyId(UUID therapyId) { this.therapyId = therapyId; }
+    public UUID getProgramId() { return programId; }
+    public void setProgramId(UUID programId) { this.programId = programId; }
     public Integer getDurationWeeks() { return durationWeeks; }
     public void setDurationWeeks(Integer durationWeeks) { this.durationWeeks = durationWeeks; }
     public Integer getAgeMinValue() { return ageMinValue; }

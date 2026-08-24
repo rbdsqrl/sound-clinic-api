@@ -7,7 +7,7 @@ import java.util.List;
 public record MagicFillRequest(
         @NotBlank String title,
         String aboutActivity,
-        String therapyName,
+        String programName,
         List<String> skillNames,
         Integer ageMinValue,
         String ageMinUnit,

@@ -185,14 +185,14 @@ public class MagicFillService {
 
                 Activity title: %s
                 About: %s
-                Therapy: %s
+                Program: %s
                 Skills targeted: %s
                 Age range: %s %s to %s %s
                 Difficulty: %s
 
                 Respond with ONLY a JSON array of strings, one per step, e.g. ["Step one...", "Step two..."].
                 """.formatted(
-                nullToEmpty(req.title()), nullToEmpty(req.aboutActivity()), nullToEmpty(req.therapyName()),
+                nullToEmpty(req.title()), nullToEmpty(req.aboutActivity()), nullToEmpty(req.programName()),
                 req.skillNames() == null ? "" : String.join(", ", req.skillNames()),
                 req.ageMinValue(), nullToEmpty(req.ageMinUnit()), req.ageMaxValue(), nullToEmpty(req.ageMaxUnit()),
                 nullToEmpty(req.difficulty()));
@@ -205,7 +205,7 @@ public class MagicFillService {
 
                 Activity title: %s
                 About: %s
-                Therapy: %s
+                Program: %s
                 Skills targeted: %s
                 Age range: %s %s to %s %s
                 Difficulty: %s
@@ -214,7 +214,7 @@ public class MagicFillService {
                 {"questionText": "...", "questionType": "SINGLE_CHOICE", "options": ["Independently", "With Assistance", "With Prompt", "Unable to do"]}
                 questionType must be one of SINGLE_CHOICE, MULTI_CHOICE, or TEXT. Use an empty options array for TEXT questions.
                 """.formatted(
-                nullToEmpty(req.title()), nullToEmpty(req.aboutActivity()), nullToEmpty(req.therapyName()),
+                nullToEmpty(req.title()), nullToEmpty(req.aboutActivity()), nullToEmpty(req.programName()),
                 req.skillNames() == null ? "" : String.join(", ", req.skillNames()),
                 req.ageMinValue(), nullToEmpty(req.ageMinUnit()), req.ageMaxValue(), nullToEmpty(req.ageMaxUnit()),
                 nullToEmpty(req.difficulty()));

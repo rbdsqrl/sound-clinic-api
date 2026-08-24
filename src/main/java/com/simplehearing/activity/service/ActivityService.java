@@ -10,7 +10,7 @@ import com.simplehearing.common.exception.ResourceNotFoundException;
 import com.simplehearing.organisation.repository.OrganisationRepository;
 import com.simplehearing.patient.entity.Patient;
 import com.simplehearing.patient.repository.PatientRepository;
-import com.simplehearing.therapy.repository.TherapyRepository;
+import com.simplehearing.program.repository.ProgramRepository;
 import com.simplehearing.user.entity.User;
 import com.simplehearing.user.repository.UserRepository;
 import org.springframework.http.HttpStatus;
@@ -40,7 +40,7 @@ public class ActivityService {
     private final ActivityAttemptLogRepository attemptLogRepository;
     private final ActivityAttemptAnswerRepository answerRepository;
     private final ActivityAttemptAnswerOptionRepository answerOptionRepository;
-    private final TherapyRepository therapyRepository;
+    private final ProgramRepository programRepository;
     private final PatientRepository patientRepository;
     private final UserRepository userRepository;
     private final OrganisationRepository organisationRepository;
@@ -59,7 +59,7 @@ public class ActivityService {
                             ActivityAttemptLogRepository attemptLogRepository,
                             ActivityAttemptAnswerRepository answerRepository,
                             ActivityAttemptAnswerOptionRepository answerOptionRepository,
-                            TherapyRepository therapyRepository, PatientRepository patientRepository,
+                            ProgramRepository programRepository, PatientRepository patientRepository,
                             UserRepository userRepository, OrganisationRepository organisationRepository) {
         this.activityRepository = activityRepository;
         this.skillRepository = skillRepository;
@@ -77,7 +77,7 @@ public class ActivityService {
         this.attemptLogRepository = attemptLogRepository;
         this.answerRepository = answerRepository;
         this.answerOptionRepository = answerOptionRepository;
-        this.therapyRepository = therapyRepository;
+        this.programRepository = programRepository;
         this.patientRepository = patientRepository;
         this.userRepository = userRepository;
         this.organisationRepository = organisationRepository;
@@ -114,7 +114,7 @@ public class ActivityService {
         Activity activity = new Activity();
         activity.setOrgId(orgId);
         activity.setCreatedBy(userId);
-        applyCore(activity, req.title(), req.aboutActivity(), req.therapyId(), req.durationWeeks(),
+        applyCore(activity, req.title(), req.aboutActivity(), req.programId(), req.durationWeeks(),
                 req.ageMinValue(), req.ageMinUnit(), req.ageMaxValue(), req.ageMaxUnit(),
                 req.difficulty(), req.tipsAndSuggestions(), req.isShared());
         Activity saved = activityRepository.save(activity);
@@ -135,7 +135,7 @@ public class ActivityService {
 
         if (req.title() != null) activity.setTitle(req.title().trim());
         if (req.aboutActivity() != null) activity.setAboutActivity(req.aboutActivity());
-        if (req.therapyId() != null) activity.setTherapyId(req.therapyId());
+        if (req.programId() != null) activity.setProgramId(req.programId());
         if (req.durationWeeks() != null) activity.setDurationWeeks(req.durationWeeks());
         if (req.ageMinValue() != null) activity.setAgeMinValue(req.ageMinValue());
         if (req.ageMinUnit() != null) activity.setAgeMinUnit(req.ageMinUnit());
@@ -165,13 +165,13 @@ public class ActivityService {
         activityRepository.save(activity);
     }
 
-    private void applyCore(Activity a, String title, String about, UUID therapyId, Integer durationWeeks,
+    private void applyCore(Activity a, String title, String about, UUID programId, Integer durationWeeks,
                             Integer ageMinValue, com.simplehearing.activity.enums.AgeUnit ageMinUnit,
                             Integer ageMaxValue, com.simplehearing.activity.enums.AgeUnit ageMaxUnit,
                             String difficulty, String tips, Boolean isShared) {
         a.setTitle(title.trim());
         a.setAboutActivity(about);
-        a.setTherapyId(therapyId);
+        a.setProgramId(programId);
         a.setDurationWeeks(durationWeeks);
         a.setAgeMinValue(ageMinValue);
         a.setAgeMinUnit(ageMinUnit);
@@ -270,8 +270,8 @@ public class ActivityService {
     // ── Response assembly ──────────────────────────────────────────────────
 
     ActivityResponse toResponse(Activity a, UUID viewerOrgId) {
-        String therapyName = a.getTherapyId() == null ? null :
-                therapyRepository.findById(a.getTherapyId()).map(com.simplehearing.therapy.entity.Therapy::getName).orElse(null);
+        String programName = a.getProgramId() == null ? null :
+                programRepository.findById(a.getProgramId()).map(com.simplehearing.program.entity.Program::getName).orElse(null);
         String orgName = organisationRepository.findById(a.getOrgId())
                 .map(com.simplehearing.organisation.entity.Organisation::getName).orElse(null);
 
@@ -304,7 +304,7 @@ public class ActivityService {
 
         boolean mine = a.getOrgId().equals(viewerOrgId);
 
-        return ActivityResponse.from(a, orgName, mine, therapyName, skills, languages,
+        return ActivityResponse.from(a, orgName, mine, programName, skills, languages,
                 instructions, checklist, props, resources, links);
     }
 

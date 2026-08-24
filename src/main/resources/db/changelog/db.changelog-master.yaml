@@ -176,3 +176,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/059-org-ai-settings.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/060-activities-use-programs.sql
+      relativeToChangelogFile: false

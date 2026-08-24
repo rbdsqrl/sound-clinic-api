@@ -10,7 +10,7 @@ import java.util.UUID;
 public record UpdateActivityRequest(
         String title,
         String aboutActivity,
-        UUID therapyId,
+        UUID programId,
         List<UUID> skillIds,
         List<UUID> languageIds,
         Integer durationWeeks,

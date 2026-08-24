@@ -11,7 +11,7 @@ import java.util.UUID;
 public record CreateActivityRequest(
         @NotBlank String title,
         @NotBlank String aboutActivity,
-        UUID therapyId,
+        UUID programId,
         List<UUID> skillIds,
         List<UUID> languageIds,
         @NotNull @Min(1) Integer durationWeeks,
