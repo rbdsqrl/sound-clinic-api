@@ -36,7 +36,7 @@ public class AttendanceController {
 
     @Operation(summary = "Check in with optional geo and face verification")
     @PostMapping("/check-in")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER','ADMIN','THERAPIST','DOCTOR','OFFICE_ADMIN','PATIENT')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PATIENT')")
     public ResponseEntity<ApiResponse<AttendanceResponse>> checkIn(
             @Valid @RequestBody CheckInRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -46,7 +46,7 @@ public class AttendanceController {
 
     @Operation(summary = "Check out")
     @PostMapping("/check-out")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER','ADMIN','THERAPIST','DOCTOR','OFFICE_ADMIN','PATIENT')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PATIENT')")
     public ResponseEntity<ApiResponse<AttendanceResponse>> checkOut(
             @Valid @RequestBody CheckOutRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -55,7 +55,7 @@ public class AttendanceController {
 
     @Operation(summary = "Retry geo and face verification for today's record")
     @PatchMapping("/today/verify")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER','ADMIN','THERAPIST','DOCTOR','OFFICE_ADMIN','PATIENT')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PATIENT')")
     public ResponseEntity<ApiResponse<AttendanceResponse>> verifyToday(
             @RequestBody VerifyAttendanceRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -64,7 +64,7 @@ public class AttendanceController {
 
     @Operation(summary = "Get today's attendance record for the caller")
     @GetMapping("/today")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER','ADMIN','THERAPIST','DOCTOR','OFFICE_ADMIN','PATIENT')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PATIENT')")
     public ResponseEntity<ApiResponse<AttendanceResponse>> today(
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(attendanceService.getToday(principal)));
@@ -72,7 +72,7 @@ public class AttendanceController {
 
     @Operation(summary = "List caller's own attendance history")
     @GetMapping("/my")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER','ADMIN','THERAPIST','DOCTOR','OFFICE_ADMIN','PATIENT')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PATIENT')")
     public ResponseEntity<ApiResponse<List<AttendanceResponse>>> listMine(
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(attendanceService.listMine(principal)));
@@ -80,7 +80,7 @@ public class AttendanceController {
 
     @Operation(summary = "List all attendance records in the org (admin view)")
     @GetMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER','ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
     public ResponseEntity<ApiResponse<List<AttendanceResponse>>> listAll(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
@@ -91,7 +91,7 @@ public class AttendanceController {
 
     @Operation(summary = "Enroll face descriptor for the caller (one-time setup)")
     @PostMapping("/enroll-face")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER','ADMIN','THERAPIST','DOCTOR','OFFICE_ADMIN','PATIENT')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PATIENT')")
     public ResponseEntity<ApiResponse<Void>> enrollFace(
             @Valid @RequestBody EnrollFaceRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -101,7 +101,7 @@ public class AttendanceController {
 
     @Operation(summary = "Review a face-override check-in (approve or reject)")
     @PatchMapping("/{id}/review-override")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER','ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
     public ResponseEntity<ApiResponse<AttendanceResponse>> reviewOverride(
             @PathVariable UUID id,
             @RequestBody ReviewOverrideRequest request,

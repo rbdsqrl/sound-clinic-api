@@ -46,7 +46,7 @@ public class AppointmentController {
 
     @Operation(summary = "Create a recurring availability slot for a therapist")
     @PostMapping("/availability-slots")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
     public ResponseEntity<ApiResponse<SlotResponse>> createSlot(
             @Valid @RequestBody CreateSlotRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -56,7 +56,7 @@ public class AppointmentController {
 
     @Operation(summary = "List availability slots — optionally filter by therapistId")
     @GetMapping("/availability-slots")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'THERAPIST', 'DOCTOR', 'PARENT')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT')")
     public ResponseEntity<ApiResponse<List<SlotResponse>>> listSlots(
             @RequestParam(required = false) UUID therapistId,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -65,7 +65,7 @@ public class AppointmentController {
 
     @Operation(summary = "Delete a therapist availability slot")
     @DeleteMapping("/availability-slots/{id}")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
     public ResponseEntity<Void> deleteSlot(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -77,7 +77,7 @@ public class AppointmentController {
 
     @Operation(summary = "Book an appointment (parent)")
     @PostMapping("/appointments")
-    @PreAuthorize("hasAnyRole('PARENT', 'BUSINESS_OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('PARENT', 'BUSINESS_OWNER', 'CLINIC_HEAD')")
     public ResponseEntity<ApiResponse<AppointmentResponse>> book(
             @Valid @RequestBody BookAppointmentRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -87,7 +87,7 @@ public class AppointmentController {
 
     @Operation(summary = "List appointments (role-scoped)")
     @GetMapping("/appointments")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'THERAPIST', 'DOCTOR', 'PARENT')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT')")
     public ResponseEntity<ApiResponse<List<AppointmentResponse>>> list(
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(appointmentService.listForCaller(principal)));
@@ -95,7 +95,7 @@ public class AppointmentController {
 
     @Operation(summary = "Update appointment status")
     @PatchMapping("/appointments/{id}/status")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'THERAPIST', 'DOCTOR', 'PARENT')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT')")
     public ResponseEntity<ApiResponse<AppointmentResponse>> updateStatus(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateAppointmentStatusRequest request,

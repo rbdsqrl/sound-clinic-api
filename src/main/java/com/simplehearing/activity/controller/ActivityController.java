@@ -35,7 +35,7 @@ import java.util.UUID;
 @RequestMapping("/api/v1/activities")
 public class ActivityController {
 
-    private static final String STAFF_ROLES = "'BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST'";
+    private static final String STAFF_ROLES = "'BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST'";
 
     private final ActivityService activityService;
     private final MagicFillService magicFillService;

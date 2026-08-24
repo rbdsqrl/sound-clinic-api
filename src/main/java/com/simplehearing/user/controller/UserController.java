@@ -51,11 +51,11 @@ public class UserController {
 
     /** Everyone who works at the clinic — as opposed to parents and patients. */
     private static final List<Role> STAFF_ROLES = List.of(
-            Role.ADMIN, Role.BUSINESS_OWNER, Role.OFFICE_ADMIN, Role.THERAPIST, Role.DOCTOR);
+            Role.CLINIC_HEAD, Role.BUSINESS_OWNER, Role.THERAPIST, Role.DOCTOR);
 
     @Operation(summary = "List all staff members in the organisation")
     @GetMapping("/members")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
     public ResponseEntity<ApiResponse<List<StaffMemberResponse>>> listMembers(
             @AuthenticationPrincipal UserPrincipal principal) {
 
@@ -87,7 +87,7 @@ public class UserController {
                     + "since anyone can create a task and assign it; personal details are deliberately left out."
     )
     @GetMapping("/assignable")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR')")
     public ResponseEntity<ApiResponse<List<AssignableUserResponse>>> listAssignable(
             @RequestParam(defaultValue = "false") boolean includeParents,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -116,14 +116,14 @@ public class UserController {
                       "Office admins are included because they reassign therapists on ongoing plans."
     )
     @GetMapping("/therapists")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
     public ResponseEntity<ApiResponse<List<UserResponse>>> listTherapists(
             @RequestParam(required = false) UUID clinicId,
             @AuthenticationPrincipal UserPrincipal principal) {
 
         if (!principal.getUser().hasRole(Role.BUSINESS_OWNER) &&
-                !principal.getUser().hasRole(Role.ADMIN) &&
-                !principal.getUser().hasRole(Role.OFFICE_ADMIN)) {
+                !principal.getUser().hasRole(Role.CLINIC_HEAD) &&
+                !principal.getUser().hasRole(Role.CLINIC_HEAD)) {
             throw new ApiException(HttpStatus.FORBIDDEN,
                     "Only a business owner, admin or office admin may list therapists");
         }

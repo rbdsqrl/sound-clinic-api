@@ -29,7 +29,7 @@ public class InvitationController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
     public ResponseEntity<ApiResponse<List<InviteResponse>>> list(
             @AuthenticationPrincipal UserPrincipal principal) {
 
@@ -41,7 +41,7 @@ public class InvitationController {
      * Restricted to BUSINESS_OWNER role only.
      */
     @PostMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
     public ResponseEntity<ApiResponse<InviteResponse>> invite(
             @Valid @RequestBody InviteRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -52,7 +52,7 @@ public class InvitationController {
     }
 
     @PostMapping("/{id}/resend")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
     public ResponseEntity<ApiResponse<InviteResponse>> resend(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -68,7 +68,7 @@ public class InvitationController {
                     + "deactivate the member instead."
     )
     @PatchMapping("/{id}/cancel")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
     public ResponseEntity<ApiResponse<InviteResponse>> cancel(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {

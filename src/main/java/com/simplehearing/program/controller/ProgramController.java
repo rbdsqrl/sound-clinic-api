@@ -36,7 +36,7 @@ public class ProgramController {
 
     @Operation(summary = "List all programs for the org")
     @GetMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST')")
     public ResponseEntity<ApiResponse<List<ProgramResponse>>> list(
             @RequestParam(required = false, defaultValue = "false") boolean activeOnly,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -56,7 +56,7 @@ public class ProgramController {
 
     @Operation(summary = "Create a new therapy program")
     @PostMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
     public ResponseEntity<ApiResponse<ProgramResponse>> create(
             @Valid @RequestBody CreateProgramRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -76,7 +76,7 @@ public class ProgramController {
 
     @Operation(summary = "Update program name, cost, or active status")
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
     public ResponseEntity<ApiResponse<ProgramResponse>> update(
             @PathVariable UUID id,
             @RequestBody UpdateProgramRequest request,
@@ -110,7 +110,7 @@ public class ProgramController {
 
     @Operation(summary = "Deactivate a program (soft delete)")
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
     public ResponseEntity<ApiResponse<ProgramResponse>> deactivate(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {

@@ -59,7 +59,7 @@ public class LeaveController {
 
     @Operation(summary = "Apply for a leave day")
     @PostMapping
-    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'OFFICE_ADMIN', 'BUSINESS_OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'CLINIC_HEAD', 'BUSINESS_OWNER')")
     public ResponseEntity<ApiResponse<LeaveResponse>> apply(
             @Valid @RequestBody CreateLeaveRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -118,7 +118,7 @@ public class LeaveController {
 
     @Operation(summary = "List leaves — business owner/admin sees all org leaves")
     @GetMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'THERAPIST', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR')")
     public ResponseEntity<ApiResponse<List<LeaveResponse>>> list(
             @RequestParam(required = false) LeaveStatus status,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -126,7 +126,7 @@ public class LeaveController {
         User caller = principal.getUser();
         List<Leave> leaves;
 
-        boolean isManager = caller.getRole() == Role.BUSINESS_OWNER || caller.getRole() == Role.ADMIN;
+        boolean isManager = caller.getRole() == Role.BUSINESS_OWNER || caller.getRole() == Role.CLINIC_HEAD;
 
         if (isManager) {
             leaves = (status != null)
@@ -167,7 +167,7 @@ public class LeaveController {
 
     @Operation(summary = "Approve or reject a leave request")
     @PatchMapping("/{id}/review")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
     public ResponseEntity<ApiResponse<LeaveResponse>> review(
             @PathVariable UUID id,
             @Valid @RequestBody ReviewLeaveRequest request,
@@ -245,7 +245,7 @@ public class LeaveController {
 
     @Operation(summary = "Cancel a pending leave request (own leaves only)")
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'OFFICE_ADMIN', 'BUSINESS_OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'CLINIC_HEAD', 'BUSINESS_OWNER')")
     public ResponseEntity<Void> cancel(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {

@@ -32,7 +32,7 @@ public class SkillController {
 
     @Operation(summary = "List all active skills for the org")
     @GetMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST')")
     public ResponseEntity<ApiResponse<List<SkillResponse>>> list(@AuthenticationPrincipal UserPrincipal principal) {
         List<SkillResponse> results = skillRepository
                 .findByOrgIdAndIsActiveTrueOrderByNameAsc(principal.getOrgId())
@@ -42,7 +42,7 @@ public class SkillController {
 
     @Operation(summary = "Add a skill for this org")
     @PostMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
     public ResponseEntity<ApiResponse<SkillResponse>> create(
             @RequestBody CreateSkillRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -55,7 +55,7 @@ public class SkillController {
 
     @Operation(summary = "Delete a skill")
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
     public ResponseEntity<ApiResponse<Void>> delete(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {

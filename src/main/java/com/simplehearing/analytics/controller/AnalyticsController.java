@@ -36,8 +36,8 @@ import java.util.UUID;
 /**
  * Progress analytics over the inputs therapists already record against their patients.
  *
- * <p>The therapist-caseload and org-overview endpoints are restricted to BUSINESS_OWNER, ADMIN
- * and OFFICE_ADMIN — org membership is the whole authorization rule there, and every query
+ * <p>The therapist-caseload and org-overview endpoints are restricted to BUSINESS_OWNER and
+ * CLINIC_HEAD — org membership is the whole authorization rule there, and every query
  * filters on {@code principal.getOrgId()}. The per-patient progress and activity endpoints are
  * also open to PARENT, but only for a patient they're actually linked to — checked explicitly
  * in each method since the class-level guard can't express "own children only".
@@ -65,7 +65,7 @@ public class AnalyticsController {
 
     @Operation(summary = "Progress series for one patient, with per-domain breakdown")
     @GetMapping("/patients/{patientId}/progress")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'PARENT')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'PARENT')")
     public ResponseEntity<ApiResponse<TimeSeriesResponse>> patientProgress(
             @PathVariable UUID patientId,
             @RequestParam(defaultValue = "WEEKLY") Granularity granularity,
@@ -83,7 +83,7 @@ public class AnalyticsController {
 
     @Operation(summary = "Activity assignment/attempt progress for one patient — additive to /progress")
     @GetMapping("/patients/{patientId}/activities")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'PARENT')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'PARENT')")
     public ResponseEntity<ApiResponse<ActivityProgressResponse>> patientActivityProgress(
             @PathVariable UUID patientId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
@@ -97,7 +97,7 @@ public class AnalyticsController {
 
     @Operation(summary = "Session cadence for one patient, folded across every concurrent enrollment")
     @GetMapping("/patients/{patientId}/frequency")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'PARENT')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'PARENT')")
     public ResponseEntity<ApiResponse<FrequencyResponse>> patientFrequency(
             @PathVariable UUID patientId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
@@ -110,7 +110,7 @@ public class AnalyticsController {
     }
 
     @Operation(summary = "A therapist's caseload series plus a row per patient")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
     @GetMapping("/therapists/{therapistId}/caseload")
     public ResponseEntity<ApiResponse<CaseloadResponse>> therapistCaseload(
             @PathVariable UUID therapistId,
@@ -127,7 +127,7 @@ public class AnalyticsController {
     }
 
     @Operation(summary = "Organisation-wide rollup — weekly or monthly only")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
     @GetMapping("/overview")
     public ResponseEntity<ApiResponse<TimeSeriesResponse>> overview(
             @RequestParam(defaultValue = "MONTHLY") Granularity granularity,
@@ -148,7 +148,7 @@ public class AnalyticsController {
     }
 
     @Operation(summary = "Org-wide clinical-outcome rollup — avg therapy duration, program breakdown, admission→discharge funnel")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
     @GetMapping("/snapshot")
     public ResponseEntity<ApiResponse<OrgSnapshotResponse>> snapshot(@AuthenticationPrincipal UserPrincipal principal) {
         OrgSnapshotResponse data = analyticsService.orgSnapshot(orgId(principal));
@@ -157,7 +157,7 @@ public class AnalyticsController {
 
     @Operation(summary = "Discharge success-criteria composite for one enrollment")
     @GetMapping("/enrollments/{enrollmentId}/success-criteria")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST', 'DOCTOR', 'PARENT')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT')")
     public ResponseEntity<ApiResponse<SuccessCriteriaResponse>> successCriteria(
             @PathVariable UUID enrollmentId,
             @AuthenticationPrincipal UserPrincipal principal) {

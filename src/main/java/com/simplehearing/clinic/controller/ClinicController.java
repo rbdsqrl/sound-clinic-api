@@ -30,7 +30,7 @@ public class ClinicController {
 
     @Operation(summary = "Create a new clinic")
     @PostMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
     public ResponseEntity<ApiResponse<ClinicResponse>> create(
             @Valid @RequestBody CreateClinicRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -57,7 +57,7 @@ public class ClinicController {
 
     @Operation(summary = "Update a clinic")
     @PatchMapping("/{id}")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
     public ResponseEntity<ApiResponse<ClinicResponse>> update(
             @PathVariable UUID id,
             @RequestBody CreateClinicRequest request,

@@ -32,7 +32,7 @@ public class PropController {
 
     @Operation(summary = "List all active props for the org")
     @GetMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST')")
     public ResponseEntity<ApiResponse<List<PropResponse>>> list(@AuthenticationPrincipal UserPrincipal principal) {
         List<PropResponse> results = propRepository
                 .findByOrgIdAndIsActiveTrueOrderByNameAsc(principal.getOrgId())
@@ -42,7 +42,7 @@ public class PropController {
 
     @Operation(summary = "Add a prop for this org — also used to add one inline while authoring an activity")
     @PostMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST')")
     public ResponseEntity<ApiResponse<PropResponse>> create(
             @RequestBody CreatePropRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -64,7 +64,7 @@ public class PropController {
 
     @Operation(summary = "Delete a prop")
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
     public ResponseEntity<ApiResponse<Void>> delete(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {

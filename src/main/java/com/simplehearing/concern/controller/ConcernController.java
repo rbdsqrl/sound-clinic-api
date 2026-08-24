@@ -120,7 +120,7 @@ public class ConcernController {
 
     @Operation(summary = "List concerns, filterable by enrollment, patient, or org-wide status")
     @GetMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST', 'DOCTOR', 'PARENT')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT')")
     public ResponseEntity<ApiResponse<List<ConcernResponse>>> list(
             @RequestParam(required = false) UUID enrollmentId,
             @RequestParam(required = false) UUID patientId,
@@ -165,7 +165,7 @@ public class ConcernController {
 
     @Operation(summary = "Count of open concerns — for a dashboard badge")
     @GetMapping("/open-count")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR')")
     public ResponseEntity<ApiResponse<Integer>> openCount(@AuthenticationPrincipal UserPrincipal principal) {
         int count = isClinicianOnly(principal)
                 ? concernRepository.countByOrgIdAndTherapistIdAndStatus(principal.getOrgId(), principal.getId(), ConcernStatus.OPEN)
@@ -177,7 +177,7 @@ public class ConcernController {
 
     @Operation(summary = "Acknowledge a concern")
     @PatchMapping("/{id}/acknowledge")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR')")
     public ResponseEntity<ApiResponse<ConcernResponse>> acknowledge(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -198,7 +198,7 @@ public class ConcernController {
 
     @Operation(summary = "Resolve a concern")
     @PatchMapping("/{id}/resolve")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR')")
     public ResponseEntity<ApiResponse<ConcernResponse>> resolve(
             @PathVariable UUID id,
             @RequestBody(required = false) ResolveConcernRequest request,
@@ -247,7 +247,7 @@ public class ConcernController {
         String orgName = organisationRepository.findById(concern.getOrgId()).map(o -> o.getName()).orElse("Simple Hearing");
 
         Set<UUID> recipientIds = userRepository.findByOrgIdAndRoleIn(
-                        concern.getOrgId(), List.of(Role.BUSINESS_OWNER, Role.ADMIN, Role.OFFICE_ADMIN))
+                        concern.getOrgId(), List.of(Role.BUSINESS_OWNER, Role.CLINIC_HEAD))
                 .stream().map(User::getId).collect(Collectors.toSet());
         List<String> recipients = userRepository.findAllById(
                         java.util.stream.Stream.concat(recipientIds.stream(), java.util.stream.Stream.of(concern.getTherapistId()))
@@ -272,7 +272,7 @@ public class ConcernController {
     private static boolean isClinicianOnly(UserPrincipal principal) {
         User user = principal.getUser();
         boolean clinician = user.hasRole(Role.THERAPIST) || user.hasRole(Role.DOCTOR);
-        boolean adminTier = user.hasRole(Role.BUSINESS_OWNER) || user.hasRole(Role.ADMIN) || user.hasRole(Role.OFFICE_ADMIN);
+        boolean adminTier = user.hasRole(Role.BUSINESS_OWNER) || user.hasRole(Role.CLINIC_HEAD);
         return clinician && !adminTier;
     }
 

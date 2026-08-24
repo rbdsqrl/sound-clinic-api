@@ -32,7 +32,7 @@ public class LanguageController {
 
     @Operation(summary = "List all active languages for the org")
     @GetMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST')")
     public ResponseEntity<ApiResponse<List<LanguageResponse>>> list(@AuthenticationPrincipal UserPrincipal principal) {
         List<LanguageResponse> results = languageRepository
                 .findByOrgIdAndIsActiveTrueOrderByNameAsc(principal.getOrgId())
@@ -42,7 +42,7 @@ public class LanguageController {
 
     @Operation(summary = "Add a language for this org")
     @PostMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
     public ResponseEntity<ApiResponse<LanguageResponse>> create(
             @RequestBody CreateLanguageRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -55,7 +55,7 @@ public class LanguageController {
 
     @Operation(summary = "Delete a language")
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
     public ResponseEntity<ApiResponse<Void>> delete(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {

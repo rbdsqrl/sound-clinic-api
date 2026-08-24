@@ -106,7 +106,7 @@ public class EnrollmentController {
 
     @Operation(summary = "Find therapists available for the given time/duration (any day)")
     @GetMapping("/available-therapists")
-    @PreAuthorize("hasAnyRole('OFFICE_ADMIN', 'ADMIN', 'BUSINESS_OWNER')")
+    @PreAuthorize("hasAnyRole('CLINIC_HEAD', 'BUSINESS_OWNER')")
     public ResponseEntity<ApiResponse<List<AvailableTherapistResponse>>> availableTherapists(
             @RequestParam LocalTime startTime,
             @RequestParam int durationMinutes,
@@ -160,7 +160,7 @@ public class EnrollmentController {
 
     @Operation(summary = "List enrollments for a patient")
     @GetMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST', 'DOCTOR', 'PARENT')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT')")
     public ResponseEntity<ApiResponse<List<EnrollmentResponse>>> list(
             @RequestParam UUID patientId,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -176,7 +176,7 @@ public class EnrollmentController {
 
     @Operation(summary = "Create an enrollment for a subscription")
     @PostMapping
-    @PreAuthorize("hasAnyRole('OFFICE_ADMIN', 'ADMIN', 'BUSINESS_OWNER')")
+    @PreAuthorize("hasAnyRole('CLINIC_HEAD', 'BUSINESS_OWNER')")
     public ResponseEntity<ApiResponse<EnrollmentResponse>> create(
             @Valid @RequestBody CreateEnrollmentRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -278,7 +278,7 @@ public class EnrollmentController {
                     + "clinical history stays accurate."
     )
     @PatchMapping("/{id}/therapist")
-    @PreAuthorize("hasAnyRole('OFFICE_ADMIN', 'ADMIN', 'BUSINESS_OWNER')")
+    @PreAuthorize("hasAnyRole('CLINIC_HEAD', 'BUSINESS_OWNER')")
     public ResponseEntity<ApiResponse<EnrollmentResponse>> changeTherapist(
             @PathVariable UUID id,
             @Valid @RequestBody ChangeTherapistRequest request,
@@ -364,7 +364,7 @@ public class EnrollmentController {
 
     @Operation(summary = "Cancel an enrollment")
     @PatchMapping("/{id}/cancel")
-    @PreAuthorize("hasAnyRole('OFFICE_ADMIN', 'ADMIN', 'BUSINESS_OWNER')")
+    @PreAuthorize("hasAnyRole('CLINIC_HEAD', 'BUSINESS_OWNER')")
     public ResponseEntity<ApiResponse<EnrollmentResponse>> cancel(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -395,7 +395,7 @@ public class EnrollmentController {
                     + "Does not touch the patient's own stage — discharge is a patient-level event, not a program one."
     )
     @PatchMapping("/{id}/care-status")
-    @PreAuthorize("hasAnyRole('THERAPIST', 'OFFICE_ADMIN', 'ADMIN', 'BUSINESS_OWNER')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'CLINIC_HEAD', 'BUSINESS_OWNER')")
     public ResponseEntity<ApiResponse<EnrollmentResponse>> updateCareStatus(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateCareStatusRequest request,
@@ -407,9 +407,9 @@ public class EnrollmentController {
         if (!enrollment.getOrgId().equals(principal.getOrgId())) {
             throw new ApiException(HttpStatus.FORBIDDEN, "Access denied");
         }
-        boolean isAdminTier = principal.getUser().hasRole(Role.ADMIN)
+        boolean isAdminTier = principal.getUser().hasRole(Role.CLINIC_HEAD)
                 || principal.getUser().hasRole(Role.BUSINESS_OWNER)
-                || principal.getUser().hasRole(Role.OFFICE_ADMIN);
+                || principal.getUser().hasRole(Role.CLINIC_HEAD);
         if (!isAdminTier && !enrollment.getTherapistId().equals(principal.getId())) {
             throw new ApiException(HttpStatus.FORBIDDEN, "You are not the assigned therapist for this plan");
         }

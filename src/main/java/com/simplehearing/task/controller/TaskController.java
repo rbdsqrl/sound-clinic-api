@@ -80,7 +80,7 @@ public class TaskController {
 
     @Operation(summary = "List tasks — admins see all, others see the ones they were assigned or raised")
     @GetMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR')")
     public ResponseEntity<ApiResponse<List<TaskResponse>>> list(
             @AuthenticationPrincipal UserPrincipal principal) {
 
@@ -97,7 +97,7 @@ public class TaskController {
     @Operation(summary = "Create a task and assign it to one or more staff members",
                description = "Open to every staff member — anyone can raise work and assign it to a colleague.")
     @PostMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR')")
     public ResponseEntity<ApiResponse<TaskResponse>> create(
             @Valid @RequestBody CreateTaskRequest req,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -144,7 +144,7 @@ public class TaskController {
 
     @Operation(summary = "Get a single task")
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR')")
     public ResponseEntity<ApiResponse<TaskResponse>> get(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -158,7 +158,7 @@ public class TaskController {
     @Operation(summary = "Update task details",
                description = "Managers may edit any task; everyone else only the tasks they raised.")
     @PatchMapping("/{id}")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR')")
     public ResponseEntity<ApiResponse<TaskResponse>> update(
             @PathVariable UUID id,
             @RequestBody UpdateTaskRequest req,
@@ -240,7 +240,7 @@ public class TaskController {
 
     @Operation(summary = "Update task status")
     @PatchMapping("/{id}/status")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR')")
     public ResponseEntity<ApiResponse<TaskResponse>> updateStatus(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateTaskStatusRequest req,
@@ -272,7 +272,7 @@ public class TaskController {
     @Operation(summary = "Delete a task",
                description = "Managers may delete any task; everyone else only the tasks they raised.")
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR')")
     public ResponseEntity<ApiResponse<Void>> delete(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -288,7 +288,7 @@ public class TaskController {
 
     @Operation(summary = "List activity log for a task")
     @GetMapping("/{id}/logs")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR')")
     public ResponseEntity<ApiResponse<List<TaskLogResponse>>> listLogs(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -303,7 +303,7 @@ public class TaskController {
 
     @Operation(summary = "List all comments for a task")
     @GetMapping("/{id}/comments")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR')")
     public ResponseEntity<ApiResponse<List<TaskCommentResponse>>> listComments(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -317,7 +317,7 @@ public class TaskController {
 
     @Operation(summary = "Add a comment to a task")
     @PostMapping("/{id}/comments")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR')")
     public ResponseEntity<ApiResponse<TaskCommentResponse>> addComment(
             @PathVariable UUID id,
             @Valid @RequestBody CreateCommentRequest req,
@@ -342,7 +342,7 @@ public class TaskController {
 
     @Operation(summary = "Delete a comment")
     @DeleteMapping("/{id}/comments/{commentId}")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR')")
     public ResponseEntity<ApiResponse<Void>> deleteComment(
             @PathVariable UUID id,
             @PathVariable UUID commentId,
@@ -368,7 +368,7 @@ public class TaskController {
 
     @Operation(summary = "List all attachments for a task")
     @GetMapping("/{id}/attachments")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR')")
     public ResponseEntity<ApiResponse<List<TaskAttachmentResponse>>> listAttachments(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -382,7 +382,7 @@ public class TaskController {
 
     @Operation(summary = "Upload a file attachment to a task")
     @PostMapping("/{id}/attachments")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR')")
     public ResponseEntity<ApiResponse<TaskAttachmentResponse>> uploadAttachment(
             @PathVariable UUID id,
             @RequestParam("file") MultipartFile file,
@@ -418,7 +418,7 @@ public class TaskController {
 
     @Operation(summary = "Delete a task attachment")
     @DeleteMapping("/{id}/attachments/{attachmentId}")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR')")
     public ResponseEntity<ApiResponse<Void>> deleteAttachment(
             @PathVariable UUID id,
             @PathVariable UUID attachmentId,
@@ -502,7 +502,7 @@ public class TaskController {
     }
 
     private static boolean isManager(Role role) {
-        return role == Role.BUSINESS_OWNER || role == Role.ADMIN;
+        return role == Role.BUSINESS_OWNER || role == Role.CLINIC_HEAD;
     }
 
     private TaskLog makeLog(UUID orgId, UUID taskId, TaskLogType type,

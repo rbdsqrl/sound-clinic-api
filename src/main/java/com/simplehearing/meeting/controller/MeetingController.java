@@ -34,7 +34,7 @@ public class MeetingController {
                description = "Staff only — parents and patients attend meetings but cannot create them. "
                            + "The organiser is added to the participant list automatically.")
     @PostMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR')")
     public ResponseEntity<ApiResponse<MeetingResponse>> create(
             @Valid @RequestBody CreateMeetingRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -53,7 +53,7 @@ public class MeetingController {
             @AuthenticationPrincipal UserPrincipal principal) {
 
         boolean seesEverything = principal.getUser().getRole() == Role.BUSINESS_OWNER
-                              || principal.getUser().getRole() == Role.ADMIN;
+                              || principal.getUser().getRole() == Role.CLINIC_HEAD;
 
         return ResponseEntity.ok(ApiResponse.success(
                 meetingService.list(principal.getOrgId(), principal.getId(), seesEverything, from, to)));
@@ -71,7 +71,7 @@ public class MeetingController {
     @Operation(summary = "Cancel a meeting",
                description = "Sends a CANCEL calendar invite so the entry drops out of participants' calendars.")
     @PatchMapping("/{id}/cancel")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR')")
     public ResponseEntity<ApiResponse<MeetingResponse>> cancel(
             @PathVariable UUID id,
             @RequestBody(required = false) CancelMeetingRequest request,

@@ -37,7 +37,7 @@ public class IEPController {
 
     @Operation(summary = "List IEP plans — for a patient (patientId required) or all plans in org (admin only)")
     @GetMapping
-    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'BUSINESS_OWNER', 'ADMIN', 'PARENT')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'BUSINESS_OWNER', 'CLINIC_HEAD', 'PARENT')")
     public ResponseEntity<ApiResponse<List<IEPPlanResponse>>> listPlans(
             @RequestParam(required = false) UUID patientId,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -47,7 +47,7 @@ public class IEPController {
         }
         // Org-level listing restricted to admin roles
         String role = principal.getUser().getRole().name();
-        if (!role.equals("ADMIN") && !role.equals("BUSINESS_OWNER")) {
+        if (!role.equals("CLINIC_HEAD") && !role.equals("BUSINESS_OWNER")) {
             throw new ApiException(HttpStatus.FORBIDDEN, "patientId is required for your role");
         }
         return ResponseEntity.ok(ApiResponse.success(iepService.listAllPlans(principal)));
@@ -57,7 +57,7 @@ public class IEPController {
 
     @Operation(summary = "Create an IEP plan for a patient")
     @PostMapping
-    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'BUSINESS_OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'BUSINESS_OWNER', 'CLINIC_HEAD')")
     public ResponseEntity<ApiResponse<IEPPlanResponse>> createPlan(
             @RequestParam UUID patientId,
             @Valid @RequestBody CreateIEPPlanRequest request,
@@ -71,7 +71,7 @@ public class IEPController {
 
     @Operation(summary = "Import IEP plans and goals from a CSV file")
     @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'BUSINESS_OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'BUSINESS_OWNER', 'CLINIC_HEAD')")
     public ResponseEntity<ApiResponse<ImportResultResponse>> importCsv(
             @RequestParam UUID patientId,
             @RequestParam("file") MultipartFile file,
@@ -96,7 +96,7 @@ public class IEPController {
 
     @Operation(summary = "Download sample IEP import CSV")
     @GetMapping("/sample-csv")
-    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'BUSINESS_OWNER', 'ADMIN', 'PARENT')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'BUSINESS_OWNER', 'CLINIC_HEAD', 'PARENT')")
     public ResponseEntity<String> sampleCsv(@AuthenticationPrincipal UserPrincipal principal) {
         String csv = iepService.sampleCsv();
         return ResponseEntity.ok()
@@ -109,7 +109,7 @@ public class IEPController {
 
     @Operation(summary = "Update an IEP plan")
     @PatchMapping("/{planId}")
-    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'BUSINESS_OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'BUSINESS_OWNER', 'CLINIC_HEAD')")
     public ResponseEntity<ApiResponse<IEPPlanResponse>> updatePlan(
             @PathVariable UUID planId,
             @RequestBody UpdateIEPPlanRequest request,
@@ -123,7 +123,7 @@ public class IEPController {
 
     @Operation(summary = "Delete an IEP plan")
     @DeleteMapping("/{planId}")
-    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'BUSINESS_OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'BUSINESS_OWNER', 'CLINIC_HEAD')")
     public ResponseEntity<Void> deletePlan(
             @PathVariable UUID planId,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -136,7 +136,7 @@ public class IEPController {
 
     @Operation(summary = "Add a goal to an existing IEP plan")
     @PostMapping("/{planId}/goals")
-    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'BUSINESS_OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'BUSINESS_OWNER', 'CLINIC_HEAD')")
     public ResponseEntity<ApiResponse<IEPGoalResponse>> addGoal(
             @PathVariable UUID planId,
             @Valid @RequestBody CreateIEPGoalRequest request,
@@ -150,7 +150,7 @@ public class IEPController {
 
     @Operation(summary = "Update an IEP goal")
     @PatchMapping("/goals/{goalId}")
-    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'BUSINESS_OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'BUSINESS_OWNER', 'CLINIC_HEAD')")
     public ResponseEntity<ApiResponse<IEPGoalResponse>> updateGoal(
             @PathVariable UUID goalId,
             @RequestBody UpdateIEPGoalRequest request,
@@ -164,7 +164,7 @@ public class IEPController {
 
     @Operation(summary = "Delete an IEP goal")
     @DeleteMapping("/goals/{goalId}")
-    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'BUSINESS_OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'BUSINESS_OWNER', 'CLINIC_HEAD')")
     public ResponseEntity<Void> deleteGoal(
             @PathVariable UUID goalId,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -177,7 +177,7 @@ public class IEPController {
 
     @Operation(summary = "Record a progress entry for an IEP goal")
     @PostMapping("/goals/{goalId}/progress")
-    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'BUSINESS_OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'BUSINESS_OWNER', 'CLINIC_HEAD')")
     public ResponseEntity<ApiResponse<IEPGoalResponse>> addProgress(
             @PathVariable UUID goalId,
             @Valid @RequestBody AddProgressRequest request,

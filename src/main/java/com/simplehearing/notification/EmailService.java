@@ -405,8 +405,7 @@ public class EmailService {
             case DOCTOR -> "Doctor";
             case PARENT -> "Parent";
             case PATIENT -> "Patient";
-            case ADMIN -> "Admin";
-            case OFFICE_ADMIN -> "Office Admin";
+            case CLINIC_HEAD -> "Clinic Head";
             case BUSINESS_OWNER -> "Business Owner";
         };
     }

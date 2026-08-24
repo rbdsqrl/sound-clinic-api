@@ -112,7 +112,7 @@ public class TherapySessionController {
 
     @Operation(summary = "List therapy sessions, optionally filtered by date range and patient or therapist")
     @GetMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST', 'DOCTOR', 'PARENT')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT')")
     public ResponseEntity<ApiResponse<List<TherapySessionResponse>>> list(
             @RequestParam(required = false) UUID patientId,
             @RequestParam(required = false) UUID therapistId,
@@ -161,7 +161,7 @@ public class TherapySessionController {
 
     @Operation(summary = "List all sessions for a specific enrollment")
     @GetMapping("/by-enrollment/{enrollmentId}")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST', 'DOCTOR', 'PARENT')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT')")
     public ResponseEntity<ApiResponse<List<TherapySessionResponse>>> byEnrollment(
             @PathVariable UUID enrollmentId,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -189,7 +189,7 @@ public class TherapySessionController {
 
     @Operation(summary = "Update therapy session status (COMPLETED / CANCELLED / NO_SHOW)")
     @PatchMapping("/{id}/status")
-    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'ADMIN', 'BUSINESS_OWNER')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'CLINIC_HEAD', 'BUSINESS_OWNER')")
     public ResponseEntity<ApiResponse<TherapySessionResponse>> updateStatus(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateSessionStatusRequest request,
@@ -221,7 +221,7 @@ public class TherapySessionController {
 
     @Operation(summary = "Update session feedback, progress report, and notes")
     @PatchMapping("/{id}/notes")
-    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'ADMIN', 'BUSINESS_OWNER')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'CLINIC_HEAD', 'BUSINESS_OWNER')")
     public ResponseEntity<ApiResponse<TherapySessionResponse>> updateNotes(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateSessionNotesRequest request,
@@ -243,7 +243,7 @@ public class TherapySessionController {
 
     @Operation(summary = "Reschedule a PENDING_RESCHEDULE session — set a new date and/or substitute therapist")
     @PatchMapping("/{id}/reschedule")
-    @PreAuthorize("hasAnyRole('ADMIN', 'BUSINESS_OWNER', 'OFFICE_ADMIN')")
+    @PreAuthorize("hasAnyRole('CLINIC_HEAD', 'BUSINESS_OWNER')")
     public ResponseEntity<ApiResponse<TherapySessionResponse>> reschedule(
             @PathVariable UUID id,
             @RequestBody RescheduleSessionRequest request,
@@ -378,7 +378,7 @@ public class TherapySessionController {
                     + "it consumes one of the sessions the family paid for."
     )
     @PostMapping("/ad-hoc")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
     public ResponseEntity<ApiResponse<TherapySessionResponse>> createAdHoc(
             @Valid @RequestBody CreateAdHocSessionRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -472,7 +472,7 @@ public class TherapySessionController {
 
     @Operation(summary = "Request cancellation of a SCHEDULED session — requires admin approval")
     @PostMapping("/{id}/cancellation-request")
-    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'ADMIN', 'BUSINESS_OWNER', 'OFFICE_ADMIN')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'CLINIC_HEAD', 'BUSINESS_OWNER')")
     public ResponseEntity<ApiResponse<TherapySessionResponse>> cancellationRequest(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -495,7 +495,7 @@ public class TherapySessionController {
 
     @Operation(summary = "Approve a cancellation request — sets session to CANCELLED")
     @PostMapping("/{id}/approve-cancellation")
-    @PreAuthorize("hasAnyRole('ADMIN', 'BUSINESS_OWNER')")
+    @PreAuthorize("hasAnyRole('CLINIC_HEAD', 'BUSINESS_OWNER')")
     public ResponseEntity<ApiResponse<TherapySessionResponse>> approveCancellation(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -517,7 +517,7 @@ public class TherapySessionController {
 
     @Operation(summary = "Reject a cancellation request — reverts session to SCHEDULED")
     @PostMapping("/{id}/reject-cancellation")
-    @PreAuthorize("hasAnyRole('ADMIN', 'BUSINESS_OWNER')")
+    @PreAuthorize("hasAnyRole('CLINIC_HEAD', 'BUSINESS_OWNER')")
     public ResponseEntity<ApiResponse<TherapySessionResponse>> rejectCancellation(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -539,7 +539,7 @@ public class TherapySessionController {
 
     @Operation(summary = "Upload a file attachment to a session")
     @PostMapping("/{id}/attachments")
-    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'ADMIN', 'BUSINESS_OWNER')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'CLINIC_HEAD', 'BUSINESS_OWNER')")
     public ResponseEntity<ApiResponse<SessionAttachmentResponse>> uploadAttachment(
             @PathVariable UUID id,
             @RequestParam("file") MultipartFile file,
@@ -569,7 +569,7 @@ public class TherapySessionController {
 
     @Operation(summary = "List all attachments for a session")
     @GetMapping("/{id}/attachments")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST', 'DOCTOR', 'PARENT')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT')")
     public ResponseEntity<ApiResponse<List<SessionAttachmentResponse>>> listAttachments(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -588,7 +588,7 @@ public class TherapySessionController {
 
     @Operation(summary = "Delete a session attachment")
     @DeleteMapping("/{id}/attachments/{attachmentId}")
-    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'ADMIN', 'BUSINESS_OWNER')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'CLINIC_HEAD', 'BUSINESS_OWNER')")
     public ResponseEntity<ApiResponse<Void>> deleteAttachment(
             @PathVariable UUID id,
             @PathVariable UUID attachmentId,

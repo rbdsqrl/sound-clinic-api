@@ -42,7 +42,7 @@ public class TherapyController {
 
     @Operation(summary = "Add a therapy type for this org")
     @PostMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
     public ResponseEntity<ApiResponse<TherapyResponse>> create(
             @RequestBody CreateTherapyRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -55,7 +55,7 @@ public class TherapyController {
 
     @Operation(summary = "Delete a therapy type")
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
     public ResponseEntity<ApiResponse<Void>> delete(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {

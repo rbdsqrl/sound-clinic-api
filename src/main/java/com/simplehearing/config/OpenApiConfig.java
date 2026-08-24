@@ -27,7 +27,7 @@ public class OpenApiConfig {
                                 Multi-clinic SaaS backend for speech and hearing therapy practice management.
 
                                 **Roles:**
-                                - `ADMIN` — clinic owner / doctor: full access within their clinic
+                                - `CLINIC_HEAD` — full access within their org (scheduling, patients, discharge, analytics)
                                 - `THERAPIST` — manages assigned patients, sessions, homework and reports
                                 - `PATIENT` / `PARENT` — read-only access to their own progress data
 

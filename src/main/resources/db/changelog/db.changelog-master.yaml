@@ -203,3 +203,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/068-enrollments-discharge-link.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/069-merge-admin-into-clinic-head.sql
+      relativeToChangelogFile: false

@@ -43,9 +43,9 @@ public class InvitationService {
     /** Roles that require a clinicId in the invitation. */
     private static final Set<Role> CLINIC_SCOPED_ROLES = Set.of(Role.PARENT, Role.THERAPIST, Role.DOCTOR);
 
-    /** All roles a BUSINESS_OWNER / ADMIN may invite. */
+    /** All roles a BUSINESS_OWNER / CLINIC_HEAD may invite. */
     private static final Set<Role> INVITABLE_ROLES = Set.of(
-            Role.ADMIN, Role.OFFICE_ADMIN, Role.THERAPIST, Role.DOCTOR,
+            Role.CLINIC_HEAD, Role.THERAPIST, Role.DOCTOR,
             Role.PARENT, Role.PATIENT, Role.BUSINESS_OWNER
     );
 

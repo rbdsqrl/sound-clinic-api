@@ -210,7 +210,7 @@ public class AppointmentService {
 
         // Collect business owner / admin emails in the org
         List<String> managerEmails = userRepository
-                .findByOrgIdAndRoleIn(principal.getOrgId(), List.of(Role.BUSINESS_OWNER, Role.ADMIN))
+                .findByOrgIdAndRoleIn(principal.getOrgId(), List.of(Role.BUSINESS_OWNER, Role.CLINIC_HEAD))
                 .stream().map(User::getEmail)
                 .filter(e -> e != null && !e.isBlank())
                 .toList();
@@ -249,7 +249,7 @@ public class AppointmentService {
             appts = appointmentRepository.findByBookedByAndOrgIdOrderByAppointmentDateAscStartTimeAsc(
                     principal.getId(), principal.getOrgId());
         } else {
-            // BUSINESS_OWNER / ADMIN — see everything
+            // BUSINESS_OWNER / CLINIC_HEAD — see everything
             appts = appointmentRepository.findByOrgIdOrderByAppointmentDateAscStartTimeAsc(principal.getOrgId());
         }
 
