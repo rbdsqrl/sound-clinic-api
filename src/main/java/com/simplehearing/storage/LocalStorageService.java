@@ -42,6 +42,18 @@ public class LocalStorageService implements StorageService {
     }
 
     @Override
+    public String store(byte[] data, String filename, String contentType, String folder) throws IOException {
+        String safe = StringUtils.cleanPath(filename).replaceAll("[^a-zA-Z0-9._-]", "_");
+        String stored = UUID.randomUUID() + "-" + safe;
+
+        Path targetDir = baseDir.resolve(folder);
+        Files.createDirectories(targetDir);
+        Files.write(targetDir.resolve(stored), data);
+
+        return baseUrl + "/api/v1/files/" + folder + "/" + stored;
+    }
+
+    @Override
     public String presign(String storedUrl, Duration duration) {
         return storedUrl;
     }

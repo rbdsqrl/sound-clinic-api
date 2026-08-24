@@ -30,6 +30,11 @@ public interface TherapySessionRepository extends JpaRepository<TherapySession, 
     /** How many sessions of a plan the parent has already asked to move. */
     int countByEnrollmentIdAndParentRescheduleRequestedTrue(UUID enrollmentId);
 
+    /** Live count of completed sessions that count toward the plan — the source of truth for an
+     *  enrollment's progress. Deliberately not a stored counter on Enrollment: a counter needs every
+     *  write path (including seed/import data) to remember to keep it in sync, and one didn't. */
+    int countByEnrollmentIdAndStatusAndCountsTowardPlanTrue(UUID enrollmentId, TherapySessionStatus status);
+
     /** All sessions in a specific status for an org (e.g. PENDING_RESCHEDULE) */
     @Query("SELECT s FROM TherapySession s WHERE s.orgId = :orgId AND s.status = :status " +
            "ORDER BY s.sessionDate ASC, s.startTime ASC")

@@ -1,6 +1,7 @@
 package com.simplehearing.enrollment.dto;
 
 import com.simplehearing.enrollment.entity.Enrollment;
+import com.simplehearing.enrollment.enums.EnrollmentCareStatus;
 import com.simplehearing.enrollment.enums.EnrollmentStatus;
 
 import java.time.DayOfWeek;
@@ -23,6 +24,10 @@ public record EnrollmentResponse(
         DayOfWeek dayOfWeek,
         LocalTime startTime,
         EnrollmentStatus status,
+        EnrollmentCareStatus careStatus,
+        String careStatusNote,
+        boolean therapistSignedOff,
+        String therapistSignoffNotes,
         int sessionsCompleted,
         int totalSessions,
         Instant createdAt
@@ -32,6 +37,7 @@ public record EnrollmentResponse(
             String therapistFirstName,
             String therapistLastName,
             String programName,
+            int sessionsCompleted,
             int totalSessions) {
         return new EnrollmentResponse(
                 enrollment.getId(),
@@ -47,7 +53,11 @@ public record EnrollmentResponse(
                 enrollment.getDayOfWeek(),
                 enrollment.getStartTime(),
                 enrollment.getStatus(),
-                enrollment.getSessionsCompleted(),
+                enrollment.getCareStatus(),
+                enrollment.getCareStatusNote(),
+                enrollment.isTherapistSignedOff(),
+                enrollment.getTherapistSignoffNotes(),
+                sessionsCompleted,
                 totalSessions,
                 enrollment.getCreatedAt()
         );

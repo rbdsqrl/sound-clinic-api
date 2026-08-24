@@ -22,6 +22,16 @@ public interface StorageService {
     String store(MultipartFile file, String folder) throws IOException;
 
     /**
+     * Stores raw bytes (e.g. a server-generated PDF) and returns its canonical stored URL.
+     *
+     * @param data        the file's bytes
+     * @param filename    a display filename — sanitised before use
+     * @param contentType MIME type, e.g. "application/pdf"
+     * @param folder      logical folder prefix, e.g. "discharge/uuid"
+     */
+    String store(byte[] data, String filename, String contentType, String folder) throws IOException;
+
+    /**
      * Returns a URL that can be used to download the file.
      * For S3: a time-limited presigned URL. For local: the stored URL as-is.
      *

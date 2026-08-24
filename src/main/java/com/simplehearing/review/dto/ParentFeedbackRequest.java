@@ -7,7 +7,10 @@ import jakarta.validation.constraints.Size;
 
 public record ParentFeedbackRequest(
         @NotNull @Min(1) @Max(5)
-        Integer rating,
+        Integer communicationRating,
+
+        @NotNull @Min(0) @Max(100)
+        Integer progressRatingPct,
 
         @Size(max = 4000)
         String comments

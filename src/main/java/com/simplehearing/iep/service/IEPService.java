@@ -100,6 +100,7 @@ public class IEPService {
         plan.setEndDate(req.endDate());
         plan.setStatus(IEPPlanStatus.ACTIVE);
         plan.setTags(joinTags(req.tags()));
+        plan.setEnrollmentId(req.enrollmentId());
 
         IEPPlan saved = planRepository.save(plan);
 

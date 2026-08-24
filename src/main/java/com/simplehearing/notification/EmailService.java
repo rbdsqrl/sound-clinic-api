@@ -71,6 +71,23 @@ public class EmailService {
     }
 
     @Async
+    public void sendNewConcernNotification(List<String> recipients, String patientName, String programName,
+                                            String description, String orgName) {
+        Map<String, String> vars = new java.util.HashMap<>();
+        vars.put("ORG_NAME", orgName);
+        vars.put("LOGO_URL", props.getBaseUrl() + "/logo.png");
+        vars.put("PATIENT_NAME", patientName);
+        vars.put("PROGRAM_NAME", programName);
+        vars.put("DESCRIPTION", description);
+        vars.put("DASHBOARD_URL", props.getBaseUrl() + "/patients");
+        String html = fillStubs(loadTemplate("new-concern"), vars);
+        String subject = "A parent raised a concern about " + patientName;
+        for (String to : recipients) {
+            send(to, subject, html);
+        }
+    }
+
+    @Async
     public void sendWelcomeEmail(String to, String firstName, String orgName) {
         Map<String, String> vars = new java.util.HashMap<>();
         vars.put("FIRST_NAME", firstName);

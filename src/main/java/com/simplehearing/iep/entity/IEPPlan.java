@@ -26,6 +26,10 @@ public class IEPPlan {
     @Column(name = "therapist_id", nullable = false)
     private UUID therapistId;
 
+    /** Which program this plan belongs to. Nullable — legacy plans predate this link. */
+    @Column(name = "enrollment_id")
+    private UUID enrollmentId;
+
     @Column(name = "title", nullable = false, length = 255)
     private String title;
 
@@ -62,6 +66,9 @@ public class IEPPlan {
 
     public UUID getTherapistId() { return therapistId; }
     public void setTherapistId(UUID therapistId) { this.therapistId = therapistId; }
+
+    public UUID getEnrollmentId() { return enrollmentId; }
+    public void setEnrollmentId(UUID enrollmentId) { this.enrollmentId = enrollmentId; }
 
     public String getTitle() { return title; }
     public void setTitle(String title) { this.title = title; }

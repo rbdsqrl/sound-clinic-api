@@ -25,7 +25,8 @@ public record ReviewMeetingResponse(
         LocalTime endTime,
         ReviewMeetingStatus status,
 
-        Integer parentRating,
+        Integer communicationRating,
+        Integer progressRatingPct,
         String parentComments,
         Instant parentFeedbackAt,
 
@@ -65,7 +66,8 @@ public record ReviewMeetingResponse(
                 m.getEndTime(),
                 m.getStatus(),
 
-                canSeeParentFeedback ? m.getParentRating() : null,
+                canSeeParentFeedback ? m.getCommunicationRating() : null,
+                canSeeParentFeedback ? m.getProgressRatingPct() : null,
                 canSeeParentFeedback ? m.getParentComments() : null,
                 m.getParentFeedbackAt(),
 

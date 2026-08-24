@@ -55,8 +55,18 @@ public class ReviewMeeting {
 
     // ── Parent's feedback about the therapist ────────────────────────────────
 
+    /** @deprecated superseded by {@link #communicationRating}; kept for historical rows, no longer written. */
+    @Deprecated
     @Column(name = "parent_rating")
     private Integer parentRating;
+
+    /** 1-5 stars — how the parent feels about the therapist relationship/interaction. */
+    @Column(name = "communication_rating")
+    private Integer communicationRating;
+
+    /** 0-100 — how much progress the parent perceives. */
+    @Column(name = "progress_rating_pct")
+    private Integer progressRatingPct;
 
     @Column(name = "parent_comments", columnDefinition = "TEXT")
     private String parentComments;
@@ -135,6 +145,12 @@ public class ReviewMeeting {
 
     public Integer getParentRating() { return parentRating; }
     public void setParentRating(Integer parentRating) { this.parentRating = parentRating; }
+
+    public Integer getCommunicationRating() { return communicationRating; }
+    public void setCommunicationRating(Integer communicationRating) { this.communicationRating = communicationRating; }
+
+    public Integer getProgressRatingPct() { return progressRatingPct; }
+    public void setProgressRatingPct(Integer progressRatingPct) { this.progressRatingPct = progressRatingPct; }
 
     public String getParentComments() { return parentComments; }
     public void setParentComments(String parentComments) { this.parentComments = parentComments; }

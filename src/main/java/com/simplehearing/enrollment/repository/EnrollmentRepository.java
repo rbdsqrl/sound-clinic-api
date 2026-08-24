@@ -14,5 +14,14 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, UUID> {
     /** All active enrollments for a therapist within the org */
     List<Enrollment> findByOrgIdAndTherapistId(UUID orgId, UUID therapistId);
 
+    /** Every enrollment in the org — used for org-wide rollups (duration, program breakdown). */
+    List<Enrollment> findByOrgId(UUID orgId);
+
+    /** The patient's current, still-open discharge episode — every enrollment not yet claimed by a past discharge. */
+    List<Enrollment> findByOrgIdAndPatientIdAndDischargedInRecordIdIsNull(UUID orgId, UUID patientId);
+
+    /** Every enrollment closed by a specific discharge episode — for building/re-reading its report. */
+    List<Enrollment> findByDischargedInRecordId(UUID dischargeRecordId);
+
     void deleteByPatientId(UUID patientId);
 }

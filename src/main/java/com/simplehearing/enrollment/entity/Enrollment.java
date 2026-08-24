@@ -1,5 +1,6 @@
 package com.simplehearing.enrollment.entity;
 
+import com.simplehearing.enrollment.enums.EnrollmentCareStatus;
 import com.simplehearing.enrollment.enums.EnrollmentStatus;
 import jakarta.persistence.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -56,8 +57,36 @@ public class Enrollment {
     @Column(nullable = false)
     private EnrollmentStatus status = EnrollmentStatus.ACTIVE;
 
-    @Column(name = "sessions_completed", nullable = false)
-    private int sessionsCompleted = 0;
+    /** Clinical-health signal set by the assigned therapist or an admin-tier role, while the enrollment is ACTIVE. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "care_status", nullable = false)
+    private EnrollmentCareStatus careStatus = EnrollmentCareStatus.ON_TRACK;
+
+    @Column(name = "care_status_note", columnDefinition = "TEXT")
+    private String careStatusNote;
+
+    @Column(name = "care_status_updated_by")
+    private UUID careStatusUpdatedBy;
+
+    @Column(name = "care_status_updated_at")
+    private Instant careStatusUpdatedAt;
+
+    /** One of the three discharge success criteria — the assigned therapist confirming this program's goals were met. */
+    @Column(name = "therapist_signed_off", nullable = false)
+    private boolean therapistSignedOff = false;
+
+    @Column(name = "therapist_signoff_by")
+    private UUID therapistSignoffBy;
+
+    @Column(name = "therapist_signoff_at")
+    private Instant therapistSignoffAt;
+
+    @Column(name = "therapist_signoff_notes", columnDefinition = "TEXT")
+    private String therapistSignoffNotes;
+
+    /** Which discharge episode closed this enrollment. NULL = belongs to the patient's current, still-open episode. */
+    @Column(name = "discharged_in_record_id")
+    private UUID dischargedInRecordId;
 
     @Column(name = "created_by")
     private UUID createdBy;
@@ -93,8 +122,24 @@ public class Enrollment {
     public void setStartTime(LocalTime startTime) { this.startTime = startTime; }
     public EnrollmentStatus getStatus() { return status; }
     public void setStatus(EnrollmentStatus status) { this.status = status; }
-    public int getSessionsCompleted() { return sessionsCompleted; }
-    public void setSessionsCompleted(int sessionsCompleted) { this.sessionsCompleted = sessionsCompleted; }
+    public EnrollmentCareStatus getCareStatus() { return careStatus; }
+    public void setCareStatus(EnrollmentCareStatus careStatus) { this.careStatus = careStatus; }
+    public String getCareStatusNote() { return careStatusNote; }
+    public void setCareStatusNote(String careStatusNote) { this.careStatusNote = careStatusNote; }
+    public UUID getCareStatusUpdatedBy() { return careStatusUpdatedBy; }
+    public void setCareStatusUpdatedBy(UUID careStatusUpdatedBy) { this.careStatusUpdatedBy = careStatusUpdatedBy; }
+    public Instant getCareStatusUpdatedAt() { return careStatusUpdatedAt; }
+    public void setCareStatusUpdatedAt(Instant careStatusUpdatedAt) { this.careStatusUpdatedAt = careStatusUpdatedAt; }
+    public boolean isTherapistSignedOff() { return therapistSignedOff; }
+    public void setTherapistSignedOff(boolean therapistSignedOff) { this.therapistSignedOff = therapistSignedOff; }
+    public UUID getTherapistSignoffBy() { return therapistSignoffBy; }
+    public void setTherapistSignoffBy(UUID therapistSignoffBy) { this.therapistSignoffBy = therapistSignoffBy; }
+    public Instant getTherapistSignoffAt() { return therapistSignoffAt; }
+    public void setTherapistSignoffAt(Instant therapistSignoffAt) { this.therapistSignoffAt = therapistSignoffAt; }
+    public String getTherapistSignoffNotes() { return therapistSignoffNotes; }
+    public void setTherapistSignoffNotes(String therapistSignoffNotes) { this.therapistSignoffNotes = therapistSignoffNotes; }
+    public UUID getDischargedInRecordId() { return dischargedInRecordId; }
+    public void setDischargedInRecordId(UUID dischargedInRecordId) { this.dischargedInRecordId = dischargedInRecordId; }
     public UUID getCreatedBy() { return createdBy; }
     public void setCreatedBy(UUID createdBy) { this.createdBy = createdBy; }
     public Instant getCreatedAt() { return createdAt; }

@@ -2,12 +2,21 @@ package com.simplehearing.analytics.controller;
 
 import com.simplehearing.analytics.dto.ActivityProgressResponse;
 import com.simplehearing.analytics.dto.CaseloadResponse;
+import com.simplehearing.analytics.dto.FrequencyResponse;
+import com.simplehearing.analytics.dto.OrgSnapshotResponse;
 import com.simplehearing.analytics.dto.TimeSeriesResponse;
 import com.simplehearing.analytics.enums.Granularity;
 import com.simplehearing.analytics.service.AnalyticsService;
 import com.simplehearing.auth.security.UserPrincipal;
 import com.simplehearing.common.dto.ApiResponse;
 import com.simplehearing.common.exception.ApiException;
+import com.simplehearing.common.exception.ResourceNotFoundException;
+import com.simplehearing.enrollment.entity.Enrollment;
+import com.simplehearing.enrollment.repository.EnrollmentRepository;
+import com.simplehearing.patient.repository.PatientParentRepository;
+import com.simplehearing.successcriteria.dto.SuccessCriteriaResponse;
+import com.simplehearing.successcriteria.service.SuccessCriteriaService;
+import com.simplehearing.user.enums.Role;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -27,25 +36,36 @@ import java.util.UUID;
 /**
  * Progress analytics over the inputs therapists already record against their patients.
  *
- * <p>All three endpoints are restricted to BUSINESS_OWNER, ADMIN and OFFICE_ADMIN. Therapists
- * and parents do not reach these routes, so the per-caller patient scoping used elsewhere in
- * the codebase is not applied here — org membership is the whole authorization rule, and every
- * query filters on {@code principal.getOrgId()}.
+ * <p>The therapist-caseload and org-overview endpoints are restricted to BUSINESS_OWNER, ADMIN
+ * and OFFICE_ADMIN — org membership is the whole authorization rule there, and every query
+ * filters on {@code principal.getOrgId()}. The per-patient progress and activity endpoints are
+ * also open to PARENT, but only for a patient they're actually linked to — checked explicitly
+ * in each method since the class-level guard can't express "own children only".
  */
 @Tag(name = "Analytics", description = "Daily, weekly and monthly progress series")
 @RestController
 @RequestMapping("/api/v1/analytics")
-@PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN')")
 public class AnalyticsController {
 
     private final AnalyticsService analyticsService;
+    private final PatientParentRepository patientParentRepository;
+    private final EnrollmentRepository enrollmentRepository;
+    private final SuccessCriteriaService successCriteriaService;
 
-    public AnalyticsController(AnalyticsService analyticsService) {
+    public AnalyticsController(
+            AnalyticsService analyticsService,
+            PatientParentRepository patientParentRepository,
+            EnrollmentRepository enrollmentRepository,
+            SuccessCriteriaService successCriteriaService) {
         this.analyticsService = analyticsService;
+        this.patientParentRepository = patientParentRepository;
+        this.enrollmentRepository = enrollmentRepository;
+        this.successCriteriaService = successCriteriaService;
     }
 
     @Operation(summary = "Progress series for one patient, with per-domain breakdown")
     @GetMapping("/patients/{patientId}/progress")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'PARENT')")
     public ResponseEntity<ApiResponse<TimeSeriesResponse>> patientProgress(
             @PathVariable UUID patientId,
             @RequestParam(defaultValue = "WEEKLY") Granularity granularity,
@@ -54,6 +74,7 @@ public class AnalyticsController {
             @RequestParam(required = false) String domain,
             @AuthenticationPrincipal UserPrincipal principal) {
 
+        requireViewable(patientId, principal);
         TimeSeriesResponse data = analyticsService.patientProgress(
                 orgId(principal), patientId, granularity, from, to, domain);
 
@@ -62,17 +83,34 @@ public class AnalyticsController {
 
     @Operation(summary = "Activity assignment/attempt progress for one patient — additive to /progress")
     @GetMapping("/patients/{patientId}/activities")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'PARENT')")
     public ResponseEntity<ApiResponse<ActivityProgressResponse>> patientActivityProgress(
             @PathVariable UUID patientId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @AuthenticationPrincipal UserPrincipal principal) {
 
+        requireViewable(patientId, principal);
         ActivityProgressResponse data = analyticsService.patientActivityProgress(orgId(principal), patientId, from, to);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 
+    @Operation(summary = "Session cadence for one patient, folded across every concurrent enrollment")
+    @GetMapping("/patients/{patientId}/frequency")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'PARENT')")
+    public ResponseEntity<ApiResponse<FrequencyResponse>> patientFrequency(
+            @PathVariable UUID patientId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        requireViewable(patientId, principal);
+        FrequencyResponse data = analyticsService.patientSessionFrequency(orgId(principal), patientId, from, to);
+        return ResponseEntity.ok(ApiResponse.success(data));
+    }
+
     @Operation(summary = "A therapist's caseload series plus a row per patient")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN')")
     @GetMapping("/therapists/{therapistId}/caseload")
     public ResponseEntity<ApiResponse<CaseloadResponse>> therapistCaseload(
             @PathVariable UUID therapistId,
@@ -89,6 +127,7 @@ public class AnalyticsController {
     }
 
     @Operation(summary = "Organisation-wide rollup — weekly or monthly only")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN')")
     @GetMapping("/overview")
     public ResponseEntity<ApiResponse<TimeSeriesResponse>> overview(
             @RequestParam(defaultValue = "MONTHLY") Granularity granularity,
@@ -106,6 +145,44 @@ public class AnalyticsController {
 
         TimeSeriesResponse data = analyticsService.orgOverview(orgId(principal), granularity, from, to, domain);
         return ResponseEntity.ok(ApiResponse.success(data));
+    }
+
+    @Operation(summary = "Org-wide clinical-outcome rollup — avg therapy duration, program breakdown, admission→discharge funnel")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN')")
+    @GetMapping("/snapshot")
+    public ResponseEntity<ApiResponse<OrgSnapshotResponse>> snapshot(@AuthenticationPrincipal UserPrincipal principal) {
+        OrgSnapshotResponse data = analyticsService.orgSnapshot(orgId(principal));
+        return ResponseEntity.ok(ApiResponse.success(data));
+    }
+
+    @Operation(summary = "Discharge success-criteria composite for one enrollment")
+    @GetMapping("/enrollments/{enrollmentId}/success-criteria")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST', 'DOCTOR', 'PARENT')")
+    public ResponseEntity<ApiResponse<SuccessCriteriaResponse>> successCriteria(
+            @PathVariable UUID enrollmentId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        Enrollment enrollment = enrollmentRepository.findById(enrollmentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Enrollment not found"));
+        if (!enrollment.getOrgId().equals(orgId(principal))) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Access denied");
+        }
+        requireViewable(enrollment.getPatientId(), principal);
+
+        SuccessCriteriaResponse data = successCriteriaService.compute(orgId(principal), enrollmentId);
+        return ResponseEntity.ok(ApiResponse.success(data));
+    }
+
+    /** A parent may only pull analytics for a patient they're actually linked to. */
+    private void requireViewable(UUID patientId, UserPrincipal principal) {
+        if (!principal.getUser().hasRole(Role.PARENT)) {
+            return;
+        }
+        boolean linked = patientParentRepository.findById_PatientId(patientId).stream()
+                .anyMatch(pp -> pp.getId().getParentId().equals(principal.getId()));
+        if (!linked) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "You are not linked to this patient");
+        }
     }
 
     private static UUID orgId(UserPrincipal principal) {

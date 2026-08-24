@@ -247,7 +247,8 @@ public class ReviewMeetingController {
 
         boolean firstTime = !meeting.hasParentFeedback();
 
-        meeting.setParentRating(request.rating());
+        meeting.setCommunicationRating(request.communicationRating());
+        meeting.setProgressRatingPct(request.progressRatingPct());
         meeting.setParentComments(request.comments());
         meeting.setParentFeedbackBy(principal.getId());
         meeting.setParentFeedbackAt(Instant.now());

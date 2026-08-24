@@ -211,10 +211,6 @@ public class TherapySessionController {
         if (request.status() == TherapySessionStatus.COMPLETED) {
             session.setCompletedBy(principal.getId());
             session.setCompletedAt(Instant.now());
-            enrollmentRepository.findById(session.getEnrollmentId()).ifPresent(enrollment -> {
-                enrollment.setSessionsCompleted(enrollment.getSessionsCompleted() + 1);
-                enrollmentRepository.save(enrollment);
-            });
         }
 
         TherapySession saved = sessionRepository.save(session);

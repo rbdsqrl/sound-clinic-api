@@ -84,6 +84,23 @@ public class S3StorageService implements StorageService {
     }
 
     @Override
+    public String store(byte[] data, String filename, String contentType, String folder) throws IOException {
+        String safe = StringUtils.cleanPath(filename).replaceAll("[^a-zA-Z0-9._-]", "_");
+        String key  = folder + "/" + UUID.randomUUID() + "-" + safe;
+
+        s3.putObject(
+                PutObjectRequest.builder()
+                        .bucket(bucket)
+                        .key(key)
+                        .contentType(contentType)
+                        .contentLength((long) data.length)
+                        .build(),
+                RequestBody.fromBytes(data));
+
+        return buildPublicUrl(key);
+    }
+
+    @Override
     public void delete(String fileUrl) {
         if (fileUrl == null) return;
         String base = urlPrefix();

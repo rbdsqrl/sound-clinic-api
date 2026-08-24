@@ -23,4 +23,7 @@ public interface IEPGoalProgressRepository extends JpaRepository<IEPGoalProgress
     /** Progress entries for a known set of goals inside a date window (patient / therapist scope). */
     List<IEPGoalProgress> findByGoalIdInAndSessionDateBetween(
             List<UUID> goalIds, LocalDate from, LocalDate to);
+
+    /** Every progress entry ever logged for a set of goals — the life-of-enrollment total for goal mastery. */
+    List<IEPGoalProgress> findByGoalIdIn(List<UUID> goalIds);
 }

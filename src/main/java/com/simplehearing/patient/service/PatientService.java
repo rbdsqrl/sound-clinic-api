@@ -13,6 +13,7 @@ import com.simplehearing.iep.repository.IEPPlanRepository;
 import com.simplehearing.invitation.repository.InvitationRepository;
 import com.simplehearing.patient.dto.*;
 import com.simplehearing.patient.entity.*;
+import com.simplehearing.patient.enums.PatientStage;
 import com.simplehearing.patient.repository.*;
 import com.simplehearing.session.repository.SessionAttachmentRepository;
 import com.simplehearing.session.repository.TherapySessionRepository;
@@ -155,6 +156,10 @@ public class PatientService {
     }
 
     public PatientResponse updateStage(UUID patientId, UpdatePatientStageRequest request, UserPrincipal principal) {
+        if (request.stage() == PatientStage.DISCHARGED) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "Use POST /patients/{id}/discharge to discharge a patient — it snapshots the episode's success criteria");
+        }
         Patient patient = findPatient(patientId, principal.getOrgId());
         patient.setStage(request.stage());
         return buildResponse(patientRepository.save(patient));

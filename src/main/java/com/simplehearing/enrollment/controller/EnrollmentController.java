@@ -16,9 +16,13 @@ import com.simplehearing.common.exception.ResourceNotFoundException;
 import com.simplehearing.enrollment.dto.AvailableTherapistResponse;
 import com.simplehearing.enrollment.dto.CreateEnrollmentRequest;
 import com.simplehearing.enrollment.dto.EnrollmentResponse;
+import com.simplehearing.enrollment.dto.TherapistSignoffRequest;
+import com.simplehearing.enrollment.dto.UpdateCareStatusRequest;
 import com.simplehearing.enrollment.entity.Enrollment;
+import com.simplehearing.enrollment.enums.EnrollmentCareStatus;
 import com.simplehearing.enrollment.enums.EnrollmentStatus;
 import com.simplehearing.enrollment.repository.EnrollmentRepository;
+import java.time.Instant;
 import com.simplehearing.leave.entity.Leave;
 import com.simplehearing.leave.enums.LeaveStatus;
 import com.simplehearing.leave.repository.LeaveRepository;
@@ -222,9 +226,10 @@ public class EnrollmentController {
                     therapistPatientRepository.save(link);
                 });
 
-        // Advance patient stage to ENROLLED if currently at ENROLLMENT
+        // Advance patient stage to ENROLLED if currently at ENROLLMENT — or if they were previously
+        // discharged and are now starting a new episode of care, so the funnel stays accurate.
         patientRepository.findById(request.patientId()).ifPresent(patient -> {
-            if (patient.getStage() == PatientStage.ENROLLMENT) {
+            if (patient.getStage() == PatientStage.ENROLLMENT || patient.getStage() == PatientStage.DISCHARGED) {
                 patient.setStage(PatientStage.ENROLLED);
                 patientRepository.save(patient);
             }
@@ -257,6 +262,7 @@ public class EnrollmentController {
                 therapist.getFirstName(),
                 therapist.getLastName(),
                 programName,
+                0, // freshly created — no sessions can be completed yet
                 sub.getNumSessions());
 
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
@@ -381,6 +387,90 @@ public class EnrollmentController {
         return ResponseEntity.ok(ApiResponse.success(enriched.get(0)));
     }
 
+    // ── Update care status ────────────────────────────────────────────────────
+
+    @Operation(
+        summary = "Set the clinical-health signal on an active enrollment",
+        description = "PROGRAM_COMPLETED also flips the enrollment's status to COMPLETED. "
+                    + "Does not touch the patient's own stage — discharge is a patient-level event, not a program one."
+    )
+    @PatchMapping("/{id}/care-status")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'OFFICE_ADMIN', 'ADMIN', 'BUSINESS_OWNER')")
+    public ResponseEntity<ApiResponse<EnrollmentResponse>> updateCareStatus(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateCareStatusRequest request,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        Enrollment enrollment = enrollmentRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Enrollment not found"));
+
+        if (!enrollment.getOrgId().equals(principal.getOrgId())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Access denied");
+        }
+        boolean isAdminTier = principal.getUser().hasRole(Role.ADMIN)
+                || principal.getUser().hasRole(Role.BUSINESS_OWNER)
+                || principal.getUser().hasRole(Role.OFFICE_ADMIN);
+        if (!isAdminTier && !enrollment.getTherapistId().equals(principal.getId())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "You are not the assigned therapist for this plan");
+        }
+        if (enrollment.getStatus() != EnrollmentStatus.ACTIVE) {
+            throw new ApiException(HttpStatus.CONFLICT, "Care status can only be set on an active enrollment");
+        }
+
+        enrollment.setCareStatus(request.careStatus());
+        enrollment.setCareStatusNote(request.note());
+        enrollment.setCareStatusUpdatedBy(principal.getId());
+        enrollment.setCareStatusUpdatedAt(Instant.now());
+        if (request.careStatus() == EnrollmentCareStatus.PROGRAM_COMPLETED) {
+            enrollment.setStatus(EnrollmentStatus.COMPLETED);
+        }
+
+        Enrollment saved = enrollmentRepository.save(enrollment);
+
+        List<EnrollmentResponse> enriched = enrichEnrollments(List.of(saved));
+        return ResponseEntity.ok(ApiResponse.success(enriched.get(0)));
+    }
+
+    // ── Therapist sign-off ────────────────────────────────────────────────────
+
+    @Operation(
+        summary = "Assigned therapist confirms the program's goals were met",
+        description = "One of the three discharge success criteria. Only available once the "
+                    + "enrollment's care status is REVIEW or PROGRAM_COMPLETED."
+    )
+    @PatchMapping("/{id}/therapist-signoff")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR')")
+    public ResponseEntity<ApiResponse<EnrollmentResponse>> therapistSignoff(
+            @PathVariable UUID id,
+            @RequestBody(required = false) TherapistSignoffRequest request,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        Enrollment enrollment = enrollmentRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Enrollment not found"));
+
+        if (!enrollment.getOrgId().equals(principal.getOrgId())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Access denied");
+        }
+        if (!enrollment.getTherapistId().equals(principal.getId())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "You are not the assigned therapist for this plan");
+        }
+        if (enrollment.getCareStatus() != EnrollmentCareStatus.REVIEW
+                && enrollment.getCareStatus() != EnrollmentCareStatus.PROGRAM_COMPLETED) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "Sign-off is only available once this program's care status is Review or Program Completed");
+        }
+
+        enrollment.setTherapistSignedOff(true);
+        enrollment.setTherapistSignoffBy(principal.getId());
+        enrollment.setTherapistSignoffAt(Instant.now());
+        enrollment.setTherapistSignoffNotes(request != null ? request.notes() : null);
+
+        Enrollment saved = enrollmentRepository.save(enrollment);
+
+        List<EnrollmentResponse> enriched = enrichEnrollments(List.of(saved));
+        return ResponseEntity.ok(ApiResponse.success(enriched.get(0)));
+    }
+
     // ── Private helpers ───────────────────────────────────────────────────────
 
     private List<EnrollmentResponse> enrichEnrollments(List<Enrollment> enrollments) {
@@ -412,7 +502,9 @@ public class EnrollmentController {
             String ln = therapist != null ? therapist.getLastName() : "";
             String prog = programNames.getOrDefault(e.getSubscriptionId(), "Unknown Program");
             int total = totalSessions.getOrDefault(e.getSubscriptionId(), 0);
-            return EnrollmentResponse.from(e, fn, ln, prog, total);
+            int completed = therapySessionRepository.countByEnrollmentIdAndStatusAndCountsTowardPlanTrue(
+                    e.getId(), TherapySessionStatus.COMPLETED);
+            return EnrollmentResponse.from(e, fn, ln, prog, completed, total);
         }).toList();
     }
 }

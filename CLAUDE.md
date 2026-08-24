@@ -18,6 +18,7 @@ Developer context for AI assistants working on this codebase.
 | Migrations     | Liquibase (YAML master + SQL files) |
 | API Docs       | SpringDoc / Swagger UI              |
 | JSON           | Jackson (camelCase, NON_NULL)       |
+| PDF generation | OpenPDF 2.0.3 (LGPL/MPL, iText-4-compatible `com.lowagie.text` API) — used for discharge reports |
 
 ---
 
@@ -185,7 +186,16 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | POST     | `/api/v1/auth/logout`                   | Authenticated                                           | Invalidate refresh token            |
 | GET      | `/api/v1/users/me`                      | Authenticated                                           | Caller's profile                    |
 | GET      | `/api/v1/users/therapists`              | BUSINESS_OWNER, ADMIN                                   | All therapists/doctors in org       |
-| GET      | `/api/v1/analytics/patients/{id}/progress` | BUSINESS_OWNER, ADMIN, OFFICE_ADMIN                  | Mastery series + per-domain breakdown |
+| GET      | `/api/v1/analytics/patients/{id}/progress` | BUSINESS_OWNER, ADMIN, OFFICE_ADMIN, PARENT (own child) | Mastery series + per-domain breakdown |
+| GET      | `/api/v1/analytics/patients/{id}/activities` | BUSINESS_OWNER, ADMIN, OFFICE_ADMIN, PARENT (own child) | Activity assignment/attempt progress |
+| GET      | `/api/v1/analytics/patients/{id}/frequency` | BUSINESS_OWNER, ADMIN, OFFICE_ADMIN, PARENT (own child) | Sessions/week across every concurrent enrollment |
+| GET      | `/api/v1/analytics/enrollments/{id}/success-criteria` | All staff + PARENT (own child)             | Goal mastery / therapist sign-off / parent satisfaction composite |
+| PATCH    | `/api/v1/enrollments/{id}/therapist-signoff` | THERAPIST/DOCTOR (own, once care status is Review or Program Completed) | Confirm this program's goals were met |
+| GET      | `/api/v1/patients/{id}/discharge/preview` | BUSINESS_OWNER, ADMIN, DOCTOR                              | Dry run of what discharging this patient now would look like |
+| POST     | `/api/v1/patients/{id}/discharge`       | BUSINESS_OWNER, ADMIN, DOCTOR                                | Discharge — closes every enrollment in the current episode, sets patient stage |
+| GET      | `/api/v1/patients/{id}/discharge`       | All staff + PARENT (own child)                               | List discharge episodes, most recent first |
+| GET      | `/api/v1/patients/{id}/discharge/{dischargeId}` | All staff + PARENT (own child)                       | One discharge episode's report |
+| GET      | `/api/v1/patients/{id}/discharge/{dischargeId}/pdf` | All staff + PARENT (own child)                   | Discharge PDF — generated on first call, then a fresh short-lived URL each time |
 | GET      | `/api/v1/analytics/therapists/{id}/caseload` | BUSINESS_OWNER, ADMIN, OFFICE_ADMIN                | Therapist series + a row per patient |
 | GET      | `/api/v1/analytics/overview`            | BUSINESS_OWNER, ADMIN, OFFICE_ADMIN                     | Org rollup (WEEKLY/MONTHLY only)    |
 | GET      | `/api/v1/users/assignable`              | BUSINESS_OWNER, ADMIN, OFFICE_ADMIN, THERAPIST, DOCTOR  | Staff names + roles for assignee pickers |
@@ -198,6 +208,12 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | PUT      | `/api/v1/review-meetings/{id}/parent-feedback`    | PARENT (linked to patient)                    | Rating + comments on the therapist  |
 | PUT      | `/api/v1/review-meetings/{id}/therapist-feedback` | THERAPIST, DOCTOR, ADMIN, BUSINESS_OWNER      | Summary + progress notes            |
 | PATCH    | `/api/v1/enrollments/{id}/therapist`    | BUSINESS_OWNER, ADMIN, OFFICE_ADMIN                     | Reassign an ongoing plan's therapist |
+| PATCH    | `/api/v1/enrollments/{id}/care-status`  | THERAPIST (own), OFFICE_ADMIN, ADMIN, BUSINESS_OWNER    | Set clinical-health signal; PROGRAM_COMPLETED also completes the enrollment |
+| POST     | `/api/v1/enrollment-concerns`           | PARENT (own child)                                      | Raise a concern about an active program |
+| GET      | `/api/v1/enrollment-concerns`           | All staff + PARENT (own child)                          | List concerns by `enrollmentId`, `patientId`, or org-wide `status` |
+| GET      | `/api/v1/enrollment-concerns/open-count`| All staff                                                | Open-concern count (own caseload for THERAPIST/DOCTOR) |
+| PATCH    | `/api/v1/enrollment-concerns/{id}/acknowledge` | All staff (own caseload for THERAPIST/DOCTOR)     | Acknowledge a concern |
+| PATCH    | `/api/v1/enrollment-concerns/{id}/resolve` | All staff (own caseload for THERAPIST/DOCTOR)         | Resolve a concern |
 | POST     | `/api/v1/therapy-sessions/ad-hoc`       | BUSINESS_OWNER, ADMIN, OFFICE_ADMIN                     | Book a one-off session from the calendar |
 | POST     | `/api/v1/meetings`                      | All staff (not PARENT/PATIENT)                          | Schedule a meeting + email invites  |
 | GET      | `/api/v1/meetings`                      | Authenticated                                           | Meetings in a date range (scoped)   |
@@ -269,6 +285,22 @@ Master file: `db.changelog-master.yaml` — lists migrations in order.
 | 051-adhoc-sessions.sql              | `therapy_sessions.ad_hoc` + `counts_toward_plan` for sessions booked from the calendar |
 | 052-reschedule-history.sql          | `therapy_sessions.reschedule_count` — durable count of moves, for reschedule analytics |
 | 053-adhoc-payment.sql               | `therapy_sessions.requires_payment` — whether an extra session is chargeable |
+| 054-create-activities.sql           | `activities` table (reusable therapy activity library)            |
+| 055-create-activity-lookups.sql     | `skills`, `languages`, `props` lookups + activity join tables      |
+| 056-create-activity-instructions-checklist.sql | `activity_instructions`, `activity_checklist_questions/options` |
+| 057-create-activity-resources.sql   | `activity_resources`, `activity_links`                             |
+| 058-create-activity-assignments.sql | `activity_assignments`, `activity_attempt_logs/answers`            |
+| 059-org-ai-settings.sql             | Org-level Anthropic API key/model for Activity "Magic Fill"        |
+| 060-activities-use-programs.sql     | `activities.therapy_id` → `program_id` (draws from Programs, not a separate Therapies lookup) |
+| 061-enrollment-care-status.sql      | `enrollments.care_status` (+ note/updated-by/at) — clinical-health signal, separate from `status` and from patient `stage` |
+| 062-create-enrollment-concerns.sql  | `enrollment_concerns` table — parent-raised concerns on an active enrollment |
+| 063-review-meeting-rating-axes.sql  | `review_meetings.communication_rating` (1-5, backfilled from `parent_rating`) + `progress_rating_pct` (0-100, new); `parent_rating` kept but deprecated |
+| —                                    | (no migration) `GET /analytics/patients/{id}/frequency` — session cadence folded across a patient's concurrent enrollments |
+| 064-iep-plan-enrollment-link.sql    | `iep_plans.enrollment_id` (nullable) — lets goal mastery attribute to the right program |
+| 065-enrollment-therapist-signoff.sql | `enrollments.therapist_signed_off` (+ by/at/notes) — one of the three discharge success criteria |
+| 066-success-criteria-settings.sql   | `organisations.goal_mastery_threshold_pct` (90), `parent_satisfaction_threshold_pct` (70), `require_all_enrollments_for_discharge` (true) |
+| 067-create-discharge-records.sql    | `discharge_records` table — one row per discharge episode, frozen snapshots + success-criteria composite |
+| 068-enrollments-discharge-link.sql  | `enrollments.discharged_in_record_id` — the episode-of-care boundary (NULL = still open) |
 
 **To add a migration:** create `NNN-description.sql` with the Liquibase header, then add it to the master YAML.
 

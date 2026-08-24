@@ -21,5 +21,8 @@ public interface IEPPlanRepository extends JpaRepository<IEPPlan, UUID> {
 
     List<IEPPlan> findByOrgIdAndTherapistId(UUID orgId, UUID therapistId);
 
+    /** Plans belonging to a specific program — used for goal-mastery-per-enrollment. */
+    List<IEPPlan> findByEnrollmentId(UUID enrollmentId);
+
     void deleteByPatientId(UUID patientId);
 }

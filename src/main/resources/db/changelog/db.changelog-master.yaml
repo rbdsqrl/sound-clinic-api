@@ -179,3 +179,27 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/060-activities-use-programs.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/061-enrollment-care-status.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/062-create-enrollment-concerns.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/063-review-meeting-rating-axes.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/064-iep-plan-enrollment-link.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/065-enrollment-therapist-signoff.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/066-success-criteria-settings.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/067-create-discharge-records.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/068-enrollments-discharge-link.sql
+      relativeToChangelogFile: false

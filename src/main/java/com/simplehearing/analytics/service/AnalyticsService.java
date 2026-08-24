@@ -7,6 +7,8 @@ import com.simplehearing.activity.repository.ActivityAssignmentRepository;
 import com.simplehearing.activity.repository.ActivityAttemptLogRepository;
 import com.simplehearing.analytics.dto.ActivityProgressResponse;
 import com.simplehearing.analytics.dto.CaseloadResponse;
+import com.simplehearing.analytics.dto.FrequencyResponse;
+import com.simplehearing.analytics.dto.OrgSnapshotResponse;
 import com.simplehearing.analytics.dto.TimeSeriesResponse;
 import com.simplehearing.analytics.dto.TimeSeriesResponse.Bucket;
 import com.simplehearing.analytics.dto.TimeSeriesResponse.DomainSeries;
@@ -15,6 +17,8 @@ import com.simplehearing.analytics.dto.TimeSeriesResponse.Totals;
 import com.simplehearing.analytics.enums.Granularity;
 import com.simplehearing.common.exception.ApiException;
 import com.simplehearing.common.exception.ResourceNotFoundException;
+import com.simplehearing.enrollment.entity.Enrollment;
+import com.simplehearing.enrollment.repository.EnrollmentRepository;
 import com.simplehearing.iep.entity.IEPGoal;
 import com.simplehearing.iep.entity.IEPGoalProgress;
 import com.simplehearing.iep.entity.IEPPlan;
@@ -25,25 +29,33 @@ import com.simplehearing.iep.repository.IEPPlanRepository;
 import com.simplehearing.organisation.entity.Organisation;
 import com.simplehearing.organisation.repository.OrganisationRepository;
 import com.simplehearing.patient.entity.Patient;
+import com.simplehearing.patient.enums.PatientStage;
 import com.simplehearing.patient.repository.PatientRepository;
+import com.simplehearing.program.entity.Program;
+import com.simplehearing.program.repository.ProgramRepository;
 import com.simplehearing.review.entity.ReviewMeeting;
 import com.simplehearing.review.repository.ReviewMeetingRepository;
 import com.simplehearing.session.entity.TherapySession;
 import com.simplehearing.session.enums.TherapySessionStatus;
 import com.simplehearing.session.repository.TherapySessionRepository;
+import com.simplehearing.subscription.entity.Subscription;
+import com.simplehearing.subscription.repository.SubscriptionRepository;
 import com.simplehearing.user.entity.User;
 import com.simplehearing.user.repository.UserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.function.Function;
@@ -76,6 +88,9 @@ public class AnalyticsService {
     private final OrganisationRepository    organisationRepository;
     private final ActivityAssignmentRepository activityAssignmentRepository;
     private final ActivityAttemptLogRepository activityAttemptLogRepository;
+    private final EnrollmentRepository      enrollmentRepository;
+    private final SubscriptionRepository    subscriptionRepository;
+    private final ProgramRepository         programRepository;
 
     public AnalyticsService(TherapySessionRepository sessionRepository,
                             IEPGoalProgressRepository progressRepository,
@@ -86,7 +101,10 @@ public class AnalyticsService {
                             UserRepository userRepository,
                             OrganisationRepository organisationRepository,
                             ActivityAssignmentRepository activityAssignmentRepository,
-                            ActivityAttemptLogRepository activityAttemptLogRepository) {
+                            ActivityAttemptLogRepository activityAttemptLogRepository,
+                            EnrollmentRepository enrollmentRepository,
+                            SubscriptionRepository subscriptionRepository,
+                            ProgramRepository programRepository) {
         this.sessionRepository       = sessionRepository;
         this.progressRepository      = progressRepository;
         this.goalRepository          = goalRepository;
@@ -97,6 +115,9 @@ public class AnalyticsService {
         this.organisationRepository  = organisationRepository;
         this.activityAssignmentRepository = activityAssignmentRepository;
         this.activityAttemptLogRepository = activityAttemptLogRepository;
+        this.enrollmentRepository    = enrollmentRepository;
+        this.subscriptionRepository  = subscriptionRepository;
+        this.programRepository       = programRepository;
     }
 
     /** Additive companion to {@link #patientProgress} — activity assignment/attempt counts for
@@ -132,6 +153,120 @@ public class AnalyticsService {
                 .toList();
 
         return new ActivityProgressResponse(assigned, inProgress, completed, discontinued, completionRate, weekly);
+    }
+
+    /**
+     * Session cadence for one patient, folded across every enrollment they have — a patient can
+     * have two programs running concurrently, each generating its own sessions on the same week
+     * (or even the same day). Attribution is solid by construction: each session belongs to
+     * exactly one enrollment already, so summing per week across enrollments is correct — the
+     * risk was only ever in presentation, not counting.
+     */
+    public FrequencyResponse patientSessionFrequency(UUID orgId, UUID patientId, LocalDate from, LocalDate to) {
+        validateWindow(from, to);
+
+        List<TherapySession> sessions = sessionRepository
+                .findByOrgIdAndPatientIdBetween(orgId, patientId, from, to)
+                .stream()
+                .filter(s -> s.getStatus() != TherapySessionStatus.CANCELLED)
+                .toList();
+
+        Set<UUID> enrollmentIds = sessions.stream().map(TherapySession::getEnrollmentId).collect(java.util.stream.Collectors.toSet());
+        Map<UUID, Enrollment> enrollmentMap = enrollmentRepository.findAllById(enrollmentIds).stream()
+                .collect(java.util.stream.Collectors.toMap(Enrollment::getId, e -> e));
+
+        Map<UUID, String> programNameByEnrollment = new HashMap<>();
+        for (Enrollment e : enrollmentMap.values()) {
+            subscriptionRepository.findById(e.getSubscriptionId()).ifPresent(sub ->
+                    programRepository.findById(sub.getProgramId()).ifPresent(prog ->
+                            programNameByEnrollment.put(e.getId(), prog.getName())));
+        }
+
+        Map<LocalDate, List<TherapySession>> byWeek = new TreeMap<>();
+        for (TherapySession s : sessions) {
+            LocalDate weekStart = s.getSessionDate().with(java.time.DayOfWeek.MONDAY);
+            byWeek.computeIfAbsent(weekStart, k -> new ArrayList<>()).add(s);
+        }
+
+        List<FrequencyResponse.WeeklyFrequency> weekly = new ArrayList<>();
+        for (Map.Entry<LocalDate, List<TherapySession>> entry : byWeek.entrySet()) {
+            List<TherapySession> weekSessions = entry.getValue();
+            int planCount = (int) weekSessions.stream().filter(s -> !s.isAdHoc()).count();
+            int adHocCount = weekSessions.size() - planCount;
+
+            Map<String, Integer> byProgram = new LinkedHashMap<>();
+            for (TherapySession s : weekSessions) {
+                String programName = programNameByEnrollment.getOrDefault(s.getEnrollmentId(), "Unknown Program");
+                byProgram.merge(programName, 1, Integer::sum);
+            }
+            List<FrequencyResponse.ProgramCount> programCounts = byProgram.entrySet().stream()
+                    .map(e -> new FrequencyResponse.ProgramCount(e.getKey(), e.getValue()))
+                    .toList();
+
+            weekly.add(new FrequencyResponse.WeeklyFrequency(entry.getKey(), weekSessions.size(), planCount, adHocCount, programCounts));
+        }
+
+        Map<String, Integer> totalsByProgram = new LinkedHashMap<>();
+        for (TherapySession s : sessions) {
+            String programName = programNameByEnrollment.getOrDefault(s.getEnrollmentId(), "Unknown Program");
+            totalsByProgram.merge(programName, 1, Integer::sum);
+        }
+        List<FrequencyResponse.ProgramTotal> byProgramTotals = totalsByProgram.entrySet().stream()
+                .map(e -> new FrequencyResponse.ProgramTotal(e.getKey(), e.getValue()))
+                .toList();
+
+        return new FrequencyResponse(weekly, byProgramTotals);
+    }
+
+    /**
+     * Org-wide clinical-outcome rollup: average therapy duration, children by program, and
+     * the current admission → discharge funnel. All "right now" figures, not a windowed trend,
+     * so this is deliberately separate from {@link #orgOverview}.
+     */
+    public OrgSnapshotResponse orgSnapshot(UUID orgId) {
+        List<Enrollment> enrollments = enrollmentRepository.findByOrgId(orgId);
+
+        // Average duration — only enrollments with a known end date have a defined span.
+        List<Long> durationsDays = enrollments.stream()
+                .filter(e -> e.getEndDate() != null)
+                .map(e -> ChronoUnit.DAYS.between(e.getStartDate(), e.getEndDate()))
+                .filter(d -> d >= 0)
+                .toList();
+        Double avgDurationWeeks = durationsDays.isEmpty() ? null
+                : Math.round((durationsDays.stream().mapToLong(Long::longValue).average().orElse(0) / 7.0) * 10.0) / 10.0;
+
+        // Program breakdown — resolve subscription -> program in bulk rather than per-enrollment.
+        Set<UUID> subscriptionIds = enrollments.stream().map(Enrollment::getSubscriptionId).collect(Collectors.toSet());
+        Map<UUID, UUID> programIdBySubscription = subscriptionRepository.findAllById(subscriptionIds).stream()
+                .collect(Collectors.toMap(Subscription::getId, Subscription::getProgramId));
+        Set<UUID> programIds = new HashSet<>(programIdBySubscription.values());
+        Map<UUID, String> programNames = programRepository.findAllById(programIds).stream()
+                .collect(Collectors.toMap(Program::getId, Program::getName));
+
+        Map<String, Set<UUID>> patientsByProgram = new LinkedHashMap<>();
+        Map<String, Integer> enrollmentCountByProgram = new LinkedHashMap<>();
+        for (Enrollment e : enrollments) {
+            UUID programId = programIdBySubscription.get(e.getSubscriptionId());
+            String programName = programId != null ? programNames.getOrDefault(programId, "Unknown Program") : "Unknown Program";
+            patientsByProgram.computeIfAbsent(programName, k -> new HashSet<>()).add(e.getPatientId());
+            enrollmentCountByProgram.merge(programName, 1, Integer::sum);
+        }
+        List<OrgSnapshotResponse.ProgramBreakdown> programBreakdown = patientsByProgram.entrySet().stream()
+                .map(en -> new OrgSnapshotResponse.ProgramBreakdown(
+                        en.getKey(), en.getValue().size(), enrollmentCountByProgram.get(en.getKey())))
+                .sorted(Comparator.comparingInt(OrgSnapshotResponse.ProgramBreakdown::patientCount).reversed())
+                .toList();
+
+        // Admission -> discharge funnel — every stage shown, zero-filled, in the funnel's own order.
+        Map<PatientStage, Integer> counts = new HashMap<>();
+        for (Patient p : patientRepository.findByOrgId(orgId)) {
+            counts.merge(p.getStage(), 1, Integer::sum);
+        }
+        List<OrgSnapshotResponse.StageCount> stageCounts = List.of(PatientStage.values()).stream()
+                .map(s -> new OrgSnapshotResponse.StageCount(s, counts.getOrDefault(s, 0)))
+                .toList();
+
+        return new OrgSnapshotResponse(avgDurationWeeks, durationsDays.size(), programBreakdown, stageCounts);
     }
 
     // ── Public entry points ──────────────────────────────────────────────────
@@ -343,15 +478,18 @@ public class AnalyticsService {
         }
 
         // ── Parent ratings from review meetings ──────────────────────────────
+        // communicationRating is the successor to the old single-axis parentRating —
+        // see 063-review-meeting-rating-axes.sql. Historical rows were backfilled, so
+        // this reads correctly across the whole series, not just post-migration data.
         for (ReviewMeeting m : in.meetings()) {
-            if (m.getParentRating() == null) continue;
+            if (m.getCommunicationRating() == null) continue;
             if (m.getMeetingDate().isBefore(from) || m.getMeetingDate().isAfter(to)) continue;
 
             Integer i = indexOf.get(g.bucketStart(m.getMeetingDate()));
             if (i == null) continue;
 
             ratingCount[i]++;
-            ratingSum[i] += m.getParentRating();
+            ratingSum[i] += m.getCommunicationRating();
         }
 
         // ── Buckets ──────────────────────────────────────────────────────────

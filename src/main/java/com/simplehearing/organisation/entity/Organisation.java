@@ -45,6 +45,16 @@ public class Organisation {
     @Column(name = "ai_api_key", length = 500)
     private String aiApiKey;
 
+    /** Discharge success-criteria thresholds — editable later via an org-settings screen. */
+    @Column(name = "goal_mastery_threshold_pct", nullable = false)
+    private int goalMasteryThresholdPct = 90;
+
+    @Column(name = "parent_satisfaction_threshold_pct", nullable = false)
+    private int parentSatisfactionThresholdPct = 70;
+
+    @Column(name = "require_all_enrollments_for_discharge", nullable = false)
+    private boolean requireAllEnrollmentsForDischarge = true;
+
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
@@ -87,6 +97,15 @@ public class Organisation {
 
     public String getAiApiKey() { return aiApiKey; }
     public void setAiApiKey(String aiApiKey) { this.aiApiKey = aiApiKey; }
+
+    public int getGoalMasteryThresholdPct() { return goalMasteryThresholdPct; }
+    public void setGoalMasteryThresholdPct(int goalMasteryThresholdPct) { this.goalMasteryThresholdPct = goalMasteryThresholdPct; }
+
+    public int getParentSatisfactionThresholdPct() { return parentSatisfactionThresholdPct; }
+    public void setParentSatisfactionThresholdPct(int parentSatisfactionThresholdPct) { this.parentSatisfactionThresholdPct = parentSatisfactionThresholdPct; }
+
+    public boolean isRequireAllEnrollmentsForDischarge() { return requireAllEnrollmentsForDischarge; }
+    public void setRequireAllEnrollmentsForDischarge(boolean requireAllEnrollmentsForDischarge) { this.requireAllEnrollmentsForDischarge = requireAllEnrollmentsForDischarge; }
 
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
