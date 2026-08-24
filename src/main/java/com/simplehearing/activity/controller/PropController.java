@@ -40,15 +40,24 @@ public class PropController {
         return ResponseEntity.ok(ApiResponse.success(results));
     }
 
-    @Operation(summary = "Add a prop for this org")
+    @Operation(summary = "Add a prop for this org — also used to add one inline while authoring an activity")
     @PostMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'ADMIN', 'OFFICE_ADMIN', 'THERAPIST')")
     public ResponseEntity<ApiResponse<PropResponse>> create(
             @RequestBody CreatePropRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
+        String name = request.name().trim();
+
+        // A free-typed "add new" control invites near-duplicates — reuse an existing match
+        // rather than creating a second "Flashcards" alongside "flashcards".
+        Prop existing = propRepository.findByOrgIdAndNameIgnoreCase(principal.getOrgId(), name).orElse(null);
+        if (existing != null) {
+            return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(PropResponse.from(existing)));
+        }
+
         Prop prop = new Prop();
         prop.setOrgId(principal.getOrgId());
-        prop.setName(request.name().trim());
+        prop.setName(name);
         Prop saved = propRepository.save(prop);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(PropResponse.from(saved)));
     }
