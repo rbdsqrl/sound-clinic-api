@@ -1,5 +1,6 @@
 package com.simplehearing.analytics.controller;
 
+import com.simplehearing.analytics.dto.ActivityProgressResponse;
 import com.simplehearing.analytics.dto.CaseloadResponse;
 import com.simplehearing.analytics.dto.TimeSeriesResponse;
 import com.simplehearing.analytics.enums.Granularity;
@@ -56,6 +57,18 @@ public class AnalyticsController {
         TimeSeriesResponse data = analyticsService.patientProgress(
                 orgId(principal), patientId, granularity, from, to, domain);
 
+        return ResponseEntity.ok(ApiResponse.success(data));
+    }
+
+    @Operation(summary = "Activity assignment/attempt progress for one patient — additive to /progress")
+    @GetMapping("/patients/{patientId}/activities")
+    public ResponseEntity<ApiResponse<ActivityProgressResponse>> patientActivityProgress(
+            @PathVariable UUID patientId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        ActivityProgressResponse data = analyticsService.patientActivityProgress(orgId(principal), patientId, from, to);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 

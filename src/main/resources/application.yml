@@ -70,6 +70,8 @@ app:
     from-name: ${EMAIL_FROM_NAME:Simple Hearing}
     base-url: ${FRONTEND_URL:http://localhost:4321}
     api-key: ${BREVO_API_KEY:}
+  # Activity "Magic Fill" AI provider/key is configured per-organisation (Business Owner,
+  # Organisation Settings) — see organisations.ai_provider / ai_api_key — not here.
   # Single-org deployment: the org-id assigned to all public (unauthenticated) inquiries.
   # Set ORG_ID env var in production. Leave blank during dev — controller handles null gracefully.
   org-id: ${ORG_ID:}

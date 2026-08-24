@@ -1,5 +1,11 @@
 package com.simplehearing.analytics.service;
 
+import com.simplehearing.activity.entity.ActivityAssignment;
+import com.simplehearing.activity.entity.ActivityAttemptLog;
+import com.simplehearing.activity.enums.AssignmentStatus;
+import com.simplehearing.activity.repository.ActivityAssignmentRepository;
+import com.simplehearing.activity.repository.ActivityAttemptLogRepository;
+import com.simplehearing.analytics.dto.ActivityProgressResponse;
 import com.simplehearing.analytics.dto.CaseloadResponse;
 import com.simplehearing.analytics.dto.TimeSeriesResponse;
 import com.simplehearing.analytics.dto.TimeSeriesResponse.Bucket;
@@ -38,6 +44,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -67,6 +74,8 @@ public class AnalyticsService {
     private final PatientRepository         patientRepository;
     private final UserRepository            userRepository;
     private final OrganisationRepository    organisationRepository;
+    private final ActivityAssignmentRepository activityAssignmentRepository;
+    private final ActivityAttemptLogRepository activityAttemptLogRepository;
 
     public AnalyticsService(TherapySessionRepository sessionRepository,
                             IEPGoalProgressRepository progressRepository,
@@ -75,7 +84,9 @@ public class AnalyticsService {
                             ReviewMeetingRepository reviewMeetingRepository,
                             PatientRepository patientRepository,
                             UserRepository userRepository,
-                            OrganisationRepository organisationRepository) {
+                            OrganisationRepository organisationRepository,
+                            ActivityAssignmentRepository activityAssignmentRepository,
+                            ActivityAttemptLogRepository activityAttemptLogRepository) {
         this.sessionRepository       = sessionRepository;
         this.progressRepository      = progressRepository;
         this.goalRepository          = goalRepository;
@@ -84,6 +95,43 @@ public class AnalyticsService {
         this.patientRepository       = patientRepository;
         this.userRepository          = userRepository;
         this.organisationRepository  = organisationRepository;
+        this.activityAssignmentRepository = activityAssignmentRepository;
+        this.activityAttemptLogRepository = activityAttemptLogRepository;
+    }
+
+    /** Additive companion to {@link #patientProgress} — activity assignment/attempt counts for
+     *  a patient. Kept separate from the mastery/domain folding above (own inputs, own query path). */
+    public ActivityProgressResponse patientActivityProgress(UUID orgId, UUID patientId, LocalDate from, LocalDate to) {
+        validateWindow(from, to);
+
+        List<ActivityAssignment> assignments = activityAssignmentRepository
+                .findByOrgIdAndPatientIdOrderByCreatedAtDesc(orgId, patientId);
+
+        int assigned = 0, inProgress = 0, completed = 0, discontinued = 0;
+        for (ActivityAssignment a : assignments) {
+            switch (a.getStatus()) {
+                case ASSIGNED -> assigned++;
+                case IN_PROGRESS -> inProgress++;
+                case COMPLETED -> completed++;
+                case DISCONTINUED -> discontinued++;
+            }
+        }
+        Double completionRate = assignments.isEmpty() ? null : (100.0 * completed / assignments.size());
+
+        List<UUID> assignmentIds = assignments.stream().map(ActivityAssignment::getId).toList();
+        List<ActivityAttemptLog> attempts = assignmentIds.isEmpty() ? List.of() :
+                activityAttemptLogRepository.findByOrgIdAndAssignmentIdInAndAttemptDateBetween(orgId, assignmentIds, from, to);
+
+        Map<LocalDate, Integer> byWeek = new TreeMap<>();
+        for (ActivityAttemptLog log : attempts) {
+            LocalDate weekStart = log.getAttemptDate().with(java.time.DayOfWeek.MONDAY);
+            byWeek.merge(weekStart, 1, Integer::sum);
+        }
+        List<ActivityProgressResponse.WeeklyAttemptPoint> weekly = byWeek.entrySet().stream()
+                .map(e -> new ActivityProgressResponse.WeeklyAttemptPoint(e.getKey(), e.getValue()))
+                .toList();
+
+        return new ActivityProgressResponse(assigned, inProgress, completed, discontinued, completionRate, weekly);
     }
 
     // ── Public entry points ──────────────────────────────────────────────────

@@ -1,5 +1,6 @@
 package com.simplehearing.organisation.entity;
 
+import com.simplehearing.organisation.enums.AiProvider;
 import jakarta.persistence.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
@@ -35,6 +36,14 @@ public class Organisation {
 
     @Column(nullable = false)
     private boolean isActive = true;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "ai_provider", length = 20)
+    private AiProvider aiProvider;
+
+    /** Never serialised back to the frontend — see {@code OrganisationResponse}. */
+    @Column(name = "ai_api_key", length = 500)
+    private String aiApiKey;
 
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
@@ -72,6 +81,12 @@ public class Organisation {
 
     public boolean isActive() { return isActive; }
     public void setActive(boolean active) { isActive = active; }
+
+    public AiProvider getAiProvider() { return aiProvider; }
+    public void setAiProvider(AiProvider aiProvider) { this.aiProvider = aiProvider; }
+
+    public String getAiApiKey() { return aiApiKey; }
+    public void setAiApiKey(String aiApiKey) { this.aiApiKey = aiApiKey; }
 
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }

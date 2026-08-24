@@ -1,6 +1,7 @@
 package com.simplehearing.organisation.dto;
 
 import com.simplehearing.organisation.entity.Organisation;
+import com.simplehearing.organisation.enums.AiProvider;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -15,6 +16,8 @@ public record OrganisationResponse(
         String logoUrl,
         String timezone,
         boolean isActive,
+        AiProvider aiProvider,
+        boolean aiKeyConfigured,
         Instant createdAt
 ) {
     public static OrganisationResponse from(Organisation org) {
@@ -28,6 +31,8 @@ public record OrganisationResponse(
                 org.getLogoUrl(),
                 org.getTimezone(),
                 org.isActive(),
+                org.getAiProvider(),
+                org.getAiApiKey() != null && !org.getAiApiKey().isBlank(),
                 org.getCreatedAt()
         );
     }

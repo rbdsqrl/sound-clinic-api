@@ -36,6 +36,8 @@ public class OrganisationService {
         if (request.address() != null)      org.setAddress(request.address());
         if (request.logoUrl() != null)      org.setLogoUrl(request.logoUrl());
         if (request.timezone() != null)     org.setTimezone(request.timezone());
+        if (request.aiProvider() != null)   org.setAiProvider(request.aiProvider());
+        if (request.aiApiKey() != null)     org.setAiApiKey(request.aiApiKey().isBlank() ? null : request.aiApiKey().trim());
 
         return OrganisationResponse.from(organisationRepository.save(org));
     }

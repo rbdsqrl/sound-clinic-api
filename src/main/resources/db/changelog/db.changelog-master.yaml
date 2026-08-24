@@ -158,3 +158,21 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/053-adhoc-payment.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/054-create-activities.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/055-create-activity-lookups.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/056-create-activity-instructions-checklist.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/057-create-activity-resources.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/058-create-activity-assignments.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/059-org-ai-settings.sql
+      relativeToChangelogFile: false
