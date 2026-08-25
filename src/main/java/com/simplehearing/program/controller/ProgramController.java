@@ -20,6 +20,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -118,6 +119,18 @@ public class ProgramController {
         if (request.perSessionCost() != null) {
             program.setPerSessionCost(request.perSessionCost());
         }
+        if (Boolean.TRUE.equals(request.removeTax())) {
+            program.setTaxId(null);
+            program.setPriceIncludesTax(true);
+        } else if (request.taxId() != null) {
+            Tax tax = taxRepository.findById(request.taxId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Tax not found"));
+            if (!tax.getOrgId().equals(principal.getOrgId())) {
+                throw new ApiException(HttpStatus.FORBIDDEN, "Access denied");
+            }
+            program.setTaxId(tax.getId());
+            program.setPriceIncludesTax(request.priceIncludesTax() != null ? request.priceIncludesTax() : true);
+        }
         if (request.isActive() != null) {
             program.setActive(request.isActive());
         }
@@ -156,7 +169,7 @@ public class ProgramController {
                 .distinct()
                 .toList();
         if (taxIds.isEmpty()) {
-            return Map.of();
+            return new HashMap<>();
         }
         return taxRepository.findAllById(taxIds).stream()
                 .collect(Collectors.toMap(Tax::getId, t -> t));
