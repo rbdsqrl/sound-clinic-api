@@ -38,6 +38,10 @@ public class OrganisationService {
         if (request.timezone() != null)     org.setTimezone(request.timezone());
         if (request.aiProvider() != null)   org.setAiProvider(request.aiProvider());
         if (request.aiApiKey() != null)     org.setAiApiKey(request.aiApiKey().isBlank() ? null : request.aiApiKey().trim());
+        if (request.weeklyOffDays() != null) {
+            org.getWeeklyOffDays().clear();
+            org.getWeeklyOffDays().addAll(request.weeklyOffDays());
+        }
 
         return OrganisationResponse.from(organisationRepository.save(org));
     }

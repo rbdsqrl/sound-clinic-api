@@ -212,3 +212,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/071-feed-post-engagement.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/072-organisation-weekly-off-days.sql
+      relativeToChangelogFile: false

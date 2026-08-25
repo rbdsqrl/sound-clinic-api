@@ -5,7 +5,10 @@ import jakarta.persistence.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import java.time.DayOfWeek;
 import java.time.Instant;
+import java.util.EnumSet;
+import java.util.Set;
 import java.util.UUID;
 
 @Entity
@@ -54,6 +57,13 @@ public class Organisation {
 
     @Column(name = "require_all_enrollments_for_discharge", nullable = false)
     private boolean requireAllEnrollmentsForDischarge = true;
+
+    /** Days of the week autoscheduling (therapy sessions, review meetings) always skips — same treatment as public holidays. Ad-hoc sessions are unaffected. */
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "organisation_weekly_off_days", joinColumns = @JoinColumn(name = "organisation_id"))
+    @Column(name = "day_of_week", length = 10)
+    @Enumerated(EnumType.STRING)
+    private Set<DayOfWeek> weeklyOffDays = EnumSet.noneOf(DayOfWeek.class);
 
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
@@ -106,6 +116,9 @@ public class Organisation {
 
     public boolean isRequireAllEnrollmentsForDischarge() { return requireAllEnrollmentsForDischarge; }
     public void setRequireAllEnrollmentsForDischarge(boolean requireAllEnrollmentsForDischarge) { this.requireAllEnrollmentsForDischarge = requireAllEnrollmentsForDischarge; }
+
+    public Set<DayOfWeek> getWeeklyOffDays() { return weeklyOffDays; }
+    public void setWeeklyOffDays(Set<DayOfWeek> weeklyOffDays) { this.weeklyOffDays = weeklyOffDays; }
 
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }

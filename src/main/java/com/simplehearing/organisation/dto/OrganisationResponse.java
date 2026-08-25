@@ -3,7 +3,9 @@ package com.simplehearing.organisation.dto;
 import com.simplehearing.organisation.entity.Organisation;
 import com.simplehearing.organisation.enums.AiProvider;
 
+import java.time.DayOfWeek;
 import java.time.Instant;
+import java.util.Set;
 import java.util.UUID;
 
 public record OrganisationResponse(
@@ -18,6 +20,7 @@ public record OrganisationResponse(
         boolean isActive,
         AiProvider aiProvider,
         boolean aiKeyConfigured,
+        Set<DayOfWeek> weeklyOffDays,
         Instant createdAt
 ) {
     public static OrganisationResponse from(Organisation org) {
@@ -33,6 +36,7 @@ public record OrganisationResponse(
                 org.isActive(),
                 org.getAiProvider(),
                 org.getAiApiKey() != null && !org.getAiApiKey().isBlank(),
+                org.getWeeklyOffDays(),
                 org.getCreatedAt()
         );
     }

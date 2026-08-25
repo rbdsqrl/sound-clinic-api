@@ -23,10 +23,12 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -114,6 +116,10 @@ public class ReviewMeetingService {
                 .map(h -> h.getHolidayDate())
                 .collect(Collectors.toSet());
 
+        Set<DayOfWeek> weeklyOffDays = organisationRepository.findById(enrollment.getOrgId())
+                .map(Organisation::getWeeklyOffDays)
+                .orElse(EnumSet.noneOf(DayOfWeek.class));
+
         LocalTime startTime = schedule.startTime();
         LocalTime endTime = startTime.plusMinutes(durationMinutes);
 
@@ -123,8 +129,8 @@ public class ReviewMeetingService {
 
         while (!date.isAfter(windowEnd)) {
             LocalDate slot = date;
-            // Nudge past holidays, but never past the end of the plan.
-            while (holidays.contains(slot) && !slot.isAfter(windowEnd)) {
+            // Nudge past holidays and weekly off days, but never past the end of the plan.
+            while ((holidays.contains(slot) || weeklyOffDays.contains(slot.getDayOfWeek())) && !slot.isAfter(windowEnd)) {
                 slot = slot.plusDays(1);
             }
             if (slot.isAfter(windowEnd)) break;
