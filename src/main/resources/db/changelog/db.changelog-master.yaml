@@ -206,3 +206,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/069-merge-admin-into-clinic-head.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/070-create-feed-posts.sql
+      relativeToChangelogFile: false
