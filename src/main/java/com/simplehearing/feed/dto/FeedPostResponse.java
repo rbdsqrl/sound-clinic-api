@@ -5,6 +5,7 @@ import com.simplehearing.user.entity.User;
 import com.simplehearing.user.enums.Role;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 public record FeedPostResponse(
@@ -17,9 +18,17 @@ public record FeedPostResponse(
         String title,
         String body,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        long likeCount,
+        boolean likedByMe,
+        long viewCount,
+        long commentCount,
+        List<FeedPostImageResponse> images
 ) {
-    public static FeedPostResponse from(FeedPost post, User author) {
+    public static FeedPostResponse from(
+            FeedPost post, User author,
+            long likeCount, boolean likedByMe, long viewCount, long commentCount,
+            List<FeedPostImageResponse> images) {
         return new FeedPostResponse(
                 post.getId(),
                 post.getOrgId(),
@@ -30,7 +39,12 @@ public record FeedPostResponse(
                 post.getTitle(),
                 post.getBody(),
                 post.getCreatedAt(),
-                post.getUpdatedAt()
+                post.getUpdatedAt(),
+                likeCount,
+                likedByMe,
+                viewCount,
+                commentCount,
+                images
         );
     }
 }
