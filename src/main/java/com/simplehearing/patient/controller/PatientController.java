@@ -148,6 +148,17 @@ public class PatientController {
         return ResponseEntity.noContent().build();
     }
 
+    @Operation(summary = "Invite a parent by email who doesn't have an account yet; auto-linked to this patient on accept")
+    @PostMapping("/{id}/parents/invite")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    public ResponseEntity<ApiResponse<InviteParentResponse>> inviteParent(
+            @PathVariable UUID id,
+            @Valid @RequestBody InviteParentRequest request,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(patientService.inviteParent(id, request, principal)));
+    }
+
     // ── Therapist assignments ─────────────────────────────────────────────────
 
     @Operation(summary = "Assign a therapist to a patient")

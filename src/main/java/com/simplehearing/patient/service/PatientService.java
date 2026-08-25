@@ -11,6 +11,7 @@ import com.simplehearing.iep.repository.IEPGoalProgressRepository;
 import com.simplehearing.iep.repository.IEPGoalRepository;
 import com.simplehearing.iep.repository.IEPPlanRepository;
 import com.simplehearing.invitation.repository.InvitationRepository;
+import com.simplehearing.invitation.service.InvitationService;
 import com.simplehearing.patient.dto.*;
 import com.simplehearing.patient.entity.*;
 import com.simplehearing.patient.enums.PatientStage;
@@ -58,6 +59,7 @@ public class PatientService {
     private final IEPGoalRepository iepGoalRepository;
     private final IEPGoalProgressRepository iepGoalProgressRepository;
     private final InvitationRepository invitationRepository;
+    private final InvitationService invitationService;
 
     public PatientService(PatientRepository patientRepository,
                           PatientConditionRepository patientConditionRepository,
@@ -75,7 +77,8 @@ public class PatientService {
                           IEPPlanRepository iepPlanRepository,
                           IEPGoalRepository iepGoalRepository,
                           IEPGoalProgressRepository iepGoalProgressRepository,
-                          InvitationRepository invitationRepository) {
+                          InvitationRepository invitationRepository,
+                          InvitationService invitationService) {
         this.patientRepository = patientRepository;
         this.patientConditionRepository = patientConditionRepository;
         this.patientParentRepository = patientParentRepository;
@@ -93,6 +96,7 @@ public class PatientService {
         this.iepGoalRepository = iepGoalRepository;
         this.iepGoalProgressRepository = iepGoalProgressRepository;
         this.invitationRepository = invitationRepository;
+        this.invitationService = invitationService;
     }
 
     // ── CRUD ─────────────────────────────────────────────────────────────────
@@ -254,6 +258,17 @@ public class PatientService {
     public void unlinkParent(UUID patientId, UUID parentId, UserPrincipal principal) {
         findPatient(patientId, principal.getOrgId());
         patientParentRepository.deleteById_PatientIdAndId_ParentId(patientId, parentId);
+    }
+
+    /** Invites someone who doesn't have an account yet; they're auto-linked as this patient's parent on accept. */
+    public InviteParentResponse inviteParent(UUID patientId, InviteParentRequest request, UserPrincipal principal) {
+        Patient patient = findPatient(patientId, principal.getOrgId());
+
+        String link = invitationService.createLinkedInvitation(
+                request.email(), Role.PARENT, patient.getClinicId(), patient.getId(),
+                principal.getOrgId(), principal.getId());
+
+        return new InviteParentResponse(link);
     }
 
     // ── Therapist assignments ─────────────────────────────────────────────────
