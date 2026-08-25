@@ -9,6 +9,8 @@ import com.simplehearing.program.dto.ProgramResponse;
 import com.simplehearing.program.dto.UpdateProgramRequest;
 import com.simplehearing.program.entity.Program;
 import com.simplehearing.program.repository.ProgramRepository;
+import com.simplehearing.tax.entity.Tax;
+import com.simplehearing.tax.repository.TaxRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -19,7 +21,10 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Tag(name = "Programs", description = "Therapy program catalog management")
 @RestController
@@ -27,9 +32,11 @@ import java.util.UUID;
 public class ProgramController {
 
     private final ProgramRepository programRepository;
+    private final TaxRepository taxRepository;
 
-    public ProgramController(ProgramRepository programRepository) {
+    public ProgramController(ProgramRepository programRepository, TaxRepository taxRepository) {
         this.programRepository = programRepository;
+        this.taxRepository = taxRepository;
     }
 
     // ── List all programs (includes inactive) ─────────────────────────────────
@@ -45,8 +52,10 @@ public class ProgramController {
                 ? programRepository.findByOrgIdAndIsActiveTrueOrderByNameAsc(principal.getOrgId())
                 : programRepository.findByOrgIdOrderByNameAsc(principal.getOrgId());
 
+        Map<UUID, Tax> taxesById = resolveTaxes(programs);
+
         List<ProgramResponse> result = programs.stream()
-                .map(ProgramResponse::from)
+                .map(p -> ProgramResponse.from(p, taxesById.get(p.getTaxId())))
                 .toList();
 
         return ResponseEntity.ok(ApiResponse.success(result));
@@ -61,15 +70,26 @@ public class ProgramController {
             @Valid @RequestBody CreateProgramRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
 
+        Tax tax = null;
+        if (request.taxId() != null) {
+            tax = taxRepository.findById(request.taxId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Tax not found"));
+            if (!tax.getOrgId().equals(principal.getOrgId())) {
+                throw new ApiException(HttpStatus.FORBIDDEN, "Access denied");
+            }
+        }
+
         Program program = new Program();
         program.setOrgId(principal.getOrgId());
         program.setName(request.name().trim());
         program.setDescription(request.description());
         program.setPerSessionCost(request.perSessionCost());
+        program.setTaxId(tax != null ? tax.getId() : null);
+        program.setPriceIncludesTax(tax != null && request.priceIncludesTax() != null ? request.priceIncludesTax() : true);
         program.setCreatedBy(principal.getId());
 
         Program saved = programRepository.save(program);
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(ProgramResponse.from(saved)));
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(ProgramResponse.from(saved, tax)));
     }
 
     // ── Update a program ───────────────────────────────────────────────────────
@@ -103,7 +123,8 @@ public class ProgramController {
         }
 
         Program saved = programRepository.save(program);
-        return ResponseEntity.ok(ApiResponse.success(ProgramResponse.from(saved)));
+        Tax tax = saved.getTaxId() != null ? taxRepository.findById(saved.getTaxId()).orElse(null) : null;
+        return ResponseEntity.ok(ApiResponse.success(ProgramResponse.from(saved, tax)));
     }
 
     // ── Deactivate a program (soft delete) ────────────────────────────────────
@@ -124,6 +145,20 @@ public class ProgramController {
 
         program.setActive(false);
         Program saved = programRepository.save(program);
-        return ResponseEntity.ok(ApiResponse.success(ProgramResponse.from(saved)));
+        Tax tax = saved.getTaxId() != null ? taxRepository.findById(saved.getTaxId()).orElse(null) : null;
+        return ResponseEntity.ok(ApiResponse.success(ProgramResponse.from(saved, tax)));
+    }
+
+    private Map<UUID, Tax> resolveTaxes(List<Program> programs) {
+        List<UUID> taxIds = programs.stream()
+                .map(Program::getTaxId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (taxIds.isEmpty()) {
+            return Map.of();
+        }
+        return taxRepository.findAllById(taxIds).stream()
+                .collect(Collectors.toMap(Tax::getId, t -> t));
     }
 }

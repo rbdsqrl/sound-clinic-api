@@ -31,6 +31,12 @@ public class Program {
     @Column(name = "is_active", nullable = false)
     private boolean isActive = true;
 
+    @Column(name = "tax_id")
+    private UUID taxId;
+
+    @Column(name = "price_includes_tax", nullable = false)
+    private boolean priceIncludesTax = true;
+
     @Column(name = "created_by")
     private UUID createdBy;
 
@@ -55,6 +61,10 @@ public class Program {
     public void setPerSessionCost(BigDecimal perSessionCost) { this.perSessionCost = perSessionCost; }
     public boolean isActive() { return isActive; }
     public void setActive(boolean active) { isActive = active; }
+    public UUID getTaxId() { return taxId; }
+    public void setTaxId(UUID taxId) { this.taxId = taxId; }
+    public boolean isPriceIncludesTax() { return priceIncludesTax; }
+    public void setPriceIncludesTax(boolean priceIncludesTax) { this.priceIncludesTax = priceIncludesTax; }
     public UUID getCreatedBy() { return createdBy; }
     public void setCreatedBy(UUID createdBy) { this.createdBy = createdBy; }
     public Instant getCreatedAt() { return createdAt; }

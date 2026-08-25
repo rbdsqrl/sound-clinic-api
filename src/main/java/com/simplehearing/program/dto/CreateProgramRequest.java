@@ -5,9 +5,12 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 public record CreateProgramRequest(
         @NotBlank String name,
         String description,
-        @NotNull @DecimalMin("0.00") BigDecimal perSessionCost
+        @NotNull @DecimalMin("0.00") BigDecimal perSessionCost,
+        UUID taxId,
+        Boolean priceIncludesTax
 ) {}
