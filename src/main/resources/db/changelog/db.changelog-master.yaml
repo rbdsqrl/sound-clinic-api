@@ -215,3 +215,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/072-organisation-weekly-off-days.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/073-create-case-histories.sql
+      relativeToChangelogFile: false
