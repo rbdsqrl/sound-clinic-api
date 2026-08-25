@@ -15,8 +15,11 @@ import com.simplehearing.patient.dto.*;
 import com.simplehearing.patient.entity.*;
 import com.simplehearing.patient.enums.PatientStage;
 import com.simplehearing.patient.repository.*;
+import com.simplehearing.program.repository.ProgramRepository;
 import com.simplehearing.session.repository.SessionAttachmentRepository;
 import com.simplehearing.session.repository.TherapySessionRepository;
+import com.simplehearing.subscription.entity.Subscription;
+import com.simplehearing.subscription.enums.SubscriptionStatus;
 import com.simplehearing.subscription.repository.SubscriptionRepository;
 import com.simplehearing.user.entity.User;
 import com.simplehearing.user.enums.Role;
@@ -47,6 +50,7 @@ public class PatientService {
     private final ClinicRepository clinicRepository;
     private final AppointmentRepository appointmentRepository;
     private final SubscriptionRepository subscriptionRepository;
+    private final ProgramRepository programRepository;
     private final EnrollmentRepository enrollmentRepository;
     private final TherapySessionRepository therapySessionRepository;
     private final SessionAttachmentRepository sessionAttachmentRepository;
@@ -64,6 +68,7 @@ public class PatientService {
                           ClinicRepository clinicRepository,
                           AppointmentRepository appointmentRepository,
                           SubscriptionRepository subscriptionRepository,
+                          ProgramRepository programRepository,
                           EnrollmentRepository enrollmentRepository,
                           TherapySessionRepository therapySessionRepository,
                           SessionAttachmentRepository sessionAttachmentRepository,
@@ -80,6 +85,7 @@ public class PatientService {
         this.clinicRepository = clinicRepository;
         this.appointmentRepository = appointmentRepository;
         this.subscriptionRepository = subscriptionRepository;
+        this.programRepository = programRepository;
         this.enrollmentRepository = enrollmentRepository;
         this.therapySessionRepository = therapySessionRepository;
         this.sessionAttachmentRepository = sessionAttachmentRepository;
@@ -352,6 +358,19 @@ public class PatientService {
         List<UUID> therapistIds = assignments.stream().map(TherapistPatient::getTherapistId).toList();
         List<User> therapists = therapistIds.isEmpty() ? List.of() : userRepository.findAllById(therapistIds);
 
-        return PatientResponse.from(patient, pcs, conditionDetails, parents, assignments, therapists);
+        List<UUID> activeProgramIds = subscriptionRepository
+                .findByOrgIdAndPatientIdOrderByCreatedAtDesc(patient.getOrgId(), patient.getId())
+                .stream()
+                .filter(s -> s.getStatus() == SubscriptionStatus.ACTIVE)
+                .map(Subscription::getProgramId)
+                .distinct()
+                .toList();
+        List<PatientResponse.TherapySummary> therapySummaries = activeProgramIds.isEmpty()
+                ? List.of()
+                : programRepository.findAllById(activeProgramIds).stream()
+                        .map(p -> new PatientResponse.TherapySummary(p.getId(), p.getName()))
+                        .toList();
+
+        return PatientResponse.from(patient, pcs, conditionDetails, parents, assignments, therapists, therapySummaries);
     }
 }

@@ -27,18 +27,22 @@ public record PatientResponse(
         Instant createdAt,
         List<ConditionSummary> conditions,
         List<ParentSummary> parents,
-        List<TherapistSummary> therapists
+        List<TherapistSummary> therapists,
+        List<TherapySummary> therapies
 ) {
     public record ConditionSummary(UUID id, String name, LocalDate diagnosedAt, String notes) {}
     public record ParentSummary(UUID id, String firstName, String lastName, String email) {}
     public record TherapistSummary(UUID id, String firstName, String lastName, Instant assignedAt) {}
+    /** A program the patient has an active subscription to. */
+    public record TherapySummary(UUID id, String name) {}
 
     public static PatientResponse from(Patient patient,
                                        List<PatientCondition> conditions,
                                        List<Condition> conditionDetails,
                                        List<User> parents,
                                        List<TherapistPatient> therapistAssignments,
-                                       List<User> therapists) {
+                                       List<User> therapists,
+                                       List<TherapySummary> therapies) {
 
         List<ConditionSummary> conditionSummaries = conditions.stream().map(pc -> {
             Condition c = conditionDetails.stream()
@@ -73,7 +77,7 @@ public record PatientResponse(
                 patient.getFirstName(), patient.getLastName(),
                 patient.getDateOfBirth(), patient.getGender(), patient.getNotes(),
                 patient.getStage(), patient.isActive(), patient.getCreatedAt(),
-                conditionSummaries, parentSummaries, therapistSummaries
+                conditionSummaries, parentSummaries, therapistSummaries, therapies
         );
     }
 }
