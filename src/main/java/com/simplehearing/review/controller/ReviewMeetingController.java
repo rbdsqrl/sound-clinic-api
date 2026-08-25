@@ -342,8 +342,11 @@ public class ReviewMeetingController {
      * Fills in patient and therapist names, and decides which half of the feedback the
      * viewer is allowed to read.
      *
-     * Staff see both sides always. A parent and a therapist only see the other's answer
-     * once they have written their own, so neither is anchored by reading first.
+     * Review feedback is confidential between the submitter and staff: a parent only ever
+     * sees their own answer (to review/edit it), never the therapist's; a therapist only
+     * ever sees their own, never the parent's. Only BUSINESS_OWNER/CLINIC_HEAD see both
+     * sides. Parent ratings are still folded into that therapist's analytics (aggregate,
+     * staff-only) so the signal isn't lost.
      */
     private List<ReviewMeetingResponse> enrich(List<ReviewMeeting> meetings, UserPrincipal principal) {
         if (meetings.isEmpty()) return List.of();
@@ -388,11 +391,11 @@ public class ReviewMeetingController {
                 seeParentSide = true;
                 seeTherapistSide = true;
             } else if (clinician) {
-                seeTherapistSide = true;
-                seeParentSide = m.hasTherapistFeedback();
+                seeTherapistSide = true;   // their own answer, to review/edit it
+                seeParentSide = false;     // never the parent's
             } else if (parent) {
-                seeParentSide = true;
-                seeTherapistSide = m.hasParentFeedback();
+                seeParentSide = true;      // their own answer, to review/edit it
+                seeTherapistSide = false;  // never the therapist's
             } else {
                 seeParentSide = false;
                 seeTherapistSide = false;

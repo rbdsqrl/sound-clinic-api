@@ -80,7 +80,8 @@ public record TimeSeriesResponse(
             int       sessionsRescheduled,
             int       sessionsLogged,
             Double    avgPerformanceScore,
-            Double    avgParentRating
+            Double    avgParentRating,
+            Double    avgParentProgressPct
     ) {}
 
     /**
@@ -126,6 +127,9 @@ public record TimeSeriesResponse(
             int    goalsTotal,
             int    goalsCompleted,
             Double avgPerformanceScore,
-            Double avgParentRating
+            Double avgParentRating,
+            Double avgParentProgressPct,
+            /** How many review meetings the average(s) above are drawn from. Staff-only context. */
+            int    parentFeedbackCount
     ) {}
 }

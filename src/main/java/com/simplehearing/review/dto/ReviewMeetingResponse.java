@@ -43,8 +43,9 @@ public record ReviewMeetingResponse(
     /**
      * Builds the response for a given viewer.
      *
-     * Each side's feedback stays hidden from the other until they have submitted their own,
-     * so nobody's answer is anchored by reading the other's first. Staff always see both.
+     * A parent only ever sees their own feedback, never the therapist's; a therapist only
+     * ever sees their own, never the parent's. Only staff (BUSINESS_OWNER/CLINIC_HEAD) see
+     * both sides.
      */
     public static ReviewMeetingResponse from(ReviewMeeting m,
                                              String patientName,

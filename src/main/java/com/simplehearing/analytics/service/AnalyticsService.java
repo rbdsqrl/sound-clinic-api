@@ -428,6 +428,9 @@ public class AnalyticsService {
         int[] scoreSum      = new int[n];
         int[] ratingCount   = new int[n];
         int[] ratingSum     = new int[n];
+        int[] progressRatingCount = new int[n];
+        int[] progressRatingSum   = new int[n];
+        int   parentFeedbackCount = 0;
 
         Map<String, int[]> domainPassed = new LinkedHashMap<>();
         Map<String, int[]> domainTotal  = new LinkedHashMap<>();
@@ -482,14 +485,21 @@ public class AnalyticsService {
         // see 063-review-meeting-rating-axes.sql. Historical rows were backfilled, so
         // this reads correctly across the whole series, not just post-migration data.
         for (ReviewMeeting m : in.meetings()) {
-            if (m.getCommunicationRating() == null) continue;
             if (m.getMeetingDate().isBefore(from) || m.getMeetingDate().isAfter(to)) continue;
+            if (m.getCommunicationRating() == null && m.getProgressRatingPct() == null) continue;
 
             Integer i = indexOf.get(g.bucketStart(m.getMeetingDate()));
             if (i == null) continue;
 
-            ratingCount[i]++;
-            ratingSum[i] += m.getCommunicationRating();
+            if (m.getCommunicationRating() != null) {
+                ratingCount[i]++;
+                ratingSum[i] += m.getCommunicationRating();
+            }
+            if (m.getProgressRatingPct() != null) {
+                progressRatingCount[i]++;
+                progressRatingSum[i] += m.getProgressRatingPct();
+            }
+            parentFeedbackCount++;
         }
 
         // ── Buckets ──────────────────────────────────────────────────────────
@@ -507,7 +517,8 @@ public class AnalyticsService {
                     rescheduled[i],
                     logged[i],
                     mean(scoreSum[i], scoreCount[i]),
-                    mean(ratingSum[i], ratingCount[i])));
+                    mean(ratingSum[i], ratingCount[i]),
+                    mean(progressRatingSum[i], progressRatingCount[i])));
         }
 
         // ── Per-domain series ────────────────────────────────────────────────
@@ -560,7 +571,9 @@ public class AnalyticsService {
                 goalsTotal,
                 goalsCompleted,
                 mean(java.util.Arrays.stream(scoreSum).sum(), java.util.Arrays.stream(scoreCount).sum()),
-                mean(java.util.Arrays.stream(ratingSum).sum(), java.util.Arrays.stream(ratingCount).sum()));
+                mean(java.util.Arrays.stream(ratingSum).sum(), java.util.Arrays.stream(ratingCount).sum()),
+                mean(java.util.Arrays.stream(progressRatingSum).sum(), java.util.Arrays.stream(progressRatingCount).sum()),
+                parentFeedbackCount);
 
         // Raw per-session scores, in the order they were delivered.
         List<TimeSeriesResponse.SessionPoint> sessionPoints = in.sessions().stream()
