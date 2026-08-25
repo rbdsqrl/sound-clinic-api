@@ -7,6 +7,7 @@ import com.simplehearing.common.exception.ResourceNotFoundException;
 import com.simplehearing.patient.entity.Patient;
 import com.simplehearing.patient.enums.PatientStage;
 import com.simplehearing.patient.repository.PatientRepository;
+import com.simplehearing.program.dto.ProgramResponse;
 import com.simplehearing.program.entity.Program;
 import com.simplehearing.program.repository.ProgramRepository;
 import com.simplehearing.subscription.dto.CreateSubscriptionRequest;
@@ -16,6 +17,8 @@ import com.simplehearing.subscription.entity.Subscription;
 import com.simplehearing.subscription.enums.SubscriptionPaymentStatus;
 import com.simplehearing.subscription.enums.SubscriptionStatus;
 import com.simplehearing.subscription.repository.SubscriptionRepository;
+import com.simplehearing.tax.entity.Tax;
+import com.simplehearing.tax.repository.TaxRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -38,14 +41,17 @@ public class SubscriptionController {
     private final SubscriptionRepository subscriptionRepository;
     private final ProgramRepository programRepository;
     private final PatientRepository patientRepository;
+    private final TaxRepository taxRepository;
 
     public SubscriptionController(
             SubscriptionRepository subscriptionRepository,
             ProgramRepository programRepository,
-            PatientRepository patientRepository) {
+            PatientRepository patientRepository,
+            TaxRepository taxRepository) {
         this.subscriptionRepository = subscriptionRepository;
         this.programRepository = programRepository;
         this.patientRepository = patientRepository;
+        this.taxRepository = taxRepository;
     }
 
     // ── List subscriptions for a patient ──────────────────────────────────────
@@ -89,12 +95,14 @@ public class SubscriptionController {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Cannot subscribe to an inactive program");
         }
 
+        Tax tax = program.getTaxId() != null ? taxRepository.findById(program.getTaxId()).orElse(null) : null;
+
         Subscription sub = new Subscription();
         sub.setOrgId(principal.getOrgId());
         sub.setPatientId(request.patientId());
         sub.setProgramId(request.programId());
         sub.setNumSessions(request.numSessions());
-        sub.setPerSessionCost(program.getPerSessionCost());   // snapshot at creation time
+        sub.setPerSessionCost(ProgramResponse.effectiveCost(program, tax));   // snapshot at creation time, tax included
         sub.setNotes(request.notes());
         sub.setCreatedBy(principal.getId());
 

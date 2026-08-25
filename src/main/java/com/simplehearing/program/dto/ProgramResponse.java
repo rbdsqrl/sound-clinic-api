@@ -22,17 +22,19 @@ public record ProgramResponse(
         boolean isActive,
         Instant createdAt
 ) {
+    /** The actual per-session amount to charge — the entered price plus tax when it's not already included. */
+    public static BigDecimal effectiveCost(Program program, Tax tax) {
+        BigDecimal cost = program.getPerSessionCost();
+        if (tax == null || program.isPriceIncludesTax()) {
+            return cost;
+        }
+        BigDecimal rateFraction = BigDecimal.valueOf(tax.getRate()).divide(BigDecimal.valueOf(100));
+        return cost.multiply(BigDecimal.ONE.add(rateFraction)).setScale(2, RoundingMode.HALF_UP);
+    }
+
     /** @param tax the program's tax, resolved by the caller — null if the program has no tax set */
     public static ProgramResponse from(Program program, Tax tax) {
-        BigDecimal cost = program.getPerSessionCost();
-        BigDecimal total = cost;
-
-        if (tax != null) {
-            BigDecimal rateFraction = BigDecimal.valueOf(tax.getRate()).divide(BigDecimal.valueOf(100));
-            total = program.isPriceIncludesTax()
-                    ? cost
-                    : cost.multiply(BigDecimal.ONE.add(rateFraction)).setScale(2, RoundingMode.HALF_UP);
-        }
+        BigDecimal total = effectiveCost(program, tax);
 
         return new ProgramResponse(
                 program.getId(),
