@@ -23,7 +23,8 @@ public class IEPPlan {
     @Column(name = "patient_id", nullable = false)
     private UUID patientId;
 
-    @Column(name = "therapist_id", nullable = false)
+    /** Nullable — a plan can be created before a therapist is assigned (e.g. by a Clinic Head/Business Owner). */
+    @Column(name = "therapist_id")
     private UUID therapistId;
 
     /** Which program this plan belongs to. Nullable — legacy plans predate this link. */

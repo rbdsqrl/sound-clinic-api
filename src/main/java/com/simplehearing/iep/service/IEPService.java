@@ -16,6 +16,7 @@ import com.simplehearing.iep.repository.IEPPlanRepository;
 import com.simplehearing.patient.entity.Patient;
 import com.simplehearing.patient.repository.PatientRepository;
 import com.simplehearing.user.entity.User;
+import com.simplehearing.user.enums.Role;
 import com.simplehearing.user.repository.UserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -54,10 +55,11 @@ public class IEPService {
 
         Set<UUID> therapistIds = plans.stream()
                 .map(IEPPlan::getTherapistId)
+                .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
 
         Map<UUID, User> userMap = therapistIds.isEmpty()
-                ? Map.of()
+                ? new HashMap<>()
                 : userRepository.findAllById(therapistIds).stream()
                         .collect(Collectors.toMap(User::getId, u -> u));
 
@@ -71,14 +73,16 @@ public class IEPService {
     public List<IEPPlanResponse> listAllPlans(UserPrincipal principal) {
         List<IEPPlan> plans = planRepository.findByOrgIdOrderByCreatedAtDesc(principal.getOrgId());
 
-        Set<UUID> therapistIds = plans.stream().map(IEPPlan::getTherapistId).collect(Collectors.toSet());
-        Set<UUID> patientIds   = plans.stream().map(IEPPlan::getPatientId).collect(Collectors.toSet());
+        Set<UUID> therapistIds = plans.stream().map(IEPPlan::getTherapistId)
+                .filter(Objects::nonNull).collect(Collectors.toSet());
+        Set<UUID> patientIds   = plans.stream().map(IEPPlan::getPatientId)
+                .filter(Objects::nonNull).collect(Collectors.toSet());
 
-        Map<UUID, User> userMap = therapistIds.isEmpty() ? Map.of()
+        Map<UUID, User> userMap = therapistIds.isEmpty() ? new HashMap<>()
                 : userRepository.findAllById(therapistIds).stream()
                         .collect(Collectors.toMap(User::getId, u -> u));
 
-        Map<UUID, Patient> patientMap = patientIds.isEmpty() ? Map.of()
+        Map<UUID, Patient> patientMap = patientIds.isEmpty() ? new HashMap<>()
                 : patientRepository.findAllById(patientIds).stream()
                         .collect(Collectors.toMap(Patient::getId, p -> p));
 
@@ -91,10 +95,18 @@ public class IEPService {
 
     @Transactional
     public IEPPlanResponse createPlan(UUID patientId, CreateIEPPlanRequest req, UserPrincipal principal) {
+        UUID therapistId;
+        if (req.therapistId() != null) {
+            validateTherapist(req.therapistId(), principal.getOrgId());
+            therapistId = req.therapistId();
+        } else {
+            therapistId = defaultTherapistId(principal);
+        }
+
         IEPPlan plan = new IEPPlan();
         plan.setOrgId(principal.getOrgId());
         plan.setPatientId(patientId);
-        plan.setTherapistId(principal.getId());
+        plan.setTherapistId(therapistId);
         plan.setTitle(req.title());
         plan.setStartDate(req.startDate());
         plan.setEndDate(req.endDate());
@@ -111,7 +123,11 @@ public class IEPService {
             }
         }
 
-        String therapistName = fullName(principal.getUser());
+        String therapistName = null;
+        if (therapistId != null) {
+            User t = userRepository.findById(therapistId).orElse(null);
+            therapistName = t != null ? fullName(t) : null;
+        }
         List<IEPGoal> goals = goalRepository.findByPlanIdOrderByCreatedAtAsc(saved.getId());
         List<IEPGoalResponse> goalResponses = goals.stream()
                 .map(g -> IEPGoalResponse.from(g, null, 0))
@@ -135,10 +151,20 @@ public class IEPService {
         if (req.endDate() != null) plan.setEndDate(req.endDate());
         if (req.tags() != null) plan.setTags(joinTags(req.tags()));
         if (req.status() != null) plan.setStatus(req.status());
+        if (req.therapistId() != null) {
+            Role role = principal.getUser().getRole();
+            if (role != Role.BUSINESS_OWNER && role != Role.CLINIC_HEAD) {
+                throw new ApiException(HttpStatus.FORBIDDEN, "Only a Business Owner or Clinic Head can assign a plan's therapist");
+            }
+            validateTherapist(req.therapistId(), principal.getOrgId());
+            plan.setTherapistId(req.therapistId());
+        }
 
         IEPPlan saved = planRepository.save(plan);
 
-        User therapist = userRepository.findById(saved.getTherapistId()).orElse(null);
+        User therapist = saved.getTherapistId() != null
+                ? userRepository.findById(saved.getTherapistId()).orElse(null)
+                : null;
         String therapistName = therapist != null ? fullName(therapist) : null;
 
         List<IEPGoal> goals = goalRepository.findByPlanIdOrderByCreatedAtAsc(saved.getId());
@@ -356,7 +382,7 @@ public class IEPService {
                 plan = new IEPPlan();
                 plan.setOrgId(principal.getOrgId());
                 plan.setPatientId(patientId);
-                plan.setTherapistId(principal.getId());
+                plan.setTherapistId(defaultTherapistId(principal));
                 plan.setTitle(planTitle);
                 plan.setStartDate(planStart);
                 plan.setEndDate(planEnd);
@@ -402,6 +428,26 @@ public class IEPService {
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
+
+    /** THERAPIST/DOCTOR callers default to assigning themselves; others leave the plan unassigned. */
+    private UUID defaultTherapistId(UserPrincipal principal) {
+        Role role = principal.getUser().getRole();
+        return (role == Role.THERAPIST || role == Role.DOCTOR) ? principal.getId() : null;
+    }
+
+    private void validateTherapist(UUID therapistId, UUID orgId) {
+        User therapist = userRepository.findById(therapistId)
+                .orElseThrow(() -> new ResourceNotFoundException("Therapist not found"));
+        if (!therapist.getOrgId().equals(orgId)) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Access denied");
+        }
+        boolean isClinical = therapist.getRole() == Role.THERAPIST || therapist.getRole() == Role.DOCTOR
+                || therapist.getAdditionalRoles().contains(Role.THERAPIST)
+                || therapist.getAdditionalRoles().contains(Role.DOCTOR);
+        if (!isClinical) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Selected user is not a therapist or doctor");
+        }
+    }
 
     private IEPPlanResponse buildPlanResponse(IEPPlan plan, Map<UUID, User> userMap) {
         User therapist = userMap.get(plan.getTherapistId());
