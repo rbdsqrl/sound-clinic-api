@@ -35,6 +35,14 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     List<User> findByOrgIdAndEmailContainingIgnoreCase(UUID orgId, String email);
 
+    /** Matches the query against first name, last name, "First Last", or email. */
+    @Query("SELECT u FROM User u WHERE u.orgId = :orgId AND (" +
+           "lower(u.email) LIKE lower(concat('%', :q, '%')) OR " +
+           "lower(u.firstName) LIKE lower(concat('%', :q, '%')) OR " +
+           "lower(u.lastName) LIKE lower(concat('%', :q, '%')) OR " +
+           "lower(concat(u.firstName, ' ', u.lastName)) LIKE lower(concat('%', :q, '%')))")
+    List<User> searchByOrgId(@Param("orgId") UUID orgId, @Param("q") String q);
+
     /** All users in an org whose primary role is one of the given roles. */
     List<User> findByOrgIdAndRoleIn(UUID orgId, Collection<Role> roles);
 

@@ -139,18 +139,18 @@ public class UserController {
     }
 
     @Operation(
-        summary = "Search users by email within this organisation",
-        description = "Returns users whose email contains the query string. " +
+        summary = "Search users by name or email within this organisation",
+        description = "Returns users whose name or email contains the query string. " +
                       "Optionally filter to users who hold a specific role (primary or additional). " +
                       "Minimum 2 characters required to avoid full-table scans."
     )
     @GetMapping("/search")
     public ResponseEntity<ApiResponse<List<UserResponse>>> search(
-            @RequestParam String email,
+            @RequestParam String q,
             @RequestParam(required = false) String role,
             @AuthenticationPrincipal UserPrincipal principal) {
 
-        if (email == null || email.trim().length() < 2) {
+        if (q == null || q.trim().length() < 2) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Search term must be at least 2 characters");
         }
 
@@ -164,7 +164,7 @@ public class UserController {
 
         final Role finalRoleFilter = roleFilter;
         List<UserResponse> results = userRepository
-                .findByOrgIdAndEmailContainingIgnoreCase(principal.getOrgId(), email.trim())
+                .searchByOrgId(principal.getOrgId(), q.trim())
                 .stream()
                 .filter(u -> finalRoleFilter == null || u.hasRole(finalRoleFilter))
                 .map(UserResponse::from)
