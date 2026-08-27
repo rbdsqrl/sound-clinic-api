@@ -230,3 +230,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/077-program-feedback-checklist.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/078-create-patient-assessments.sql
+      relativeToChangelogFile: false
