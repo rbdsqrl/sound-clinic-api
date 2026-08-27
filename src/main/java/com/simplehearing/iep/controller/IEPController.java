@@ -186,4 +186,17 @@ public class IEPController {
         IEPGoalResponse response = iepService.addProgress(goalId, request, principal);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
     }
+
+    // ── List progress entries for a goal ──────────────────────────────────────
+
+    @Operation(summary = "List progress entries for an IEP goal, newest first")
+    @GetMapping("/goals/{goalId}/progress")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'BUSINESS_OWNER', 'CLINIC_HEAD', 'PARENT')")
+    public ResponseEntity<ApiResponse<List<IEPGoalProgressResponse>>> listProgress(
+            @PathVariable UUID goalId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        List<IEPGoalProgressResponse> response = iepService.listProgress(goalId, principal);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
 }

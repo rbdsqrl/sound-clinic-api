@@ -130,7 +130,7 @@ public class IEPService {
         }
         List<IEPGoal> goals = goalRepository.findByPlanIdOrderByCreatedAtAsc(saved.getId());
         List<IEPGoalResponse> goalResponses = goals.stream()
-                .map(g -> IEPGoalResponse.from(g, null, 0))
+                .map(g -> IEPGoalResponse.from(g, null, List.of()))
                 .collect(Collectors.toList());
         int completedGoals = (int) goals.stream()
                 .filter(g -> g.getStatus() == IEPGoalStatus.COMPLETED)
@@ -168,13 +168,13 @@ public class IEPService {
         String therapistName = therapist != null ? fullName(therapist) : null;
 
         List<IEPGoal> goals = goalRepository.findByPlanIdOrderByCreatedAtAsc(saved.getId());
-        Map<UUID, Integer> progressCounts = buildProgressCountMap(goals);
+        Map<UUID, List<IEPGoalProgress>> progressMap = buildProgressMap(goals);
         Map<UUID, User> therapistMap = buildTherapistMapForGoals(goals);
 
         List<IEPGoalResponse> goalResponses = goals.stream()
                 .map(g -> IEPGoalResponse.from(g,
                         therapistNameForGoal(g, therapistMap),
-                        progressCounts.getOrDefault(g.getId(), 0)))
+                        progressMap.getOrDefault(g.getId(), List.of())))
                 .collect(Collectors.toList());
         int completedGoals = (int) goals.stream()
                 .filter(g -> g.getStatus() == IEPGoalStatus.COMPLETED)
@@ -210,7 +210,7 @@ public class IEPService {
         IEPGoal goal = buildGoalFromRequest(req, plan.getId(), principal.getOrgId());
         IEPGoal saved = goalRepository.save(goal);
 
-        return IEPGoalResponse.from(saved, null, 0);
+        return IEPGoalResponse.from(saved, null, List.of());
     }
 
     // ── Update goal ───────────────────────────────────────────────────────────
@@ -238,8 +238,8 @@ public class IEPService {
             if (t != null) therapistName = fullName(t);
         }
 
-        int progressCount = progressRepository.countByGoalId(saved.getId());
-        return IEPGoalResponse.from(saved, therapistName, progressCount);
+        List<IEPGoalProgress> progress = progressRepository.findByGoalIdOrderBySessionDateDesc(saved.getId());
+        return IEPGoalResponse.from(saved, therapistName, progress);
     }
 
     // ── Delete goal ───────────────────────────────────────────────────────────
@@ -278,8 +278,32 @@ public class IEPService {
             if (t != null) therapistName = fullName(t);
         }
 
-        int progressCount = progressRepository.countByGoalId(goalId);
-        return IEPGoalResponse.from(goal, therapistName, progressCount);
+        List<IEPGoalProgress> progressList = progressRepository.findByGoalIdOrderBySessionDateDesc(goalId);
+        return IEPGoalResponse.from(goal, therapistName, progressList);
+    }
+
+    // ── List progress entries for a goal ──────────────────────────────────────
+
+    public List<IEPGoalProgressResponse> listProgress(UUID goalId, UserPrincipal principal) {
+        goalRepository.findByIdAndOrgId(goalId, principal.getOrgId())
+                .orElseThrow(() -> new ResourceNotFoundException("IEP goal not found"));
+
+        List<IEPGoalProgress> entries = progressRepository.findByGoalIdOrderBySessionDateDesc(goalId);
+
+        Set<UUID> therapistIds = entries.stream()
+                .map(IEPGoalProgress::getTherapistId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<UUID, User> therapistMap = therapistIds.isEmpty() ? Map.of()
+                : userRepository.findAllById(therapistIds).stream()
+                        .collect(Collectors.toMap(User::getId, u -> u));
+
+        return entries.stream()
+                .map(p -> {
+                    User t = therapistMap.get(p.getTherapistId());
+                    return IEPGoalProgressResponse.from(p, t != null ? fullName(t) : null);
+                })
+                .toList();
     }
 
     // ── Import from CSV ───────────────────────────────────────────────────────
@@ -454,13 +478,13 @@ public class IEPService {
         String therapistName = therapist != null ? fullName(therapist) : null;
 
         List<IEPGoal> goals = goalRepository.findByPlanIdOrderByCreatedAtAsc(plan.getId());
-        Map<UUID, Integer> progressCounts = buildProgressCountMap(goals);
+        Map<UUID, List<IEPGoalProgress>> progressMap = buildProgressMap(goals);
         Map<UUID, User> goalTherapistMap = buildTherapistMapForGoals(goals);
 
         List<IEPGoalResponse> goalResponses = goals.stream()
                 .map(g -> IEPGoalResponse.from(g,
                         therapistNameForGoal(g, goalTherapistMap),
-                        progressCounts.getOrDefault(g.getId(), 0)))
+                        progressMap.getOrDefault(g.getId(), List.of())))
                 .collect(Collectors.toList());
         int completedGoals = (int) goals.stream()
                 .filter(g -> g.getStatus() == IEPGoalStatus.COMPLETED)
@@ -480,13 +504,13 @@ public class IEPService {
         String therapistName = therapist != null ? fullName(therapist) : null;
 
         List<IEPGoal> goals = goalRepository.findByPlanIdOrderByCreatedAtAsc(plan.getId());
-        Map<UUID, Integer> progressCounts = buildProgressCountMap(goals);
+        Map<UUID, List<IEPGoalProgress>> progressMap = buildProgressMap(goals);
         Map<UUID, User> goalTherapistMap  = buildTherapistMapForGoals(goals);
 
         List<IEPGoalResponse> goalResponses = goals.stream()
                 .map(g -> IEPGoalResponse.from(g,
                         therapistNameForGoal(g, goalTherapistMap),
-                        progressCounts.getOrDefault(g.getId(), 0)))
+                        progressMap.getOrDefault(g.getId(), List.of())))
                 .collect(Collectors.toList());
         int completedGoals = (int) goals.stream()
                 .filter(g -> g.getStatus() == IEPGoalStatus.COMPLETED)
@@ -495,11 +519,19 @@ public class IEPService {
         return IEPPlanResponse.from(plan, therapistName, patientName, goalResponses, completedGoals);
     }
 
-    private Map<UUID, Integer> buildProgressCountMap(List<IEPGoal> goals) {
-        Map<UUID, Integer> map = new HashMap<>();
-        for (IEPGoal goal : goals) {
-            map.put(goal.getId(), progressRepository.countByGoalId(goal.getId()));
+    /** Every progress entry for a set of goals, grouped by goal and sorted newest-first. */
+    private Map<UUID, List<IEPGoalProgress>> buildProgressMap(List<IEPGoal> goals) {
+        List<UUID> goalIds = goals.stream().map(IEPGoal::getId).toList();
+        if (goalIds.isEmpty()) return Map.of();
+
+        Map<UUID, List<IEPGoalProgress>> map = new HashMap<>();
+        for (IEPGoalProgress p : progressRepository.findByGoalIdIn(goalIds)) {
+            map.computeIfAbsent(p.getGoalId(), k -> new ArrayList<>()).add(p);
         }
+        Comparator<IEPGoalProgress> newestFirst = Comparator.comparing(IEPGoalProgress::getSessionDate)
+                .thenComparing(IEPGoalProgress::getCreatedAt)
+                .reversed();
+        map.values().forEach(list -> list.sort(newestFirst));
         return map;
     }
 
