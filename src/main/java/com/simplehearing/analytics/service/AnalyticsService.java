@@ -1,12 +1,19 @@
 package com.simplehearing.analytics.service;
 
+import com.simplehearing.activity.entity.Activity;
 import com.simplehearing.activity.entity.ActivityAssignment;
 import com.simplehearing.activity.entity.ActivityAttemptLog;
+import com.simplehearing.activity.entity.ActivitySkill;
+import com.simplehearing.activity.entity.Skill;
 import com.simplehearing.activity.enums.AssignmentStatus;
 import com.simplehearing.activity.repository.ActivityAssignmentRepository;
 import com.simplehearing.activity.repository.ActivityAttemptLogRepository;
+import com.simplehearing.activity.repository.ActivityRepository;
+import com.simplehearing.activity.repository.ActivitySkillRepository;
+import com.simplehearing.activity.repository.SkillRepository;
 import com.simplehearing.analytics.dto.ActivityProgressResponse;
 import com.simplehearing.analytics.dto.CaseloadResponse;
+import com.simplehearing.analytics.dto.EngagementOverviewResponse;
 import com.simplehearing.analytics.dto.FrequencyResponse;
 import com.simplehearing.analytics.dto.OrgSnapshotResponse;
 import com.simplehearing.analytics.dto.TimeSeriesResponse;
@@ -19,6 +26,8 @@ import com.simplehearing.common.exception.ApiException;
 import com.simplehearing.common.exception.ResourceNotFoundException;
 import com.simplehearing.enrollment.entity.Enrollment;
 import com.simplehearing.enrollment.repository.EnrollmentRepository;
+import com.simplehearing.invitation.entity.Invitation;
+import com.simplehearing.invitation.repository.InvitationRepository;
 import com.simplehearing.iep.entity.IEPGoal;
 import com.simplehearing.iep.entity.IEPGoalProgress;
 import com.simplehearing.iep.entity.IEPPlan;
@@ -41,6 +50,7 @@ import com.simplehearing.session.repository.TherapySessionRepository;
 import com.simplehearing.subscription.entity.Subscription;
 import com.simplehearing.subscription.repository.SubscriptionRepository;
 import com.simplehearing.user.entity.User;
+import com.simplehearing.user.enums.Role;
 import com.simplehearing.user.repository.UserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -91,6 +101,10 @@ public class AnalyticsService {
     private final EnrollmentRepository      enrollmentRepository;
     private final SubscriptionRepository    subscriptionRepository;
     private final ProgramRepository         programRepository;
+    private final InvitationRepository      invitationRepository;
+    private final ActivityRepository        activityRepository;
+    private final SkillRepository           skillRepository;
+    private final ActivitySkillRepository   activitySkillRepository;
 
     public AnalyticsService(TherapySessionRepository sessionRepository,
                             IEPGoalProgressRepository progressRepository,
@@ -104,7 +118,11 @@ public class AnalyticsService {
                             ActivityAttemptLogRepository activityAttemptLogRepository,
                             EnrollmentRepository enrollmentRepository,
                             SubscriptionRepository subscriptionRepository,
-                            ProgramRepository programRepository) {
+                            ProgramRepository programRepository,
+                            InvitationRepository invitationRepository,
+                            ActivityRepository activityRepository,
+                            SkillRepository skillRepository,
+                            ActivitySkillRepository activitySkillRepository) {
         this.sessionRepository       = sessionRepository;
         this.progressRepository      = progressRepository;
         this.goalRepository          = goalRepository;
@@ -118,6 +136,10 @@ public class AnalyticsService {
         this.enrollmentRepository    = enrollmentRepository;
         this.subscriptionRepository  = subscriptionRepository;
         this.programRepository       = programRepository;
+        this.invitationRepository    = invitationRepository;
+        this.activityRepository      = activityRepository;
+        this.skillRepository         = skillRepository;
+        this.activitySkillRepository = activitySkillRepository;
     }
 
     /** Additive companion to {@link #patientProgress} — activity assignment/attempt counts for
@@ -267,6 +289,138 @@ public class AnalyticsService {
                 .toList();
 
         return new OrgSnapshotResponse(avgDurationWeeks, durationsDays.size(), programBreakdown, stageCounts);
+    }
+
+    /** Session count per calendar day in the window — feeds the GitHub-style activity heatmap. */
+    public List<EngagementOverviewResponse.TrendPoint> sessionHeatmap(UUID orgId, LocalDate from, LocalDate to) {
+        validateWindow(from, to);
+        List<TherapySession> sessions = sessionRepository
+                .findByOrgIdAndSessionDateBetweenOrderBySessionDateAscStartTimeAsc(orgId, from, to);
+
+        Map<LocalDate, Integer> byDay = new TreeMap<>();
+        for (TherapySession s : sessions) {
+            byDay.merge(s.getSessionDate(), 1, Integer::sum);
+        }
+        return byDay.entrySet().stream()
+                .map(e -> new EngagementOverviewResponse.TrendPoint(e.getKey(), e.getValue()))
+                .toList();
+    }
+
+    private static final List<int[]> AGE_BANDS = List.of(
+            new int[]{0, 2}, new int[]{3, 5}, new int[]{6, 8}, new int[]{9, 11},
+            new int[]{12, 14}, new int[]{15, Integer.MAX_VALUE});
+
+    /**
+     * Org-wide engagement rollup for the "Overview" analytics tab — active/invited user counts,
+     * average session length, skills and age-group breakdowns, session/checklist trends, and the
+     * activities patients are assigned most. Distinct from {@link #orgSnapshot} (clinical-outcome,
+     * point-in-time) and {@link #orgOverview} (goal-mastery trend) — this is activity/engagement.
+     */
+    public EngagementOverviewResponse engagementOverview(UUID orgId, LocalDate from, LocalDate to) {
+        validateWindow(from, to);
+
+        // Active users
+        List<User> staff = userRepository.findByOrgIdAndRoleIn(orgId,
+                List.of(Role.THERAPIST, Role.DOCTOR, Role.CLINIC_HEAD, Role.BUSINESS_OWNER));
+        List<Patient> patients = patientRepository.findByOrgId(orgId);
+        EngagementOverviewResponse.UserCounts activeUsers =
+                new EngagementOverviewResponse.UserCounts(staff.size(), patients.size());
+
+        // Invited users — pending invitations, split staff vs parent (a parent invite is patient-linked)
+        List<Invitation> pending = invitationRepository.findByOrgIdOrderByCreatedAtDesc(orgId).stream()
+                .filter(i -> i.getStatus() == Invitation.Status.PENDING)
+                .toList();
+        long pendingMembers = pending.stream().filter(i -> i.getRole() != Role.PARENT).count();
+        long pendingCases = pending.stream().filter(i -> i.getRole() == Role.PARENT).count();
+        EngagementOverviewResponse.UserCounts invitedUsers =
+                new EngagementOverviewResponse.UserCounts((int) pendingMembers, (int) pendingCases);
+
+        // Sessions in window — backs the trend, total, average duration and heatmap-adjacent figures
+        List<TherapySession> sessions = sessionRepository
+                .findByOrgIdAndSessionDateBetweenOrderBySessionDateAscStartTimeAsc(orgId, from, to);
+
+        Map<LocalDate, Integer> sessionsByDay = new TreeMap<>();
+        List<Long> durations = new ArrayList<>();
+        for (TherapySession s : sessions) {
+            sessionsByDay.merge(s.getSessionDate(), 1, Integer::sum);
+            durations.add(java.time.Duration.between(s.getStartTime(), s.getEndTime()).toMinutes());
+        }
+        List<EngagementOverviewResponse.TrendPoint> sessionsTrend = sessionsByDay.entrySet().stream()
+                .map(e -> new EngagementOverviewResponse.TrendPoint(e.getKey(), e.getValue()))
+                .toList();
+        Integer avgDurationMinutes = durations.isEmpty() ? null
+                : (int) Math.round(durations.stream().mapToLong(Long::longValue).average().orElse(0));
+
+        // Age groups — zero-filled bands so a thin org doesn't drop a bar silently
+        int[] ageCounts = new int[AGE_BANDS.size()];
+        LocalDate today = LocalDate.now();
+        for (Patient p : patients) {
+            if (p.getDateOfBirth() == null) continue;
+            int age = java.time.Period.between(p.getDateOfBirth(), today).getYears();
+            for (int i = 0; i < AGE_BANDS.size(); i++) {
+                if (age >= AGE_BANDS.get(i)[0] && age <= AGE_BANDS.get(i)[1]) { ageCounts[i]++; break; }
+            }
+        }
+        List<EngagementOverviewResponse.NameCount> ageGroups = new ArrayList<>();
+        String[] ageLabels = {"0-2", "3-5", "6-8", "9-11", "12-14", "15+"};
+        for (int i = 0; i < ageLabels.length; i++) {
+            ageGroups.add(new EngagementOverviewResponse.NameCount(ageLabels[i], ageCounts[i]));
+        }
+
+        // Skills breakdown — how often each skill's activities have been assigned
+        List<Activity> activities = activityRepository.findByOrgIdOrderByCreatedAtDesc(orgId);
+        List<EngagementOverviewResponse.NameCount> skillsBreakdown = skillsBreakdown(orgId, activities);
+
+        // Every assignment in the org backs both "most assigned activities" and, via its attempt
+        // logs, the "checklist filled" trend.
+        List<ActivityAssignment> allAssignments = activityAssignmentRepository.findByOrgId(orgId);
+        Map<UUID, String> activityTitles = activities.stream()
+                .collect(Collectors.toMap(Activity::getId, Activity::getTitle));
+        Map<UUID, Integer> assignmentCountByActivity = new LinkedHashMap<>();
+        for (ActivityAssignment a : allAssignments) {
+            assignmentCountByActivity.merge(a.getActivityId(), 1, Integer::sum);
+        }
+        List<EngagementOverviewResponse.NameCount> mostAssigned = assignmentCountByActivity.entrySet().stream()
+                .map(e -> new EngagementOverviewResponse.NameCount(
+                        activityTitles.getOrDefault(e.getKey(), "Unknown Activity"), e.getValue()))
+                .sorted(Comparator.comparingInt(EngagementOverviewResponse.NameCount::count).reversed())
+                .limit(5)
+                .toList();
+
+        List<UUID> assignmentIds = allAssignments.stream().map(ActivityAssignment::getId).toList();
+        Map<LocalDate, Integer> checklistByDay = new TreeMap<>();
+        if (!assignmentIds.isEmpty()) {
+            List<ActivityAttemptLog> attempts = activityAttemptLogRepository
+                    .findByOrgIdAndAssignmentIdInAndAttemptDateBetween(orgId, assignmentIds, from, to);
+            for (ActivityAttemptLog log : attempts) {
+                checklistByDay.merge(log.getAttemptDate(), 1, Integer::sum);
+            }
+        }
+        List<EngagementOverviewResponse.TrendPoint> checklistFilledTrend = checklistByDay.entrySet().stream()
+                .map(e -> new EngagementOverviewResponse.TrendPoint(e.getKey(), e.getValue()))
+                .toList();
+
+        return new EngagementOverviewResponse(
+                activeUsers, invitedUsers, avgDurationMinutes, skillsBreakdown, ageGroups,
+                sessionsTrend, sessions.size(), checklistFilledTrend, mostAssigned);
+    }
+
+    private List<EngagementOverviewResponse.NameCount> skillsBreakdown(UUID orgId, List<Activity> activities) {
+        List<UUID> activityIds = activities.stream().map(Activity::getId).toList();
+        if (activityIds.isEmpty()) return List.of();
+        List<ActivitySkill> links = activitySkillRepository.findByActivityIdIn(activityIds);
+        Map<UUID, String> skillNames = skillRepository.findByOrgIdAndIsActiveTrueOrderByNameAsc(orgId).stream()
+                .collect(Collectors.toMap(Skill::getId, Skill::getName));
+        Map<String, Integer> counts = new LinkedHashMap<>();
+        for (ActivitySkill link : links) {
+            String name = skillNames.get(link.getSkillId());
+            if (name == null) continue;
+            counts.merge(name, 1, Integer::sum);
+        }
+        return counts.entrySet().stream()
+                .map(e -> new EngagementOverviewResponse.NameCount(e.getKey(), e.getValue()))
+                .sorted(Comparator.comparingInt(EngagementOverviewResponse.NameCount::count).reversed())
+                .toList();
     }
 
     // ── Public entry points ──────────────────────────────────────────────────

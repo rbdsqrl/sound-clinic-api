@@ -2,6 +2,7 @@ package com.simplehearing.analytics.controller;
 
 import com.simplehearing.analytics.dto.ActivityProgressResponse;
 import com.simplehearing.analytics.dto.CaseloadResponse;
+import com.simplehearing.analytics.dto.EngagementOverviewResponse;
 import com.simplehearing.analytics.dto.FrequencyResponse;
 import com.simplehearing.analytics.dto.OrgSnapshotResponse;
 import com.simplehearing.analytics.dto.TimeSeriesResponse;
@@ -31,6 +32,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -152,6 +154,30 @@ public class AnalyticsController {
     @GetMapping("/snapshot")
     public ResponseEntity<ApiResponse<OrgSnapshotResponse>> snapshot(@AuthenticationPrincipal UserPrincipal principal) {
         OrgSnapshotResponse data = analyticsService.orgSnapshot(orgId(principal));
+        return ResponseEntity.ok(ApiResponse.success(data));
+    }
+
+    @Operation(summary = "Org-wide engagement rollup for the Overview analytics tab — users, sessions, skills, checklist fills")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @GetMapping("/engagement-overview")
+    public ResponseEntity<ApiResponse<EngagementOverviewResponse>> engagementOverview(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        EngagementOverviewResponse data = analyticsService.engagementOverview(orgId(principal), from, to);
+        return ResponseEntity.ok(ApiResponse.success(data));
+    }
+
+    @Operation(summary = "Session count per day in the window — powers the calendar heatmap")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @GetMapping("/session-heatmap")
+    public ResponseEntity<ApiResponse<List<EngagementOverviewResponse.TrendPoint>>> sessionHeatmap(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        List<EngagementOverviewResponse.TrendPoint> data = analyticsService.sessionHeatmap(orgId(principal), from, to);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 

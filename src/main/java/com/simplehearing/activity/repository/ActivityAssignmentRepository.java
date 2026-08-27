@@ -11,4 +11,5 @@ public interface ActivityAssignmentRepository extends JpaRepository<ActivityAssi
     List<ActivityAssignment> findByOrgIdAndPatientIdOrderByCreatedAtDesc(UUID orgId, UUID patientId);
     Optional<ActivityAssignment> findByIdAndOrgId(UUID id, UUID orgId);
     long countByOrgIdAndPatientId(UUID orgId, UUID patientId);
+    List<ActivityAssignment> findByOrgId(UUID orgId);
 }
