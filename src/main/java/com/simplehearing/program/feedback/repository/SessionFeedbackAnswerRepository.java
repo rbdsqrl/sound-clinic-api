@@ -9,6 +9,7 @@ import java.util.UUID;
 
 public interface SessionFeedbackAnswerRepository extends JpaRepository<SessionFeedbackAnswer, UUID> {
     List<SessionFeedbackAnswer> findBySessionId(UUID sessionId);
+    List<SessionFeedbackAnswer> findBySessionIdIn(List<UUID> sessionIds);
 
     @Transactional
     void deleteBySessionId(UUID sessionId);

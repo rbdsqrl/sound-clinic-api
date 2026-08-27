@@ -11,4 +11,5 @@ public interface SessionFeedbackAnswerOptionRepository
         extends JpaRepository<SessionFeedbackAnswerOption, SessionFeedbackAnswerOptionId> {
 
     List<SessionFeedbackAnswerOption> findById_AnswerId(UUID answerId);
+    List<SessionFeedbackAnswerOption> findById_AnswerIdIn(List<UUID> answerIds);
 }

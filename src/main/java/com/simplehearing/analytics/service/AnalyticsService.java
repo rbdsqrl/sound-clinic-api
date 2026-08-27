@@ -46,6 +46,10 @@ import com.simplehearing.patient.enums.PatientStage;
 import com.simplehearing.patient.repository.PatientRepository;
 import com.simplehearing.patient.repository.TherapistPatientRepository;
 import com.simplehearing.program.entity.Program;
+import com.simplehearing.program.feedback.entity.SessionFeedbackAnswer;
+import com.simplehearing.program.feedback.entity.SessionFeedbackAnswerOption;
+import com.simplehearing.program.feedback.repository.SessionFeedbackAnswerOptionRepository;
+import com.simplehearing.program.feedback.repository.SessionFeedbackAnswerRepository;
 import com.simplehearing.program.repository.ProgramRepository;
 import com.simplehearing.review.entity.ReviewMeeting;
 import com.simplehearing.review.repository.ReviewMeetingRepository;
@@ -113,6 +117,8 @@ public class AnalyticsService {
     private final SkillRepository           skillRepository;
     private final ActivitySkillRepository   activitySkillRepository;
     private final TherapistPatientRepository therapistPatientRepository;
+    private final SessionFeedbackAnswerRepository sessionFeedbackAnswerRepository;
+    private final SessionFeedbackAnswerOptionRepository sessionFeedbackAnswerOptionRepository;
 
     public AnalyticsService(TherapySessionRepository sessionRepository,
                             IEPGoalProgressRepository progressRepository,
@@ -131,7 +137,9 @@ public class AnalyticsService {
                             ActivityRepository activityRepository,
                             SkillRepository skillRepository,
                             ActivitySkillRepository activitySkillRepository,
-                            TherapistPatientRepository therapistPatientRepository) {
+                            TherapistPatientRepository therapistPatientRepository,
+                            SessionFeedbackAnswerRepository sessionFeedbackAnswerRepository,
+                            SessionFeedbackAnswerOptionRepository sessionFeedbackAnswerOptionRepository) {
         this.sessionRepository       = sessionRepository;
         this.progressRepository      = progressRepository;
         this.goalRepository          = goalRepository;
@@ -150,6 +158,8 @@ public class AnalyticsService {
         this.skillRepository         = skillRepository;
         this.activitySkillRepository = activitySkillRepository;
         this.therapistPatientRepository = therapistPatientRepository;
+        this.sessionFeedbackAnswerRepository = sessionFeedbackAnswerRepository;
+        this.sessionFeedbackAnswerOptionRepository = sessionFeedbackAnswerOptionRepository;
     }
 
     /** Additive companion to {@link #patientProgress} — activity assignment/attempt counts for
@@ -381,8 +391,7 @@ public class AnalyticsService {
         List<Activity> activities = activityRepository.findByOrgIdOrderByCreatedAtDesc(orgId);
         List<EngagementOverviewResponse.NameCount> skillsBreakdown = skillsBreakdown(orgId, activities);
 
-        // Every assignment in the org backs both "most assigned activities" and, via its attempt
-        // logs, the "checklist filled" trend.
+        // Every assignment in the org backs "most assigned activities" below.
         List<ActivityAssignment> allAssignments = activityAssignmentRepository.findByOrgId(orgId);
         Map<UUID, String> activityTitles = activities.stream()
                 .collect(Collectors.toMap(Activity::getId, Activity::getTitle));
@@ -397,14 +406,14 @@ public class AnalyticsService {
                 .limit(5)
                 .toList();
 
-        List<UUID> assignmentIds = allAssignments.stream().map(ActivityAssignment::getId).toList();
+        // "Checklist filled" = the per-session feedback checklist (the therapist's "Detailed
+        // Feedback Options" on the Session Notes modal) was actually engaged with.
+        Map<UUID, LocalDate> sessionDateById = sessions.stream()
+                .collect(Collectors.toMap(TherapySession::getId, TherapySession::getSessionDate));
         Map<LocalDate, Integer> checklistByDay = new TreeMap<>();
-        if (!assignmentIds.isEmpty()) {
-            List<ActivityAttemptLog> attempts = activityAttemptLogRepository
-                    .findByOrgIdAndAssignmentIdInAndAttemptDateBetween(orgId, assignmentIds, from, to);
-            for (ActivityAttemptLog log : attempts) {
-                checklistByDay.merge(log.getAttemptDate(), 1, Integer::sum);
-            }
+        for (UUID sid : checklistFilledSessionIds(sessions)) {
+            LocalDate date = sessionDateById.get(sid);
+            if (date != null) checklistByDay.merge(date, 1, Integer::sum);
         }
         List<EngagementOverviewResponse.TrendPoint> checklistFilledTrend = checklistByDay.entrySet().stream()
                 .map(e -> new EngagementOverviewResponse.TrendPoint(e.getKey(), e.getValue()))
@@ -413,6 +422,39 @@ public class AnalyticsService {
         return new EngagementOverviewResponse(
                 activeUsers, invitedUsers, avgDurationMinutes, skillsBreakdown, ageGroups,
                 sessionsTrend, sessions.size(), checklistFilledTrend, mostAssigned);
+    }
+
+    /**
+     * Session IDs among the given sessions whose per-session feedback checklist (the therapist's
+     * "Detailed Feedback Options" on the Session Notes modal) was actually engaged with — at
+     * least one checkbox selected, or a checklist note written. A feedback-answer row alone isn't
+     * enough to count as "filled": the frontend writes one row per template question on every
+     * save regardless of whether anything was checked, so presence of a row would over-count.
+     */
+    private Set<UUID> checklistFilledSessionIds(List<TherapySession> sessions) {
+        List<UUID> sessionIds = sessions.stream().map(TherapySession::getId).toList();
+        if (sessionIds.isEmpty()) return Set.of();
+
+        List<SessionFeedbackAnswer> answers = sessionFeedbackAnswerRepository.findBySessionIdIn(sessionIds);
+        List<UUID> answerIds = answers.stream().map(SessionFeedbackAnswer::getId).toList();
+        Set<UUID> answerIdsWithOption = answerIds.isEmpty() ? Set.of() :
+                sessionFeedbackAnswerOptionRepository.findById_AnswerIdIn(answerIds).stream()
+                        .map(SessionFeedbackAnswerOption::getAnswerId)
+                        .collect(Collectors.toSet());
+
+        Set<UUID> filled = new HashSet<>();
+        for (SessionFeedbackAnswer ans : answers) {
+            boolean hasText = ans.getTextAnswer() != null && !ans.getTextAnswer().isBlank();
+            if (hasText || answerIdsWithOption.contains(ans.getId())) {
+                filled.add(ans.getSessionId());
+            }
+        }
+        for (TherapySession s : sessions) {
+            if (s.getChecklistNotes() != null && !s.getChecklistNotes().isBlank()) {
+                filled.add(s.getId());
+            }
+        }
+        return filled;
     }
 
     /**
@@ -429,10 +471,12 @@ public class AnalyticsService {
         if (patients.isEmpty()) return List.of();
         List<UUID> patientIds = patients.stream().map(Patient::getId).toList();
 
-        // Attended / cancelled — scoped to the requested window.
+        // Attended / cancelled / checklist-filled — scoped to the requested window.
+        List<TherapySession> sessionsInWindow = sessionRepository
+                .findByOrgIdAndSessionDateBetweenOrderBySessionDateAscStartTimeAsc(orgId, from, to);
         Map<UUID, Integer> attended = new HashMap<>();
         Map<UUID, Integer> cancelled = new HashMap<>();
-        for (TherapySession s : sessionRepository.findByOrgIdAndSessionDateBetweenOrderBySessionDateAscStartTimeAsc(orgId, from, to)) {
+        for (TherapySession s : sessionsInWindow) {
             switch (s.getStatus()) {
                 case COMPLETED -> attended.merge(s.getPatientId(), 1, Integer::sum);
                 case CANCELLED, CANCELLATION_REQUESTED -> cancelled.merge(s.getPatientId(), 1, Integer::sum);
@@ -456,22 +500,21 @@ public class AnalyticsService {
             membersAssigned.merge(tp.getPatientId(), 1, Integer::sum);
         }
 
-        // Activities assigned + checklist-filled (attempts logged in the window), grouped via assignment -> patient.
+        // Activities assigned, grouped via assignment -> patient.
         List<ActivityAssignment> allAssignments = activityAssignmentRepository.findByOrgId(orgId);
         Map<UUID, Integer> activitiesAssigned = new HashMap<>();
-        Map<UUID, UUID> patientByAssignment = new HashMap<>();
         for (ActivityAssignment a : allAssignments) {
             activitiesAssigned.merge(a.getPatientId(), 1, Integer::sum);
-            patientByAssignment.put(a.getId(), a.getPatientId());
         }
+
+        // Checklist-filled — sessions in the window whose per-session feedback checklist was
+        // actually engaged with, per patient.
+        Map<UUID, UUID> patientBySession = sessionsInWindow.stream()
+                .collect(Collectors.toMap(TherapySession::getId, TherapySession::getPatientId));
         Map<UUID, Integer> checklistFilled = new HashMap<>();
-        List<UUID> assignmentIds = allAssignments.stream().map(ActivityAssignment::getId).toList();
-        if (!assignmentIds.isEmpty()) {
-            for (ActivityAttemptLog log : activityAttemptLogRepository
-                    .findByOrgIdAndAssignmentIdInAndAttemptDateBetween(orgId, assignmentIds, from, to)) {
-                UUID patientId = patientByAssignment.get(log.getAssignmentId());
-                if (patientId != null) checklistFilled.merge(patientId, 1, Integer::sum);
-            }
+        for (UUID sid : checklistFilledSessionIds(sessionsInWindow)) {
+            UUID patientId = patientBySession.get(sid);
+            if (patientId != null) checklistFilled.merge(patientId, 1, Integer::sum);
         }
 
         // LT goals — goal count per patient, resolved via their IEP plans.
