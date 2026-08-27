@@ -1,0 +1,52 @@
+package com.simplehearing.baseline.entity;
+
+import com.simplehearing.baseline.enums.BaselineDomain;
+import jakarta.persistence.*;
+import org.hibernate.annotations.UpdateTimestamp;
+
+import java.time.Instant;
+import java.util.UUID;
+
+@Entity
+@Table(name = "baseline_domain_values")
+public class BaselineDomainValue {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
+
+    @Column(name = "report_id", nullable = false)
+    private UUID reportId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "domain", nullable = false)
+    private BaselineDomain domain;
+
+    @Column(name = "value", columnDefinition = "TEXT")
+    private String value;
+
+    @Column(name = "updated_by")
+    private UUID updatedBy;
+
+    @UpdateTimestamp
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
+
+    public BaselineDomainValue() {}
+
+    public UUID getId() { return id; }
+
+    public UUID getReportId() { return reportId; }
+    public void setReportId(UUID reportId) { this.reportId = reportId; }
+
+    public BaselineDomain getDomain() { return domain; }
+    public void setDomain(BaselineDomain domain) { this.domain = domain; }
+
+    public String getValue() { return value; }
+    public void setValue(String value) { this.value = value; }
+
+    public UUID getUpdatedBy() { return updatedBy; }
+    public void setUpdatedBy(UUID updatedBy) { this.updatedBy = updatedBy; }
+
+    public Instant getUpdatedAt() { return updatedAt; }
+}

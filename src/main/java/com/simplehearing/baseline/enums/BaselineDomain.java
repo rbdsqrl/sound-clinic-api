@@ -1,0 +1,17 @@
+package com.simplehearing.baseline.enums;
+
+public enum BaselineDomain {
+    EYE_CONTACT,
+    ATTENTION,
+    COMPLIANCE,
+    GROSS_MOTOR,
+    FINE_MOTOR,
+    ADL_SKILLS,
+    RECEPTIVE_LANGUAGE,
+    EXPRESSIVE_LANGUAGE,
+    NON_VERBAL_COMMUNICATION,
+    ORO_MOTOR_SKILLS,
+    COGNITIVE_SKILLS,
+    SOCIAL_SKILLS,
+    EMOTIONAL_SKILLS
+}

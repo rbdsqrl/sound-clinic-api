@@ -233,3 +233,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/078-create-patient-assessments.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/079-create-baseline-reports.sql
+      relativeToChangelogFile: false
