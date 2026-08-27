@@ -16,7 +16,9 @@ import com.simplehearing.analytics.dto.CaseSummaryResponse;
 import com.simplehearing.analytics.dto.CaseloadResponse;
 import com.simplehearing.analytics.dto.EngagementOverviewResponse;
 import com.simplehearing.analytics.dto.FrequencyResponse;
+import com.simplehearing.analytics.dto.MemberSummaryResponse;
 import com.simplehearing.analytics.dto.OrgSnapshotResponse;
+import com.simplehearing.analytics.dto.ScheduleResponse;
 import com.simplehearing.analytics.dto.TimeSeriesResponse;
 import com.simplehearing.analytics.dto.TimeSeriesResponse.Bucket;
 import com.simplehearing.analytics.dto.TimeSeriesResponse.DomainSeries;
@@ -58,7 +60,9 @@ import com.simplehearing.user.repository.UserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -499,6 +503,170 @@ public class AnalyticsService {
                         ltGoals.getOrDefault(p.getId(), 0),
                         latestSubscription.containsKey(p.getId()) ? latestSubscription.get(p.getId()).getPaymentStatus().name() : null))
                 .toList();
+    }
+
+    public List<MemberSummaryResponse> members(UUID orgId, LocalDate from, LocalDate to) {
+        validateWindow(from, to);
+
+        List<User> staff = userRepository.findByOrgIdAndRoleIn(orgId, List.of(Role.THERAPIST, Role.DOCTOR));
+        if (staff.isEmpty()) return List.of();
+        List<UUID> staffIds = staff.stream().map(User::getId).toList();
+
+        // Cases assigned — active therapist-patient links, current standing count (not windowed).
+        Map<UUID, Integer> casesAssigned = new HashMap<>();
+        for (Object[] row : therapistPatientRepository.countCasesByTherapistIds(staffIds)) {
+            casesAssigned.put((UUID) row[0], ((Long) row[1]).intValue());
+        }
+
+        // Activities created — authored by this member, standing count like casesAssigned above.
+        Map<UUID, Integer> activitiesCreated = new HashMap<>();
+        for (Activity a : activityRepository.findByOrgIdOrderByCreatedAtDesc(orgId)) {
+            if (a.getCreatedBy() != null) activitiesCreated.merge(a.getCreatedBy(), 1, Integer::sum);
+        }
+
+        // Activities assigned — by this member to a patient, in the window.
+        Map<UUID, Integer> activitiesAssigned = new HashMap<>();
+        for (ActivityAssignment aa : activityAssignmentRepository.findByOrgId(orgId)) {
+            if (aa.getCreatedAt() == null) continue;
+            LocalDate assignedDate = aa.getCreatedAt().atZone(ZoneOffset.UTC).toLocalDate();
+            if (!assignedDate.isBefore(from) && !assignedDate.isAfter(to)) {
+                activitiesAssigned.merge(aa.getAssignedBy(), 1, Integer::sum);
+            }
+        }
+
+        // Sessions cancelled — this member was the assigned therapist, in the window.
+        Map<UUID, Integer> sessionsCancelled = new HashMap<>();
+        for (TherapySession s : sessionRepository.findByOrgIdAndSessionDateBetweenOrderBySessionDateAscStartTimeAsc(orgId, from, to)) {
+            if (s.getStatus() == TherapySessionStatus.CANCELLED || s.getStatus() == TherapySessionStatus.CANCELLATION_REQUESTED) {
+                sessionsCancelled.merge(s.getTherapistId(), 1, Integer::sum);
+            }
+        }
+
+        // IEP plans — this member is the therapist of record, plan created in the window. IEPPlan
+        // has no createdBy field, so therapistId is the closest honest proxy for "IEP Created".
+        Instant windowStart = from.atStartOfDay(ZoneOffset.UTC).toInstant();
+        Instant windowEnd = to.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+        Map<UUID, Integer> iepPlans = new HashMap<>();
+        for (IEPPlan p : planRepository.findByOrgIdOrderByCreatedAtDesc(orgId)) {
+            if (p.getTherapistId() == null || p.getCreatedAt() == null) continue;
+            if (!p.getCreatedAt().isBefore(windowStart) && p.getCreatedAt().isBefore(windowEnd)) {
+                iepPlans.merge(p.getTherapistId(), 1, Integer::sum);
+            }
+        }
+
+        return staff.stream()
+                .map(u -> new MemberSummaryResponse(
+                        u.getId(),
+                        fullName(u.getFirstName(), u.getLastName()),
+                        u.getRole().name(),
+                        casesAssigned.getOrDefault(u.getId(), 0),
+                        activitiesCreated.getOrDefault(u.getId(), 0),
+                        activitiesAssigned.getOrDefault(u.getId(), 0),
+                        sessionsCancelled.getOrDefault(u.getId(), 0),
+                        iepPlans.getOrDefault(u.getId(), 0)))
+                .toList();
+    }
+
+    /**
+     * The Schedule tab's session log — every filter is optional and narrows the same window
+     * the KPI strip is computed from, so the numbers above the table always match its rows.
+     */
+    public ScheduleResponse schedule(UUID orgId, LocalDate from, LocalDate to,
+                                      UUID patientId, UUID therapistId, UUID programId) {
+        validateWindow(from, to);
+
+        List<TherapySession> sessions = sessionRepository
+                .findByOrgIdAndSessionDateBetweenOrderBySessionDateAscStartTimeAsc(orgId, from, to);
+        if (patientId != null) {
+            sessions = sessions.stream().filter(s -> patientId.equals(s.getPatientId())).toList();
+        }
+        if (therapistId != null) {
+            sessions = sessions.stream().filter(s -> therapistId.equals(s.getTherapistId())).toList();
+        }
+        if (sessions.isEmpty()) return emptySchedule();
+
+        Set<UUID> enrollmentIds = sessions.stream().map(TherapySession::getEnrollmentId).collect(Collectors.toSet());
+        Map<UUID, Enrollment> enrollmentMap = enrollmentRepository.findAllById(enrollmentIds).stream()
+                .collect(Collectors.toMap(Enrollment::getId, e -> e));
+        Set<UUID> subscriptionIds = enrollmentMap.values().stream().map(Enrollment::getSubscriptionId).collect(Collectors.toSet());
+        Map<UUID, Subscription> subscriptionMap = subscriptionRepository.findAllById(subscriptionIds).stream()
+                .collect(Collectors.toMap(Subscription::getId, s -> s));
+
+        // Program isn't on the session itself — it's resolved via enrollment -> subscription.
+        Map<UUID, UUID> programIdBySession = new HashMap<>();
+        for (TherapySession s : sessions) {
+            Enrollment enr = enrollmentMap.get(s.getEnrollmentId());
+            Subscription sub = enr != null ? subscriptionMap.get(enr.getSubscriptionId()) : null;
+            if (sub != null) programIdBySession.put(s.getId(), sub.getProgramId());
+        }
+        if (programId != null) {
+            sessions = sessions.stream().filter(s -> programId.equals(programIdBySession.get(s.getId()))).toList();
+        }
+        if (sessions.isEmpty()) return emptySchedule();
+
+        Set<UUID> patientIds = sessions.stream().map(TherapySession::getPatientId).collect(Collectors.toSet());
+        Set<UUID> therapistIds = sessions.stream().map(TherapySession::getTherapistId).collect(Collectors.toSet());
+        Set<UUID> programIds = programIdBySession.values().stream().filter(java.util.Objects::nonNull).collect(Collectors.toSet());
+        Map<UUID, Patient> patientMap = patientRepository.findAllById(patientIds).stream()
+                .collect(Collectors.toMap(Patient::getId, p -> p));
+        Map<UUID, User> therapistMap = userRepository.findAllById(therapistIds).stream()
+                .collect(Collectors.toMap(User::getId, u -> u));
+        Map<UUID, Program> programMap = programRepository.findAllById(programIds).stream()
+                .collect(Collectors.toMap(Program::getId, p -> p));
+
+        int completed = 0, noShow = 0, cancelled = 0, rescheduled = 0;
+        List<Long> durations = new ArrayList<>();
+        List<ScheduleResponse.Entry> entries = new ArrayList<>();
+
+        for (TherapySession s : sessions) {
+            switch (s.getStatus()) {
+                case COMPLETED -> completed++;
+                case NO_SHOW -> noShow++;
+                case CANCELLED, CANCELLATION_REQUESTED -> cancelled++;
+                default -> { }
+            }
+            if (s.getRescheduleCount() > 0) rescheduled++;
+
+            long durationMinutes = java.time.Duration.between(s.getStartTime(), s.getEndTime()).toMinutes();
+            durations.add(durationMinutes);
+
+            Patient patient = patientMap.get(s.getPatientId());
+            User therapist = therapistMap.get(s.getTherapistId());
+            UUID resolvedProgramId = programIdBySession.get(s.getId());
+            Program program = resolvedProgramId != null ? programMap.get(resolvedProgramId) : null;
+            Enrollment enr = enrollmentMap.get(s.getEnrollmentId());
+            Subscription sub = enr != null ? subscriptionMap.get(enr.getSubscriptionId()) : null;
+
+            entries.add(new ScheduleResponse.Entry(
+                    s.getId(),
+                    s.getSessionDate(),
+                    s.getStartTime().toString(),
+                    (int) durationMinutes,
+                    program != null ? program.getName() : "Unknown Program",
+                    patient != null ? fullName(patient.getFirstName(), patient.getLastName()) : "",
+                    therapist != null ? fullName(therapist.getFirstName(), therapist.getLastName()) : "",
+                    s.getStatus().name(),
+                    sub != null ? sub.getPerSessionCost() : null));
+        }
+
+        int total = sessions.size();
+        int finalised = completed + noShow + cancelled;
+        int totalDuration = (int) durations.stream().mapToLong(Long::longValue).sum();
+        Integer avgDuration = durations.isEmpty() ? null
+                : (int) Math.round(durations.stream().mapToLong(Long::longValue).average().orElse(0));
+
+        return new ScheduleResponse(
+                total,
+                pct(cancelled, total),
+                pct(rescheduled, total),
+                pct(completed, finalised),
+                totalDuration,
+                avgDuration,
+                entries);
+    }
+
+    private static ScheduleResponse emptySchedule() {
+        return new ScheduleResponse(0, null, null, null, 0, null, List.of());
     }
 
     private List<EngagementOverviewResponse.NameCount> skillsBreakdown(UUID orgId, List<Activity> activities) {
