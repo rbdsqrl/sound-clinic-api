@@ -13,6 +13,9 @@ public interface TherapistPatientRepository extends JpaRepository<TherapistPatie
 
     List<TherapistPatient> findByPatientIdAndIsActive(UUID patientId, boolean isActive);
 
+    /** Bulk variant for org-wide rollups — avoids one query per patient. */
+    List<TherapistPatient> findByPatientIdInAndIsActive(List<UUID> patientIds, boolean isActive);
+
     List<TherapistPatient> findByTherapistIdAndIsActive(UUID therapistId, boolean isActive);
 
     Optional<TherapistPatient> findByPatientIdAndTherapistId(UUID patientId, UUID therapistId);

@@ -11,5 +11,8 @@ public interface SubscriptionRepository extends JpaRepository<Subscription, UUID
     /** All subscriptions for a patient within the org, newest first */
     List<Subscription> findByOrgIdAndPatientIdOrderByCreatedAtDesc(UUID orgId, UUID patientId);
 
+    /** Every subscription in the org — used for org-wide rollups (e.g. per-patient payment status). */
+    List<Subscription> findByOrgId(UUID orgId);
+
     void deleteByPatientId(UUID patientId);
 }

@@ -200,6 +200,7 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | GET      | `/api/v1/analytics/overview`            | BUSINESS_OWNER, CLINIC_HEAD                     | Org rollup (WEEKLY/MONTHLY only)    |
 | GET      | `/api/v1/analytics/engagement-overview` | BUSINESS_OWNER, CLINIC_HEAD                     | Org-wide engagement rollup for the Overview analytics tab — users, sessions, skills, checklist fills |
 | GET      | `/api/v1/analytics/session-heatmap`     | BUSINESS_OWNER, CLINIC_HEAD                     | Session count per day in the window — powers the calendar heatmap |
+| GET      | `/api/v1/analytics/cases`               | BUSINESS_OWNER, CLINIC_HEAD                     | One row per active patient — sessions, members/activities assigned, checklist fills, LT goals, payment status |
 | GET      | `/api/v1/users/assignable`              | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST, DOCTOR  | Staff names + roles for assignee pickers |
 | GET      | `/api/v1/review-meetings`               | All staff + PARENT (own children)                       | List review meetings                |
 | POST     | `/api/v1/review-meetings`               | BUSINESS_OWNER, CLINIC_HEAD                     | Add one review meeting to a plan    |

@@ -12,6 +12,7 @@ import com.simplehearing.activity.repository.ActivityRepository;
 import com.simplehearing.activity.repository.ActivitySkillRepository;
 import com.simplehearing.activity.repository.SkillRepository;
 import com.simplehearing.analytics.dto.ActivityProgressResponse;
+import com.simplehearing.analytics.dto.CaseSummaryResponse;
 import com.simplehearing.analytics.dto.CaseloadResponse;
 import com.simplehearing.analytics.dto.EngagementOverviewResponse;
 import com.simplehearing.analytics.dto.FrequencyResponse;
@@ -38,8 +39,10 @@ import com.simplehearing.iep.repository.IEPPlanRepository;
 import com.simplehearing.organisation.entity.Organisation;
 import com.simplehearing.organisation.repository.OrganisationRepository;
 import com.simplehearing.patient.entity.Patient;
+import com.simplehearing.patient.entity.TherapistPatient;
 import com.simplehearing.patient.enums.PatientStage;
 import com.simplehearing.patient.repository.PatientRepository;
+import com.simplehearing.patient.repository.TherapistPatientRepository;
 import com.simplehearing.program.entity.Program;
 import com.simplehearing.program.repository.ProgramRepository;
 import com.simplehearing.review.entity.ReviewMeeting;
@@ -105,6 +108,7 @@ public class AnalyticsService {
     private final ActivityRepository        activityRepository;
     private final SkillRepository           skillRepository;
     private final ActivitySkillRepository   activitySkillRepository;
+    private final TherapistPatientRepository therapistPatientRepository;
 
     public AnalyticsService(TherapySessionRepository sessionRepository,
                             IEPGoalProgressRepository progressRepository,
@@ -122,7 +126,8 @@ public class AnalyticsService {
                             InvitationRepository invitationRepository,
                             ActivityRepository activityRepository,
                             SkillRepository skillRepository,
-                            ActivitySkillRepository activitySkillRepository) {
+                            ActivitySkillRepository activitySkillRepository,
+                            TherapistPatientRepository therapistPatientRepository) {
         this.sessionRepository       = sessionRepository;
         this.progressRepository      = progressRepository;
         this.goalRepository          = goalRepository;
@@ -140,6 +145,7 @@ public class AnalyticsService {
         this.activityRepository      = activityRepository;
         this.skillRepository         = skillRepository;
         this.activitySkillRepository = activitySkillRepository;
+        this.therapistPatientRepository = therapistPatientRepository;
     }
 
     /** Additive companion to {@link #patientProgress} — activity assignment/attempt counts for
@@ -403,6 +409,96 @@ public class AnalyticsService {
         return new EngagementOverviewResponse(
                 activeUsers, invitedUsers, avgDurationMinutes, skillsBreakdown, ageGroups,
                 sessionsTrend, sessions.size(), checklistFilledTrend, mostAssigned);
+    }
+
+    /**
+     * One row per active patient for the "Cases" analytics tab. Attended/cancelled are scoped to
+     * [from, to]; upcoming is deliberately not — a case list filtered to last month should still
+     * show what's next, so it's counted from today over a fixed forward-looking cap instead.
+     */
+    public List<CaseSummaryResponse> cases(UUID orgId, LocalDate from, LocalDate to) {
+        validateWindow(from, to);
+
+        List<Patient> patients = patientRepository.findByOrgId(orgId).stream()
+                .filter(Patient::isActive)
+                .toList();
+        if (patients.isEmpty()) return List.of();
+        List<UUID> patientIds = patients.stream().map(Patient::getId).toList();
+
+        // Attended / cancelled — scoped to the requested window.
+        Map<UUID, Integer> attended = new HashMap<>();
+        Map<UUID, Integer> cancelled = new HashMap<>();
+        for (TherapySession s : sessionRepository.findByOrgIdAndSessionDateBetweenOrderBySessionDateAscStartTimeAsc(orgId, from, to)) {
+            switch (s.getStatus()) {
+                case COMPLETED -> attended.merge(s.getPatientId(), 1, Integer::sum);
+                case CANCELLED, CANCELLATION_REQUESTED -> cancelled.merge(s.getPatientId(), 1, Integer::sum);
+                default -> { }
+            }
+        }
+
+        // Upcoming — from today, independent of the requested window, capped so the query stays bounded.
+        LocalDate today = LocalDate.now();
+        Map<UUID, Integer> upcoming = new HashMap<>();
+        for (TherapySession s : sessionRepository.findByOrgIdAndSessionDateBetweenOrderBySessionDateAscStartTimeAsc(
+                orgId, today, today.plusDays(MAX_WINDOW_DAYS))) {
+            if (s.getStatus() == TherapySessionStatus.SCHEDULED || s.getStatus() == TherapySessionStatus.PENDING_RESCHEDULE) {
+                upcoming.merge(s.getPatientId(), 1, Integer::sum);
+            }
+        }
+
+        // Members assigned — active therapist-patient links.
+        Map<UUID, Integer> membersAssigned = new HashMap<>();
+        for (TherapistPatient tp : therapistPatientRepository.findByPatientIdInAndIsActive(patientIds, true)) {
+            membersAssigned.merge(tp.getPatientId(), 1, Integer::sum);
+        }
+
+        // Activities assigned + checklist-filled (attempts logged in the window), grouped via assignment -> patient.
+        List<ActivityAssignment> allAssignments = activityAssignmentRepository.findByOrgId(orgId);
+        Map<UUID, Integer> activitiesAssigned = new HashMap<>();
+        Map<UUID, UUID> patientByAssignment = new HashMap<>();
+        for (ActivityAssignment a : allAssignments) {
+            activitiesAssigned.merge(a.getPatientId(), 1, Integer::sum);
+            patientByAssignment.put(a.getId(), a.getPatientId());
+        }
+        Map<UUID, Integer> checklistFilled = new HashMap<>();
+        List<UUID> assignmentIds = allAssignments.stream().map(ActivityAssignment::getId).toList();
+        if (!assignmentIds.isEmpty()) {
+            for (ActivityAttemptLog log : activityAttemptLogRepository
+                    .findByOrgIdAndAssignmentIdInAndAttemptDateBetween(orgId, assignmentIds, from, to)) {
+                UUID patientId = patientByAssignment.get(log.getAssignmentId());
+                if (patientId != null) checklistFilled.merge(patientId, 1, Integer::sum);
+            }
+        }
+
+        // LT goals — goal count per patient, resolved via their IEP plans.
+        Map<UUID, UUID> patientByPlan = planRepository.findByOrgIdOrderByCreatedAtDesc(orgId).stream()
+                .collect(Collectors.toMap(IEPPlan::getId, IEPPlan::getPatientId));
+        Map<UUID, Integer> ltGoals = new HashMap<>();
+        for (IEPGoal g : goalRepository.findByOrgId(orgId)) {
+            UUID patientId = patientByPlan.get(g.getPlanId());
+            if (patientId != null) ltGoals.merge(patientId, 1, Integer::sum);
+        }
+
+        // Payment status — most recently created subscription per patient.
+        Map<UUID, Subscription> latestSubscription = new HashMap<>();
+        for (Subscription sub : subscriptionRepository.findByOrgId(orgId)) {
+            latestSubscription.merge(sub.getPatientId(), sub,
+                    (a, b) -> a.getCreatedAt().isAfter(b.getCreatedAt()) ? a : b);
+        }
+
+        return patients.stream()
+                .map(p -> new CaseSummaryResponse(
+                        p.getId(),
+                        p.getFirstName() + " " + p.getLastName(),
+                        attended.getOrDefault(p.getId(), 0),
+                        upcoming.getOrDefault(p.getId(), 0),
+                        cancelled.getOrDefault(p.getId(), 0),
+                        membersAssigned.getOrDefault(p.getId(), 0),
+                        activitiesAssigned.getOrDefault(p.getId(), 0),
+                        checklistFilled.getOrDefault(p.getId(), 0),
+                        ltGoals.getOrDefault(p.getId(), 0),
+                        latestSubscription.containsKey(p.getId()) ? latestSubscription.get(p.getId()).getPaymentStatus().name() : null))
+                .toList();
     }
 
     private List<EngagementOverviewResponse.NameCount> skillsBreakdown(UUID orgId, List<Activity> activities) {

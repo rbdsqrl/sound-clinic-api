@@ -1,6 +1,7 @@
 package com.simplehearing.analytics.controller;
 
 import com.simplehearing.analytics.dto.ActivityProgressResponse;
+import com.simplehearing.analytics.dto.CaseSummaryResponse;
 import com.simplehearing.analytics.dto.CaseloadResponse;
 import com.simplehearing.analytics.dto.EngagementOverviewResponse;
 import com.simplehearing.analytics.dto.FrequencyResponse;
@@ -178,6 +179,18 @@ public class AnalyticsController {
             @AuthenticationPrincipal UserPrincipal principal) {
 
         List<EngagementOverviewResponse.TrendPoint> data = analyticsService.sessionHeatmap(orgId(principal), from, to);
+        return ResponseEntity.ok(ApiResponse.success(data));
+    }
+
+    @Operation(summary = "One row per active patient — sessions, members/activities assigned, checklist fills, LT goals, payment status")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @GetMapping("/cases")
+    public ResponseEntity<ApiResponse<List<CaseSummaryResponse>>> cases(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        List<CaseSummaryResponse> data = analyticsService.cases(orgId(principal), from, to);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 
