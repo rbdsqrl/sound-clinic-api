@@ -227,3 +227,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/076-iep-plan-therapist-nullable.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/077-program-feedback-checklist.sql
+      relativeToChangelogFile: false

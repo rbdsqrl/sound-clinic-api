@@ -8,6 +8,9 @@ import com.simplehearing.program.dto.CreateProgramRequest;
 import com.simplehearing.program.dto.ProgramResponse;
 import com.simplehearing.program.dto.UpdateProgramRequest;
 import com.simplehearing.program.entity.Program;
+import com.simplehearing.program.feedback.dto.ProgramFeedbackQuestionResponse;
+import com.simplehearing.program.feedback.dto.UpdateProgramFeedbackTemplateRequest;
+import com.simplehearing.program.feedback.service.ProgramFeedbackService;
 import com.simplehearing.program.repository.ProgramRepository;
 import com.simplehearing.tax.entity.Tax;
 import com.simplehearing.tax.repository.TaxRepository;
@@ -34,10 +37,13 @@ public class ProgramController {
 
     private final ProgramRepository programRepository;
     private final TaxRepository taxRepository;
+    private final ProgramFeedbackService programFeedbackService;
 
-    public ProgramController(ProgramRepository programRepository, TaxRepository taxRepository) {
+    public ProgramController(ProgramRepository programRepository, TaxRepository taxRepository,
+                              ProgramFeedbackService programFeedbackService) {
         this.programRepository = programRepository;
         this.taxRepository = taxRepository;
+        this.programFeedbackService = programFeedbackService;
     }
 
     // ── List all programs (includes inactive) ─────────────────────────────────
@@ -160,6 +166,42 @@ public class ProgramController {
         Program saved = programRepository.save(program);
         Tax tax = saved.getTaxId() != null ? taxRepository.findById(saved.getTaxId()).orElse(null) : null;
         return ResponseEntity.ok(ApiResponse.success(ProgramResponse.from(saved, tax)));
+    }
+
+    // ── Session feedback template ──────────────────────────────────────────────
+
+    @Operation(summary = "Get a program's session feedback checklist template")
+    @GetMapping("/{id}/feedback-template")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    public ResponseEntity<ApiResponse<List<ProgramFeedbackQuestionResponse>>> getFeedbackTemplate(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        Program program = programRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Program not found"));
+        if (!program.getOrgId().equals(principal.getOrgId())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Access denied");
+        }
+
+        return ResponseEntity.ok(ApiResponse.success(programFeedbackService.getTemplate(id)));
+    }
+
+    @Operation(summary = "Replace a program's session feedback checklist template")
+    @PutMapping("/{id}/feedback-template")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    public ResponseEntity<ApiResponse<List<ProgramFeedbackQuestionResponse>>> updateFeedbackTemplate(
+            @PathVariable UUID id,
+            @RequestBody UpdateProgramFeedbackTemplateRequest request,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        Program program = programRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Program not found"));
+        if (!program.getOrgId().equals(principal.getOrgId())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Access denied");
+        }
+
+        return ResponseEntity.ok(ApiResponse.success(
+                programFeedbackService.replaceTemplate(id, principal.getOrgId(), request)));
     }
 
     private Map<UUID, Tax> resolveTaxes(List<Program> programs) {

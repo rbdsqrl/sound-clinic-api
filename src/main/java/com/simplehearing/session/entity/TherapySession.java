@@ -55,6 +55,10 @@ public class TherapySession {
     @Column(name = "progress_report", columnDefinition = "TEXT")
     private String progressReport;
 
+    /** Free-text notes on the session feedback checklist — separate from the checklist answers themselves. */
+    @Column(name = "checklist_notes", columnDefinition = "TEXT")
+    private String checklistNotes;
+
     @Column(name = "performance_score")
     private Integer performanceScore;
 
@@ -125,6 +129,8 @@ public class TherapySession {
     public void setFeedback(String feedback) { this.feedback = feedback; }
     public String getProgressReport() { return progressReport; }
     public void setProgressReport(String progressReport) { this.progressReport = progressReport; }
+    public String getChecklistNotes() { return checklistNotes; }
+    public void setChecklistNotes(String checklistNotes) { this.checklistNotes = checklistNotes; }
     public Integer getPerformanceScore() { return performanceScore; }
     public void setPerformanceScore(Integer performanceScore) { this.performanceScore = performanceScore; }
     public RescheduleReason getRescheduleReason() { return rescheduleReason; }

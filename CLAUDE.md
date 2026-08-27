@@ -215,6 +215,10 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | PATCH    | `/api/v1/enrollment-concerns/{id}/acknowledge` | All staff (own caseload for THERAPIST/DOCTOR)     | Acknowledge a concern |
 | PATCH    | `/api/v1/enrollment-concerns/{id}/resolve` | All staff (own caseload for THERAPIST/DOCTOR)         | Resolve a concern |
 | POST     | `/api/v1/therapy-sessions/ad-hoc`       | BUSINESS_OWNER, CLINIC_HEAD                     | Book a one-off session from the calendar |
+| GET      | `/api/v1/therapy-sessions/{id}/feedback` | THERAPIST, DOCTOR, CLINIC_HEAD, BUSINESS_OWNER | Session feedback checklist template (per the session's program) + this session's answers |
+| PUT      | `/api/v1/therapy-sessions/{id}/feedback` | THERAPIST, DOCTOR, CLINIC_HEAD, BUSINESS_OWNER | Save this session's feedback checklist answers |
+| GET      | `/api/v1/programs/{id}/feedback-template` | BUSINESS_OWNER, CLINIC_HEAD                    | Get a program's session feedback checklist template |
+| PUT      | `/api/v1/programs/{id}/feedback-template` | BUSINESS_OWNER, CLINIC_HEAD                    | Replace a program's session feedback checklist template |
 | POST     | `/api/v1/meetings`                      | All staff (not PARENT/PATIENT)                          | Schedule a meeting + email invites  |
 | GET      | `/api/v1/meetings`                      | Authenticated                                           | Meetings in a date range (scoped)   |
 | GET      | `/api/v1/meetings/{id}`                 | Authenticated                                           | One meeting with participants       |
@@ -301,6 +305,7 @@ Master file: `db.changelog-master.yaml` — lists migrations in order.
 | 066-success-criteria-settings.sql   | `organisations.goal_mastery_threshold_pct` (90), `parent_satisfaction_threshold_pct` (70), `require_all_enrollments_for_discharge` (true) |
 | 067-create-discharge-records.sql    | `discharge_records` table — one row per discharge episode, frozen snapshots + success-criteria composite |
 | 068-enrollments-discharge-link.sql  | `enrollments.discharged_in_record_id` — the episode-of-care boundary (NULL = still open) |
+| 077-program-feedback-checklist.sql  | `program_feedback_questions`/`options` (per-program checklist template) + `session_feedback_answers`/`answer_options` (per-session fill) + `therapy_sessions.checklist_notes` |
 
 **To add a migration:** create `NNN-description.sql` with the Liquibase header, then add it to the master YAML.
 

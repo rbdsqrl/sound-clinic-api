@@ -18,6 +18,9 @@ import com.simplehearing.enrollment.repository.EnrollmentRepository;
 import com.simplehearing.patient.entity.Patient;
 import com.simplehearing.patient.repository.PatientRepository;
 import com.simplehearing.program.entity.Program;
+import com.simplehearing.program.feedback.dto.SessionFeedbackResponse;
+import com.simplehearing.program.feedback.dto.UpdateSessionFeedbackRequest;
+import com.simplehearing.program.feedback.service.ProgramFeedbackService;
 import com.simplehearing.program.repository.ProgramRepository;
 import com.simplehearing.patient.entity.TherapistPatient;
 import com.simplehearing.patient.repository.TherapistPatientRepository;
@@ -73,6 +76,7 @@ public class TherapySessionController {
     private final PatientParentRepository patientParentRepository;
     private final OrganisationRepository organisationRepository;
     private final EmailService emailService;
+    private final ProgramFeedbackService programFeedbackService;
 
     private static final Logger log = LoggerFactory.getLogger(TherapySessionController.class);
     private static final DateTimeFormatter WHEN_DATE = DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy");
@@ -93,7 +97,8 @@ public class TherapySessionController {
             TherapistPatientRepository therapistPatientRepository,
             PatientParentRepository patientParentRepository,
             OrganisationRepository organisationRepository,
-            EmailService emailService) {
+            EmailService emailService,
+            ProgramFeedbackService programFeedbackService) {
         this.sessionRepository    = sessionRepository;
         this.enrollmentRepository = enrollmentRepository;
         this.subscriptionRepository = subscriptionRepository;
@@ -106,6 +111,7 @@ public class TherapySessionController {
         this.patientParentRepository = patientParentRepository;
         this.organisationRepository = organisationRepository;
         this.emailService = emailService;
+        this.programFeedbackService = programFeedbackService;
     }
 
     // ── List sessions (calendar / patient view) ────────────────────────────────
@@ -237,6 +243,51 @@ public class TherapySessionController {
 
         TherapySession saved = sessionRepository.save(session);
         return ResponseEntity.ok(ApiResponse.success(enrich(List.of(saved)).get(0)));
+    }
+
+    // ── Session feedback checklist (per the session's program) ────────────────
+
+    @Operation(summary = "Get the session feedback checklist template and this session's answers")
+    @GetMapping("/{id}/feedback")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'CLINIC_HEAD', 'BUSINESS_OWNER')")
+    public ResponseEntity<ApiResponse<SessionFeedbackResponse>> getFeedback(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        TherapySession session = findOwned(id, principal);
+        requireTherapistOwnership(session, principal);
+
+        UUID programId = resolveProgramId(session);
+        var template = programId != null ? programFeedbackService.getTemplate(programId) : List.<com.simplehearing.program.feedback.dto.ProgramFeedbackQuestionResponse>of();
+        var answers = programFeedbackService.getSessionAnswers(session.getId());
+
+        return ResponseEntity.ok(ApiResponse.success(
+                new SessionFeedbackResponse(template, answers, session.getChecklistNotes())));
+    }
+
+    @Operation(summary = "Save this session's feedback checklist answers")
+    @PutMapping("/{id}/feedback")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'CLINIC_HEAD', 'BUSINESS_OWNER')")
+    public ResponseEntity<ApiResponse<Void>> updateFeedback(
+            @PathVariable UUID id,
+            @RequestBody UpdateSessionFeedbackRequest request,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        TherapySession session = findOwned(id, principal);
+        requireTherapistOwnership(session, principal);
+
+        programFeedbackService.replaceSessionAnswers(session.getId(), request.answers());
+        session.setChecklistNotes(request.checklistNotes());
+        sessionRepository.save(session);
+
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    private UUID resolveProgramId(TherapySession session) {
+        return enrollmentRepository.findById(session.getEnrollmentId())
+                .flatMap(enrollment -> subscriptionRepository.findById(enrollment.getSubscriptionId()))
+                .map(Subscription::getProgramId)
+                .orElse(null);
     }
 
     // ── Reschedule a session (new date and/or substitute therapist) ───────────
