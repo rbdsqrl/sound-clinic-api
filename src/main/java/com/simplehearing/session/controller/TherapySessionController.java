@@ -337,14 +337,10 @@ public class TherapySessionController {
             User sub = userRepository.findById(request.substituteTherapistId())
                     .filter(u -> u.getOrgId().equals(principal.getOrgId()))
                     .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Therapist not found in your organisation"));
-            UUID oldTherapistId = session.getTherapistId();
+            // Reassigns only this one session — the enrollment's ongoing therapist is a separate,
+            // deliberate decision (PATCH /enrollments/{id}/therapist), not a side effect of covering
+            // a single session.
             session.setTherapistId(sub.getId());
-
-            // Update enrollment to point to the substitute therapist
-            enrollmentRepository.findById(session.getEnrollmentId()).ifPresent(enrollment -> {
-                enrollment.setTherapistId(sub.getId());
-                enrollmentRepository.save(enrollment);
-            });
 
             // Ensure the substitute is linked to the patient
             therapistPatientRepository.findByPatientIdAndTherapistId(session.getPatientId(), sub.getId())
