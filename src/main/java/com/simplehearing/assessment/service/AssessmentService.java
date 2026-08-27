@@ -11,10 +11,13 @@ import com.simplehearing.common.exception.ApiException;
 import com.simplehearing.common.exception.ResourceNotFoundException;
 import com.simplehearing.patient.entity.Patient;
 import com.simplehearing.patient.repository.PatientRepository;
+import com.simplehearing.storage.StorageService;
 import com.simplehearing.user.repository.UserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
+import java.io.IOException;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.Period;
 import java.util.List;
@@ -28,15 +31,21 @@ public class AssessmentService {
     private final PatientRepository patientRepository;
     private final UserRepository userRepository;
     private final ObjectMapper objectMapper;
+    private final AssessmentPdfService assessmentPdfService;
+    private final StorageService storageService;
 
     public AssessmentService(PatientAssessmentRepository assessmentRepository,
                               PatientRepository patientRepository,
                               UserRepository userRepository,
-                              ObjectMapper objectMapper) {
+                              ObjectMapper objectMapper,
+                              AssessmentPdfService assessmentPdfService,
+                              StorageService storageService) {
         this.assessmentRepository = assessmentRepository;
         this.patientRepository = patientRepository;
         this.userRepository = userRepository;
         this.objectMapper = objectMapper;
+        this.assessmentPdfService = assessmentPdfService;
+        this.storageService = storageService;
     }
 
     public List<PatientAssessmentResponse> list(UUID orgId, UUID patientId, AssessmentType type) {
@@ -77,6 +86,29 @@ public class AssessmentService {
 
         PatientAssessment saved = assessmentRepository.save(assessment);
         return PatientAssessmentResponse.from(saved, userName(filledBy), AssessmentDefinitions.maxScoreFor(type));
+    }
+
+    /**
+     * Renders and stores the PDF fresh on every call — regenerating one of these is cheap
+     * and infrequent, so there's no need for a cached pdf_url column like discharge reports.
+     */
+    public String generatePdfUrl(UUID orgId, UUID patientId, UUID assessmentId) {
+        PatientAssessment assessment = assessmentRepository.findById(assessmentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Assessment not found"));
+        if (!assessment.getOrgId().equals(orgId) || !assessment.getPatientId().equals(patientId)) {
+            throw new ResourceNotFoundException("Assessment not found");
+        }
+        Patient patient = patientRepository.findByIdAndOrgId(patientId, orgId)
+                .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
+
+        byte[] pdf = assessmentPdfService.generate(assessment, patient, userName(assessment.getFilledBy()));
+        String filename = assessment.getAssessmentType().name().toLowerCase() + "-" + assessment.getAssessmentDate() + ".pdf";
+        try {
+            String storedUrl = storageService.store(pdf, filename, "application/pdf", "assessments/" + patientId);
+            return storageService.presign(storedUrl, Duration.ofMinutes(15));
+        } catch (IOException e) {
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to store assessment PDF");
+        }
     }
 
     private String classify(AssessmentType type, int total, LocalDate dob, LocalDate assessmentDate) {

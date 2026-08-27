@@ -58,6 +58,19 @@ public class PatientAssessmentController {
                 assessmentService.list(principal.getOrgId(), patientId, type)));
     }
 
+    @Operation(summary = "Download one filled assessment as a PDF, laid out like the paper form")
+    @GetMapping("/{assessmentId}/pdf")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT')")
+    public ResponseEntity<ApiResponse<java.util.Map<String, String>>> pdf(
+            @PathVariable UUID patientId,
+            @PathVariable AssessmentType type,
+            @PathVariable UUID assessmentId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        requireViewable(patientId, principal);
+        String url = assessmentService.generatePdfUrl(principal.getOrgId(), patientId, assessmentId);
+        return ResponseEntity.ok(ApiResponse.success(java.util.Map.of("url", url)));
+    }
+
     @Operation(summary = "Record a new fill of this assessment for a patient")
     @PostMapping
     @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR')")
