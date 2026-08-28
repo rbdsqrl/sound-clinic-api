@@ -277,7 +277,26 @@ public class AnalyticsService {
         Double avgDurationWeeks = durationsDays.isEmpty() ? null
                 : Math.round((durationsDays.stream().mapToLong(Long::longValue).average().orElse(0) / 7.0) * 10.0) / 10.0;
 
-        // Program breakdown — resolve subscription -> program in bulk rather than per-enrollment.
+        List<OrgSnapshotResponse.ProgramBreakdown> programBreakdown = programBreakdown(enrollments);
+
+        // Admission -> discharge funnel — every stage shown, zero-filled, in the funnel's own order.
+        Map<PatientStage, Integer> counts = new HashMap<>();
+        for (Patient p : patientRepository.findByOrgId(orgId)) {
+            counts.merge(p.getStage(), 1, Integer::sum);
+        }
+        List<OrgSnapshotResponse.StageCount> stageCounts = List.of(PatientStage.values()).stream()
+                .map(s -> new OrgSnapshotResponse.StageCount(s, counts.getOrDefault(s, 0)))
+                .toList();
+
+        return new OrgSnapshotResponse(avgDurationWeeks, durationsDays.size(), programBreakdown, stageCounts);
+    }
+
+    /**
+     * Distinct children (and enrollment count) per program/therapy type, resolving
+     * subscription -> program in bulk rather than per-enrollment. Shared by {@link #orgSnapshot}
+     * (all enrollments in the org) and {@link #therapistCaseload} (one therapist's enrollments).
+     */
+    private List<OrgSnapshotResponse.ProgramBreakdown> programBreakdown(List<Enrollment> enrollments) {
         Set<UUID> subscriptionIds = enrollments.stream().map(Enrollment::getSubscriptionId).collect(Collectors.toSet());
         Map<UUID, UUID> programIdBySubscription = subscriptionRepository.findAllById(subscriptionIds).stream()
                 .collect(Collectors.toMap(Subscription::getId, Subscription::getProgramId));
@@ -293,22 +312,11 @@ public class AnalyticsService {
             patientsByProgram.computeIfAbsent(programName, k -> new HashSet<>()).add(e.getPatientId());
             enrollmentCountByProgram.merge(programName, 1, Integer::sum);
         }
-        List<OrgSnapshotResponse.ProgramBreakdown> programBreakdown = patientsByProgram.entrySet().stream()
+        return patientsByProgram.entrySet().stream()
                 .map(en -> new OrgSnapshotResponse.ProgramBreakdown(
                         en.getKey(), en.getValue().size(), enrollmentCountByProgram.get(en.getKey())))
                 .sorted(Comparator.comparingInt(OrgSnapshotResponse.ProgramBreakdown::patientCount).reversed())
                 .toList();
-
-        // Admission -> discharge funnel — every stage shown, zero-filled, in the funnel's own order.
-        Map<PatientStage, Integer> counts = new HashMap<>();
-        for (Patient p : patientRepository.findByOrgId(orgId)) {
-            counts.merge(p.getStage(), 1, Integer::sum);
-        }
-        List<OrgSnapshotResponse.StageCount> stageCounts = List.of(PatientStage.values()).stream()
-                .map(s -> new OrgSnapshotResponse.StageCount(s, counts.getOrDefault(s, 0)))
-                .toList();
-
-        return new OrgSnapshotResponse(avgDurationWeeks, durationsDays.size(), programBreakdown, stageCounts);
     }
 
     /** Session count per calendar day in the window — feeds the GitHub-style activity heatmap. */
@@ -766,6 +774,11 @@ public class AnalyticsService {
 
         List<TherapySession> sessions = sessionRepository.findByOrgIdAndTherapistIdBetween(orgId, therapistId, from, to);
 
+        // Not windowed, same as orgSnapshot's — this is a "right now" caseload composition,
+        // not a trend over [from, to].
+        List<OrgSnapshotResponse.ProgramBreakdown> programBreakdown =
+                programBreakdown(enrollmentRepository.findByOrgIdAndTherapistId(orgId, therapistId));
+
         Inputs inputs = new Inputs(
                 sessions,
                 progressForGoals(goals, from, to),
@@ -827,7 +840,7 @@ public class AnalyticsService {
                 .thenComparing(r -> r.deltaPts() == null ? Double.MAX_VALUE : r.deltaPts()));
 
         return new CaseloadResponse(therapistId, fullName(therapist.getFirstName(), therapist.getLastName()),
-                from, to, series, rows);
+                from, to, series, rows, programBreakdown);
     }
 
     /** Org-wide rollup. Daily is rejected upstream — day-to-day org churn is noise. */

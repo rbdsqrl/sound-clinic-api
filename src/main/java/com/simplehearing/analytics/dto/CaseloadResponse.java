@@ -14,7 +14,10 @@ public record CaseloadResponse(
         LocalDate from,
         LocalDate to,
         TimeSeriesResponse series,
-        List<PatientRow>   patients
+        List<PatientRow>   patients,
+        /** Children on this therapist's caseload, grouped by therapy/program — mirrors
+         *  {@link OrgSnapshotResponse#programBreakdown()} but scoped to one therapist. */
+        List<OrgSnapshotResponse.ProgramBreakdown> programBreakdown
 ) {
 
     /**

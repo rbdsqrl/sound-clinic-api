@@ -196,7 +196,7 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | GET      | `/api/v1/patients/{id}/discharge`       | All staff + PARENT (own child)                               | List discharge episodes, most recent first |
 | GET      | `/api/v1/patients/{id}/discharge/{dischargeId}` | All staff + PARENT (own child)                       | One discharge episode's report |
 | GET      | `/api/v1/patients/{id}/discharge/{dischargeId}/pdf` | All staff + PARENT (own child)                   | Discharge PDF — generated on first call, then a fresh short-lived URL each time |
-| GET      | `/api/v1/analytics/therapists/{id}/caseload` | BUSINESS_OWNER, CLINIC_HEAD                | Therapist series + a row per patient |
+| GET      | `/api/v1/analytics/therapists/{id}/caseload` | BUSINESS_OWNER, CLINIC_HEAD                | Therapist series + a row per patient + program/therapy-type breakdown of their caseload |
 | GET      | `/api/v1/analytics/overview`            | BUSINESS_OWNER, CLINIC_HEAD                     | Org rollup (WEEKLY/MONTHLY only)    |
 | GET      | `/api/v1/analytics/engagement-overview` | BUSINESS_OWNER, CLINIC_HEAD                     | Org-wide engagement rollup for the Overview analytics tab — users, sessions, skills, checklist fills |
 | GET      | `/api/v1/analytics/session-heatmap`     | BUSINESS_OWNER, CLINIC_HEAD                     | Session count per day in the window — powers the calendar heatmap |
