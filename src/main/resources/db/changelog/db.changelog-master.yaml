@@ -239,3 +239,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/080-member-profile-fields.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/081-baseline-score-percent.sql
+      relativeToChangelogFile: false

@@ -29,6 +29,11 @@ public class BaselineProgressEntry {
     @Column(name = "value", nullable = false, columnDefinition = "TEXT")
     private String value;
 
+    /** Optional 0-100 score alongside the free-text value — lets progress be charted when a
+     *  clinician chooses to score this entry. */
+    @Column(name = "score_percent")
+    private Integer scorePercent;
+
     @Column(name = "logged_by", nullable = false)
     private UUID loggedBy;
 
@@ -51,6 +56,9 @@ public class BaselineProgressEntry {
 
     public String getValue() { return value; }
     public void setValue(String value) { this.value = value; }
+
+    public Integer getScorePercent() { return scorePercent; }
+    public void setScorePercent(Integer scorePercent) { this.scorePercent = scorePercent; }
 
     public UUID getLoggedBy() { return loggedBy; }
     public void setLoggedBy(UUID loggedBy) { this.loggedBy = loggedBy; }

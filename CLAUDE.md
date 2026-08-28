@@ -318,6 +318,7 @@ Master file: `db.changelog-master.yaml` — lists migrations in order.
 | 077-program-feedback-checklist.sql  | `program_feedback_questions`/`options` (per-program checklist template) + `session_feedback_answers`/`answer_options` (per-session fill) + `therapy_sessions.checklist_notes` |
 | 078-create-patient-assessments.sql  | `patient_assessments` — repeated ISAA/PRBA clinical assessment fills per patient, item scores as JSON, server-computed total + classification |
 | 080-member-profile-fields.sql       | `users.qualification`/`users.specialization` (free text) + `user_languages` join table (reuses the existing `languages` lookup) — member profile page |
+| 081-baseline-score-percent.sql      | `baseline_domain_values.score_percent`/`baseline_progress_entries.score_percent` — optional 0-100 score alongside the free-text value, so a domain can be charted |
 
 **To add a migration:** create `NNN-description.sql` with the Liquibase header, then add it to the master YAML.
 

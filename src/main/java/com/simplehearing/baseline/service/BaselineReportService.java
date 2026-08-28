@@ -81,13 +81,16 @@ public class BaselineReportService {
         BaselineReport saved = reportRepository.save(report);
 
         Map<BaselineDomain, String> values = req.domainValues() != null ? req.domainValues() : Map.of();
+        Map<BaselineDomain, Integer> scores = req.domainScores() != null ? req.domainScores() : Map.of();
+        validateScores(scores);
         for (BaselineDomain domain : BaselineDomain.values()) {
             BaselineDomainValue dv = new BaselineDomainValue();
             dv.setReportId(saved.getId());
             dv.setDomain(domain);
             String value = values.get(domain);
             dv.setValue(value);
-            if (value != null && !value.isBlank()) {
+            dv.setScorePercent(scores.get(domain));
+            if ((value != null && !value.isBlank()) || scores.get(domain) != null) {
                 dv.setUpdatedBy(principal.getId());
             }
             domainValueRepository.save(dv);
@@ -108,19 +111,23 @@ public class BaselineReportService {
         if (req.cdct() != null) report.setCdct(req.cdct());
         BaselineReport saved = reportRepository.save(report);
 
-        if (req.domainValues() != null) {
-            for (Map.Entry<BaselineDomain, String> e : req.domainValues().entrySet()) {
-                BaselineDomainValue dv = domainValueRepository.findByReportIdAndDomain(saved.getId(), e.getKey())
-                        .orElseGet(() -> {
-                            BaselineDomainValue fresh = new BaselineDomainValue();
-                            fresh.setReportId(saved.getId());
-                            fresh.setDomain(e.getKey());
-                            return fresh;
-                        });
-                dv.setValue(e.getValue());
-                dv.setUpdatedBy(principal.getId());
-                domainValueRepository.save(dv);
-            }
+        Map<BaselineDomain, String> values = req.domainValues() != null ? req.domainValues() : Map.of();
+        Map<BaselineDomain, Integer> scores = req.domainScores() != null ? req.domainScores() : Map.of();
+        validateScores(scores);
+        Set<BaselineDomain> touchedDomains = new java.util.HashSet<>(values.keySet());
+        touchedDomains.addAll(scores.keySet());
+        for (BaselineDomain domain : touchedDomains) {
+            BaselineDomainValue dv = domainValueRepository.findByReportIdAndDomain(saved.getId(), domain)
+                    .orElseGet(() -> {
+                        BaselineDomainValue fresh = new BaselineDomainValue();
+                        fresh.setReportId(saved.getId());
+                        fresh.setDomain(domain);
+                        return fresh;
+                    });
+            if (values.containsKey(domain)) dv.setValue(values.get(domain));
+            if (scores.containsKey(domain)) dv.setScorePercent(scores.get(domain));
+            dv.setUpdatedBy(principal.getId());
+            domainValueRepository.save(dv);
         }
 
         return buildResponse(saved);
@@ -139,6 +146,7 @@ public class BaselineReportService {
         entry.setDomain(domain);
         entry.setEntryDate(req.entryDate());
         entry.setValue(req.value());
+        entry.setScorePercent(req.scorePercent());
         entry.setLoggedBy(principal.getId());
         BaselineProgressEntry saved = progressRepository.save(entry);
 
@@ -184,6 +192,7 @@ public class BaselineReportService {
             domains.add(new BaselineDomainResponse(
                     domain,
                     dv != null ? dv.getValue() : null,
+                    dv != null ? dv.getScorePercent() : null,
                     dv != null ? dv.getUpdatedAt() : null,
                     entriesByDomain.getOrDefault(domain, List.of())
             ));
@@ -214,6 +223,16 @@ public class BaselineReportService {
 
     private String fullName(User user) {
         return user.getFirstName() + " " + user.getLastName();
+    }
+
+    /** createReport/updateReport don't go through {@code @Valid}, so the 0-100 range on a
+     *  per-domain score map is checked here rather than via bean validation. */
+    private void validateScores(Map<BaselineDomain, Integer> scores) {
+        for (Integer score : scores.values()) {
+            if (score != null && (score < 0 || score > 100)) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "Domain scores must be between 0 and 100");
+            }
+        }
     }
 
     private void requirePatientInOrg(UUID patientId, UUID orgId) {
