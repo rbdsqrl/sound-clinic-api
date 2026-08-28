@@ -186,6 +186,8 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | POST     | `/api/v1/auth/logout`                   | Authenticated                                           | Invalidate refresh token            |
 | GET      | `/api/v1/users/me`                      | Authenticated                                           | Caller's profile                    |
 | GET      | `/api/v1/users/therapists`              | BUSINESS_OWNER, CLINIC_HEAD                                   | All therapists/doctors in org       |
+| GET      | `/api/v1/users/{id}/profile`            | BUSINESS_OWNER, CLINIC_HEAD                                   | One member's profile — contact, qualification, specialization, languages, case count |
+| PATCH    | `/api/v1/users/{id}/profile`            | BUSINESS_OWNER, CLINIC_HEAD                                   | Update a member's phone/clinic/qualification/specialization/languages — role and active status are unaffected |
 | GET      | `/api/v1/analytics/patients/{id}/progress` | BUSINESS_OWNER, CLINIC_HEAD, PARENT (own child) | Mastery series + per-domain breakdown |
 | GET      | `/api/v1/analytics/patients/{id}/activities` | BUSINESS_OWNER, CLINIC_HEAD, PARENT (own child) | Activity assignment/attempt progress |
 | GET      | `/api/v1/analytics/patients/{id}/frequency` | BUSINESS_OWNER, CLINIC_HEAD, PARENT (own child) | Sessions/week across every concurrent enrollment |
@@ -315,6 +317,7 @@ Master file: `db.changelog-master.yaml` — lists migrations in order.
 | 068-enrollments-discharge-link.sql  | `enrollments.discharged_in_record_id` — the episode-of-care boundary (NULL = still open) |
 | 077-program-feedback-checklist.sql  | `program_feedback_questions`/`options` (per-program checklist template) + `session_feedback_answers`/`answer_options` (per-session fill) + `therapy_sessions.checklist_notes` |
 | 078-create-patient-assessments.sql  | `patient_assessments` — repeated ISAA/PRBA clinical assessment fills per patient, item scores as JSON, server-computed total + classification |
+| 080-member-profile-fields.sql       | `users.qualification`/`users.specialization` (free text) + `user_languages` join table (reuses the existing `languages` lookup) — member profile page |
 
 **To add a migration:** create `NNN-description.sql` with the Liquibase header, then add it to the master YAML.
 

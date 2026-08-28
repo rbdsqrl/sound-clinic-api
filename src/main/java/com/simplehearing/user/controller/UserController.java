@@ -1,14 +1,23 @@
 package com.simplehearing.user.controller;
 
+import com.simplehearing.activity.dto.LanguageResponse;
+import com.simplehearing.activity.repository.LanguageRepository;
 import com.simplehearing.auth.security.UserPrincipal;
+import com.simplehearing.clinic.entity.Clinic;
+import com.simplehearing.clinic.repository.ClinicRepository;
 import com.simplehearing.common.dto.ApiResponse;
 import com.simplehearing.common.exception.ApiException;
+import com.simplehearing.common.exception.ResourceNotFoundException;
 import com.simplehearing.patient.repository.TherapistPatientRepository;
 import com.simplehearing.user.dto.AssignableUserResponse;
+import com.simplehearing.user.dto.MemberProfileResponse;
 import com.simplehearing.user.dto.StaffMemberResponse;
+import com.simplehearing.user.dto.UpdateMemberProfileRequest;
 import com.simplehearing.user.dto.UserResponse;
 import com.simplehearing.user.entity.User;
+import com.simplehearing.user.entity.UserLanguage;
 import com.simplehearing.user.enums.Role;
+import com.simplehearing.user.repository.UserLanguageRepository;
 import com.simplehearing.user.repository.UserRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -39,11 +48,20 @@ public class UserController {
 
     private final UserRepository userRepository;
     private final TherapistPatientRepository therapistPatientRepository;
+    private final ClinicRepository clinicRepository;
+    private final LanguageRepository languageRepository;
+    private final UserLanguageRepository userLanguageRepository;
 
     public UserController(UserRepository userRepository,
-                          TherapistPatientRepository therapistPatientRepository) {
+                          TherapistPatientRepository therapistPatientRepository,
+                          ClinicRepository clinicRepository,
+                          LanguageRepository languageRepository,
+                          UserLanguageRepository userLanguageRepository) {
         this.userRepository = userRepository;
         this.therapistPatientRepository = therapistPatientRepository;
+        this.clinicRepository = clinicRepository;
+        this.languageRepository = languageRepository;
+        this.userLanguageRepository = userLanguageRepository;
     }
 
     /** Roles that count as "clinical staff" for the therapists list. */
@@ -171,6 +189,74 @@ public class UserController {
                 .toList();
 
         return ResponseEntity.ok(ApiResponse.success(results));
+    }
+
+    @Operation(summary = "Get one member's profile — the member profile page")
+    @GetMapping("/{id}/profile")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    public ResponseEntity<ApiResponse<MemberProfileResponse>> getMemberProfile(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        User user = loadOrgScopedMember(id, principal);
+        return ResponseEntity.ok(ApiResponse.success(buildMemberProfile(user)));
+    }
+
+    @Operation(summary = "Update a member's contact/qualification details — role and active status are unaffected")
+    @PatchMapping("/{id}/profile")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    public ResponseEntity<ApiResponse<MemberProfileResponse>> updateMemberProfile(
+            @PathVariable UUID id,
+            @RequestBody UpdateMemberProfileRequest request,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        User user = loadOrgScopedMember(id, principal);
+
+        if (request.clinicId() != null) {
+            clinicRepository.findByIdAndOrgId(request.clinicId(), principal.getOrgId())
+                    .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Clinic not found"));
+        }
+
+        user.setPhone(request.phone());
+        user.setClinicId(request.clinicId());
+        user.setQualification(request.qualification());
+        user.setSpecialization(request.specialization());
+        userRepository.save(user);
+
+        userLanguageRepository.deleteById_UserId(id);
+        List<UUID> languageIds = request.languageIds() != null ? request.languageIds() : List.of();
+        for (UUID languageId : languageIds) {
+            userLanguageRepository.save(new UserLanguage(id, languageId));
+        }
+
+        return ResponseEntity.ok(ApiResponse.success(buildMemberProfile(user)));
+    }
+
+    private User loadOrgScopedMember(UUID id, UserPrincipal principal) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Member not found"));
+        if (!user.getOrgId().equals(principal.getOrgId())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "User does not belong to this organisation");
+        }
+        return user;
+    }
+
+    private MemberProfileResponse buildMemberProfile(User user) {
+        String clinicName = user.getClinicId() != null
+                ? clinicRepository.findById(user.getClinicId()).map(Clinic::getName).orElse(null)
+                : null;
+
+        List<UUID> languageIds = userLanguageRepository.findById_UserId(user.getId()).stream()
+                .map(UserLanguage::getLanguageId)
+                .toList();
+        List<LanguageResponse> languages = languageRepository.findAllById(languageIds).stream()
+                .map(LanguageResponse::from)
+                .sorted(Comparator.comparing(LanguageResponse::name))
+                .toList();
+
+        int caseCount = therapistPatientRepository.findByTherapistIdAndIsActive(user.getId(), true).size();
+
+        return MemberProfileResponse.from(user, clinicName, languages, caseCount);
     }
 
     @Operation(summary = "Deactivate a member — revokes login access while preserving audit records")

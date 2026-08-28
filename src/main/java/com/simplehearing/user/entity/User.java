@@ -71,6 +71,12 @@ public class User {
     @Column(name = "face_descriptor", columnDefinition = "TEXT")
     private String faceDescriptor;
 
+    /** Free text, e.g. "Diploma in Hearing, Language and Speech". Staff only — shown on the member profile. */
+    private String qualification;
+
+    /** Comma-separated free text, e.g. "Speech Language Pathologist, ABA Therapist". Staff only. */
+    private String specialization;
+
     @Column(nullable = false)
     private boolean isActive = true;
 
@@ -133,6 +139,12 @@ public class User {
 
     public String getFaceDescriptor() { return faceDescriptor; }
     public void setFaceDescriptor(String faceDescriptor) { this.faceDescriptor = faceDescriptor; }
+
+    public String getQualification() { return qualification; }
+    public void setQualification(String qualification) { this.qualification = qualification; }
+
+    public String getSpecialization() { return specialization; }
+    public void setSpecialization(String specialization) { this.specialization = specialization; }
 
     public boolean isActive() { return isActive; }
     public void setActive(boolean active) { isActive = active; }
