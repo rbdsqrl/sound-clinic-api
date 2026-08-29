@@ -202,7 +202,7 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success(buildMemberProfile(user)));
     }
 
-    @Operation(summary = "Update a member's contact/qualification details — role and active status are unaffected")
+    @Operation(summary = "Update a member's contact/qualification details, and (BUSINESS_OWNER only) their role")
     @PatchMapping("/{id}/profile")
     @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
     public ResponseEntity<ApiResponse<MemberProfileResponse>> updateMemberProfile(
@@ -215,6 +215,19 @@ public class UserController {
         if (request.clinicId() != null) {
             clinicRepository.findByIdAndOrgId(request.clinicId(), principal.getOrgId())
                     .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Clinic not found"));
+        }
+
+        if (request.role() != null) {
+            if (!principal.getUser().hasRole(Role.BUSINESS_OWNER)) {
+                throw new ApiException(HttpStatus.FORBIDDEN, "Only a Business Owner can change a member's role");
+            }
+            if (!STAFF_ROLES.contains(request.role())) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "Role must be one of " + STAFF_ROLES);
+            }
+            if (id.equals(principal.getId())) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "You cannot change your own role");
+            }
+            user.setRole(request.role());
         }
 
         user.setPhone(request.phone());

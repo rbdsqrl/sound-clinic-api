@@ -187,7 +187,7 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | GET      | `/api/v1/users/me`                      | Authenticated                                           | Caller's profile                    |
 | GET      | `/api/v1/users/therapists`              | BUSINESS_OWNER, CLINIC_HEAD                                   | All therapists/doctors in org       |
 | GET      | `/api/v1/users/{id}/profile`            | BUSINESS_OWNER, CLINIC_HEAD                                   | One member's profile — contact, qualification, specialization, languages, case count |
-| PATCH    | `/api/v1/users/{id}/profile`            | BUSINESS_OWNER, CLINIC_HEAD                                   | Update a member's phone/clinic/qualification/specialization/languages — role and active status are unaffected |
+| PATCH    | `/api/v1/users/{id}/profile`            | BUSINESS_OWNER, CLINIC_HEAD (role change: BUSINESS_OWNER only) | Update a member's phone/clinic/qualification/specialization/languages, and their role (staff roles only, not own role) |
 | GET      | `/api/v1/analytics/patients/{id}/progress` | BUSINESS_OWNER, CLINIC_HEAD, PARENT (own child) | Mastery series + per-domain breakdown |
 | GET      | `/api/v1/analytics/patients/{id}/activities` | BUSINESS_OWNER, CLINIC_HEAD, PARENT (own child) | Activity assignment/attempt progress |
 | GET      | `/api/v1/analytics/patients/{id}/frequency` | BUSINESS_OWNER, CLINIC_HEAD, PARENT (own child) | Sessions/week across every concurrent enrollment |
