@@ -242,3 +242,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/081-baseline-score-percent.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/082-create-shared-media.sql
+      relativeToChangelogFile: false

@@ -167,6 +167,13 @@ com.simplehearing
 │   ├── enums/Granularity.java           # DAILY | WEEKLY | MONTHLY + ISO bucketing rules
 │   └── service/AnalyticsService.java    # Folds sessions + IEP progress into buckets
 │
+├── sharedmedia/
+│   ├── controller/SharedMediaController.java  # /api/v1/patients/{patientId}/shared-media — list/upload/delete
+│   ├── dto/SharedMediaResponse.java            # id, direction, fileUrl (presigned), note, uploader name/role, createdAt
+│   ├── entity/SharedMedia.java                 # video optional, note optional — at least one required (CHECK constraint)
+│   ├── enums/SharedMediaDirection.java         # PARENT_TO_CLINIC, CLINIC_TO_PARENT
+│   └── repository/SharedMediaRepository.java
+│
 └── controller/
     └── HealthController.java            # GET /, GET /health (no auth required)
 ```
@@ -262,6 +269,9 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | GET      | `/api/v1/leaves`                        | BUSINESS_OWNER/CLINIC_HEAD (all), THERAPIST/DOCTOR (own only) | List leave requests; optional `?status=PENDING\|APPROVED\|REJECTED` |
 | PATCH    | `/api/v1/leaves/{id}/review`            | BUSINESS_OWNER, CLINIC_HEAD                                   | Approve or reject a leave request   |
 | DELETE   | `/api/v1/leaves/{id}`                   | THERAPIST, DOCTOR                                       | Cancel own pending leave            |
+| GET      | `/api/v1/patients/{patientId}/shared-media` | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST (assigned), PARENT (own child) | List videos/notes shared between the parent and the care team |
+| POST     | `/api/v1/patients/{patientId}/shared-media` | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST (assigned), PARENT (own child) | Share a video and/or a note — video is optional |
+| DELETE   | `/api/v1/patients/{patientId}/shared-media/{id}` | Uploader, or BUSINESS_OWNER/CLINIC_HEAD             | Delete a shared video/note          |
 
 ---
 
@@ -319,6 +329,7 @@ Master file: `db.changelog-master.yaml` — lists migrations in order.
 | 078-create-patient-assessments.sql  | `patient_assessments` — repeated ISAA/PRBA clinical assessment fills per patient, item scores as JSON, server-computed total + classification |
 | 080-member-profile-fields.sql       | `users.qualification`/`users.specialization` (free text) + `user_languages` join table (reuses the existing `languages` lookup) — member profile page |
 | 081-baseline-score-percent.sql      | `baseline_domain_values.score_percent`/`baseline_progress_entries.score_percent` — optional 0-100 score alongside the free-text value, so a domain can be charted |
+| 082-create-shared-media.sql         | `shared_media` table — videos/notes shared between parents and the care team per patient; either `file_url` or `note` must be set |
 
 **To add a migration:** create `NNN-description.sql` with the Liquibase header, then add it to the master YAML.
 
