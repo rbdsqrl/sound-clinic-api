@@ -32,7 +32,7 @@ public class LanguageController {
 
     @Operation(summary = "List all active languages for the org")
     @GetMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<List<LanguageResponse>>> list(@AuthenticationPrincipal UserPrincipal principal) {
         List<LanguageResponse> results = languageRepository
                 .findByOrgIdAndIsActiveTrueOrderByNameAsc(principal.getOrgId())

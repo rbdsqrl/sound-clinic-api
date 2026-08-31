@@ -31,7 +31,7 @@ public class PatientController {
 
     @Operation(summary = "Create a patient")
     @PostMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<PatientResponse>> create(
             @Valid @RequestBody CreatePatientRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -41,7 +41,7 @@ public class PatientController {
 
     @Operation(summary = "List all patients in your organisation")
     @GetMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<List<PatientResponse>>> list(
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(patientService.listForOrg(principal)));
@@ -49,7 +49,7 @@ public class PatientController {
 
     @Operation(summary = "Patients whose birthday falls in the next 30 days")
     @GetMapping("/upcoming-birthdays")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<List<UpcomingBirthdayResponse>>> upcomingBirthdays(
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(patientService.upcomingBirthdays(principal)));
@@ -65,7 +65,7 @@ public class PatientController {
 
     @Operation(summary = "Get a patient by ID")
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<PatientResponse>> get(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -74,7 +74,7 @@ public class PatientController {
 
     @Operation(summary = "Update a patient")
     @PatchMapping("/{id}")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<PatientResponse>> update(
             @PathVariable UUID id,
             @RequestBody CreatePatientRequest request,
@@ -84,7 +84,7 @@ public class PatientController {
 
     @Operation(summary = "Update patient journey stage")
     @PatchMapping("/{id}/stage")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'DOCTOR', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<PatientResponse>> updateStage(
             @PathVariable UUID id,
             @Valid @RequestBody UpdatePatientStageRequest request,
@@ -106,7 +106,7 @@ public class PatientController {
 
     @Operation(summary = "Add a condition to a patient")
     @PostMapping("/{id}/conditions")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<PatientResponse>> addCondition(
             @PathVariable UUID id,
             @Valid @RequestBody AddConditionRequest request,
@@ -116,7 +116,7 @@ public class PatientController {
 
     @Operation(summary = "Remove a condition from a patient")
     @DeleteMapping("/{id}/conditions/{conditionId}")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<Void> removeCondition(
             @PathVariable UUID id,
             @PathVariable UUID conditionId,
@@ -129,7 +129,7 @@ public class PatientController {
 
     @Operation(summary = "Link a parent user to a patient")
     @PostMapping("/{id}/parents")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<PatientResponse>> linkParent(
             @PathVariable UUID id,
             @Valid @RequestBody LinkParentRequest request,
@@ -139,7 +139,7 @@ public class PatientController {
 
     @Operation(summary = "Unlink a parent from a patient")
     @DeleteMapping("/{id}/parents/{parentId}")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<Void> unlinkParent(
             @PathVariable UUID id,
             @PathVariable UUID parentId,
@@ -150,7 +150,7 @@ public class PatientController {
 
     @Operation(summary = "Invite a parent by email who doesn't have an account yet; auto-linked to this patient on accept")
     @PostMapping("/{id}/parents/invite")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<InviteParentResponse>> inviteParent(
             @PathVariable UUID id,
             @Valid @RequestBody InviteParentRequest request,
@@ -163,7 +163,7 @@ public class PatientController {
 
     @Operation(summary = "Assign a therapist to a patient")
     @PostMapping("/{id}/therapists")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<PatientResponse>> assignTherapist(
             @PathVariable UUID id,
             @Valid @RequestBody AssignTherapistRequest request,
@@ -173,7 +173,7 @@ public class PatientController {
 
     @Operation(summary = "Unassign a therapist from a patient")
     @DeleteMapping("/{id}/therapists/{therapistId}")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<Void> unassignTherapist(
             @PathVariable UUID id,
             @PathVariable UUID therapistId,

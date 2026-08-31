@@ -59,7 +59,7 @@ public class ActivityController {
 
     @Operation(summary = "List activities for the org")
     @GetMapping
-    @PreAuthorize("hasAnyRole(" + STAFF_ROLES + ")")
+    @PreAuthorize("hasAnyRole(" + STAFF_ROLES + ", 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<List<ActivityResponse>>> list(
             @RequestParam(required = false, defaultValue = "false") boolean activeOnly,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -68,7 +68,7 @@ public class ActivityController {
 
     @Operation(summary = "Create an activity")
     @PostMapping
-    @PreAuthorize("hasAnyRole(" + STAFF_ROLES + ")")
+    @PreAuthorize("hasAnyRole(" + STAFF_ROLES + ", 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<ActivityResponse>> create(
             @Valid @RequestBody CreateActivityRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -78,7 +78,7 @@ public class ActivityController {
 
     @Operation(summary = "Get one activity")
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole(" + STAFF_ROLES + ")")
+    @PreAuthorize("hasAnyRole(" + STAFF_ROLES + ", 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<ActivityResponse>> get(
             @PathVariable UUID id, @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(activityService.get(id, principal.getOrgId())));
@@ -86,7 +86,7 @@ public class ActivityController {
 
     @Operation(summary = "Update an activity")
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole(" + STAFF_ROLES + ")")
+    @PreAuthorize("hasAnyRole(" + STAFF_ROLES + ", 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<ActivityResponse>> update(
             @PathVariable UUID id, @RequestBody UpdateActivityRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -95,7 +95,7 @@ public class ActivityController {
 
     @Operation(summary = "Deactivate an activity (soft delete)")
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole(" + STAFF_ROLES + ")")
+    @PreAuthorize("hasAnyRole(" + STAFF_ROLES + ", 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deactivate(
             @PathVariable UUID id, @AuthenticationPrincipal UserPrincipal principal) {
         activityService.deactivate(id, principal.getOrgId());
@@ -106,14 +106,14 @@ public class ActivityController {
 
     @Operation(summary = "Whether AI magic fill is configured for this org (no key exposed)")
     @GetMapping("/ai-status")
-    @PreAuthorize("hasAnyRole(" + STAFF_ROLES + ")")
+    @PreAuthorize("hasAnyRole(" + STAFF_ROLES + ", 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<AiStatusResponse>> aiStatus(@AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(new AiStatusResponse(magicFillService.isEnabled(principal.getOrgId()))));
     }
 
     @Operation(summary = "AI-draft Instructions or a Checklist for an activity being authored")
     @PostMapping("/magic-fill")
-    @PreAuthorize("hasAnyRole(" + STAFF_ROLES + ")")
+    @PreAuthorize("hasAnyRole(" + STAFF_ROLES + ", 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<MagicFillResponse>> magicFill(
             @Valid @RequestBody MagicFillRequest request, @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(magicFillService.generate(principal.getOrgId(), request)));
@@ -125,7 +125,7 @@ public class ActivityController {
 
     @Operation(summary = "Browse activities other orgs have shared")
     @GetMapping("/shared-library")
-    @PreAuthorize("hasAnyRole(" + STAFF_ROLES + ")")
+    @PreAuthorize("hasAnyRole(" + STAFF_ROLES + ", 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<List<ActivityResponse>>> sharedLibrary(
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(sharingService.sharedLibrary(principal.getOrgId())));
@@ -133,7 +133,7 @@ public class ActivityController {
 
     @Operation(summary = "Clone a shared activity into this org")
     @PostMapping("/{id}/import")
-    @PreAuthorize("hasAnyRole(" + STAFF_ROLES + ")")
+    @PreAuthorize("hasAnyRole(" + STAFF_ROLES + ", 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<ActivityResponse>> importActivity(
             @PathVariable UUID id, @AuthenticationPrincipal UserPrincipal principal) {
         ActivityResponse imported = sharingService.importActivity(id, principal.getOrgId(), principal.getId());
@@ -144,7 +144,7 @@ public class ActivityController {
 
     @Operation(summary = "Upload a resource file to an activity")
     @PostMapping("/{id}/resources")
-    @PreAuthorize("hasAnyRole(" + STAFF_ROLES + ")")
+    @PreAuthorize("hasAnyRole(" + STAFF_ROLES + ", 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<ActivityResourceResponse>> uploadResource(
             @PathVariable UUID id, @RequestParam("file") MultipartFile file,
             @AuthenticationPrincipal UserPrincipal principal) throws IOException {
@@ -166,7 +166,7 @@ public class ActivityController {
 
     @Operation(summary = "Delete an activity resource")
     @DeleteMapping("/{id}/resources/{resourceId}")
-    @PreAuthorize("hasAnyRole(" + STAFF_ROLES + ")")
+    @PreAuthorize("hasAnyRole(" + STAFF_ROLES + ", 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deleteResource(
             @PathVariable UUID id, @PathVariable UUID resourceId,
             @AuthenticationPrincipal UserPrincipal principal) {

@@ -106,7 +106,7 @@ public class EnrollmentController {
 
     @Operation(summary = "Find therapists available for the given time/duration (any day)")
     @GetMapping("/available-therapists")
-    @PreAuthorize("hasAnyRole('CLINIC_HEAD', 'BUSINESS_OWNER')")
+    @PreAuthorize("hasAnyRole('CLINIC_HEAD', 'BUSINESS_OWNER', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<List<AvailableTherapistResponse>>> availableTherapists(
             @RequestParam LocalTime startTime,
             @RequestParam int durationMinutes,
@@ -160,7 +160,7 @@ public class EnrollmentController {
 
     @Operation(summary = "List enrollments for a patient")
     @GetMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<List<EnrollmentResponse>>> list(
             @RequestParam UUID patientId,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -176,7 +176,7 @@ public class EnrollmentController {
 
     @Operation(summary = "Create an enrollment for a subscription")
     @PostMapping
-    @PreAuthorize("hasAnyRole('CLINIC_HEAD', 'BUSINESS_OWNER')")
+    @PreAuthorize("hasAnyRole('CLINIC_HEAD', 'BUSINESS_OWNER', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<EnrollmentResponse>> create(
             @Valid @RequestBody CreateEnrollmentRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -278,7 +278,7 @@ public class EnrollmentController {
                     + "clinical history stays accurate."
     )
     @PatchMapping("/{id}/therapist")
-    @PreAuthorize("hasAnyRole('CLINIC_HEAD', 'BUSINESS_OWNER')")
+    @PreAuthorize("hasAnyRole('CLINIC_HEAD', 'BUSINESS_OWNER', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<EnrollmentResponse>> changeTherapist(
             @PathVariable UUID id,
             @Valid @RequestBody ChangeTherapistRequest request,
@@ -364,7 +364,7 @@ public class EnrollmentController {
 
     @Operation(summary = "Cancel an enrollment")
     @PatchMapping("/{id}/cancel")
-    @PreAuthorize("hasAnyRole('CLINIC_HEAD', 'BUSINESS_OWNER')")
+    @PreAuthorize("hasAnyRole('CLINIC_HEAD', 'BUSINESS_OWNER', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<EnrollmentResponse>> cancel(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {

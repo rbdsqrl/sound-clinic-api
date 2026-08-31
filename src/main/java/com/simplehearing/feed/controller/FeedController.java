@@ -126,7 +126,7 @@ public class FeedController {
 
     @Operation(summary = "Post a new clinic-wide update")
     @PostMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<FeedPostResponse>> create(
             @Valid @RequestBody CreateFeedPostRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -301,7 +301,7 @@ public class FeedController {
 
     @Operation(summary = "Attach images to a feed post")
     @PostMapping("/{id}/images")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<List<FeedPostImageResponse>>> uploadImages(
             @PathVariable UUID id,
             @RequestParam("files") List<MultipartFile> files,

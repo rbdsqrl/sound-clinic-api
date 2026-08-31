@@ -32,7 +32,7 @@ public class SkillController {
 
     @Operation(summary = "List all active skills for the org")
     @GetMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<List<SkillResponse>>> list(@AuthenticationPrincipal UserPrincipal principal) {
         List<SkillResponse> results = skillRepository
                 .findByOrgIdAndIsActiveTrueOrderByNameAsc(principal.getOrgId())

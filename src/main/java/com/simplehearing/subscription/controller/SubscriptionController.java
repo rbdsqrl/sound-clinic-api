@@ -58,7 +58,7 @@ public class SubscriptionController {
 
     @Operation(summary = "List subscriptions for a patient")
     @GetMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<List<SubscriptionResponse>>> list(
             @RequestParam UUID patientId,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -79,7 +79,7 @@ public class SubscriptionController {
 
     @Operation(summary = "Allocate a subscription to a patient")
     @PostMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<SubscriptionResponse>> create(
             @Valid @RequestBody CreateSubscriptionRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -127,7 +127,7 @@ public class SubscriptionController {
 
     @Operation(summary = "Record payment and discount for a subscription")
     @PatchMapping("/{id}/payment")
-    @PreAuthorize("hasAnyRole('CLINIC_HEAD', 'BUSINESS_OWNER', 'PARENT')")
+    @PreAuthorize("hasAnyRole('CLINIC_HEAD', 'BUSINESS_OWNER', 'PARENT', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<SubscriptionResponse>> recordPayment(
             @PathVariable UUID id,
             @Valid @RequestBody UpdatePaymentRequest request,
@@ -179,7 +179,7 @@ public class SubscriptionController {
 
     @Operation(summary = "Cancel a subscription")
     @PatchMapping("/{id}/cancel")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<SubscriptionResponse>> cancel(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {

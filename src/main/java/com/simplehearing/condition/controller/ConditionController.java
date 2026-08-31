@@ -48,7 +48,7 @@ public class ConditionController {
 
     @Operation(summary = "Add a new condition for this org")
     @PostMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<ConditionResponse>> create(
             @RequestBody CreateConditionRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -62,7 +62,7 @@ public class ConditionController {
 
     @Operation(summary = "Delete an org condition")
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<Void>> delete(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {

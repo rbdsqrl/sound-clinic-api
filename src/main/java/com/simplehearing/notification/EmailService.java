@@ -407,6 +407,7 @@ public class EmailService {
             case PATIENT -> "Patient";
             case CLINIC_HEAD -> "Clinic Head";
             case BUSINESS_OWNER -> "Business Owner";
+            case OFFICE_ADMIN -> "Office Admin";
         };
     }
 

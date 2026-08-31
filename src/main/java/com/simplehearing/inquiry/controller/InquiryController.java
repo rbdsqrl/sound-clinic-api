@@ -77,7 +77,7 @@ public class InquiryController {
 
     @Operation(summary = "Aggregated inquiry analytics for the organisation")
     @GetMapping("/analytics")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<InquiryAnalyticsResponse>> analytics(
             @AuthenticationPrincipal UserPrincipal principal) {
 
@@ -166,7 +166,7 @@ public class InquiryController {
                     + "log entry records who added it."
     )
     @PostMapping("/manual")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<InquiryResponse>> addManual(
             @Valid @RequestBody CreateManualInquiryRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -265,7 +265,7 @@ public class InquiryController {
 
     @Operation(summary = "List all inquiries for the organisation")
     @GetMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<List<InquiryResponse>>> list(
             @RequestParam(required = false) InquiryStatus status,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -291,7 +291,7 @@ public class InquiryController {
 
     @Operation(summary = "Update inquiry status, admin notes, and appointment")
     @PatchMapping("/{id}")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<InquiryResponse>> update(
             @PathVariable UUID id,
             @RequestBody UpdateInquiryRequest request,
@@ -349,7 +349,7 @@ public class InquiryController {
 
     @Operation(summary = "Get all activity logs for an inquiry")
     @GetMapping("/{id}/logs")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<List<InquiryLogResponse>>> getLogs(
             @PathVariable UUID id) {
 
@@ -368,7 +368,7 @@ public class InquiryController {
 
     @Operation(summary = "Add an activity log entry to an inquiry")
     @PostMapping("/{id}/logs")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<InquiryLogResponse>> addLogEntry(
             @PathVariable UUID id,
             @Valid @RequestBody CreateInquiryLogRequest request,
@@ -388,7 +388,7 @@ public class InquiryController {
 
     @Operation(summary = "Convert an inquiry into a patient record")
     @PostMapping("/{id}/convert")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<ConvertInquiryResponse>> convert(
             @PathVariable UUID id,
             @Valid @RequestBody ConvertInquiryRequest request,
@@ -456,7 +456,7 @@ public class InquiryController {
 
     @Operation(summary = "Execute a next-action transition on an inquiry")
     @PostMapping("/{id}/next-action")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<InquiryResponse>> nextAction(
             @PathVariable UUID id,
             @Valid @RequestBody NextActionRequest request,

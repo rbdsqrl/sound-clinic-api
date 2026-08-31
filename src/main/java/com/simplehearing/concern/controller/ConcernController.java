@@ -120,7 +120,7 @@ public class ConcernController {
 
     @Operation(summary = "List concerns, filterable by enrollment, patient, or org-wide status")
     @GetMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<List<ConcernResponse>>> list(
             @RequestParam(required = false) UUID enrollmentId,
             @RequestParam(required = false) UUID patientId,
@@ -165,7 +165,7 @@ public class ConcernController {
 
     @Operation(summary = "Count of open concerns — for a dashboard badge")
     @GetMapping("/open-count")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<Integer>> openCount(@AuthenticationPrincipal UserPrincipal principal) {
         int count = isClinicianOnly(principal)
                 ? concernRepository.countByOrgIdAndTherapistIdAndStatus(principal.getOrgId(), principal.getId(), ConcernStatus.OPEN)

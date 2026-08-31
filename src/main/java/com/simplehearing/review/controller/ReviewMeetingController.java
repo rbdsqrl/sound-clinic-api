@@ -68,7 +68,7 @@ public class ReviewMeetingController {
     @Operation(summary = "List review meetings",
                description = "Filter by enrollment or patient. Parents only ever see meetings for their own children.")
     @GetMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<List<ReviewMeetingResponse>>> list(
             @RequestParam(required = false) UUID enrollmentId,
             @RequestParam(required = false) UUID patientId,
@@ -101,7 +101,7 @@ public class ReviewMeetingController {
 
     @Operation(summary = "Get a single review meeting")
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<ReviewMeetingResponse>> get(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -114,7 +114,7 @@ public class ReviewMeetingController {
 
     @Operation(summary = "Add a review meeting to an existing therapy plan")
     @PostMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<ReviewMeetingResponse>> create(
             @Valid @RequestBody CreateReviewMeetingRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -137,7 +137,7 @@ public class ReviewMeetingController {
     @Operation(summary = "Generate a recurring review schedule for an existing plan",
                description = "Meetings repeat on the given interval until the end date, skipping public holidays.")
     @PostMapping("/schedule/{enrollmentId}")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<List<ReviewMeetingResponse>>> generateSchedule(
             @PathVariable UUID enrollmentId,
             @Valid @RequestBody ReviewScheduleRequest request,
@@ -171,7 +171,7 @@ public class ReviewMeetingController {
     @Operation(summary = "Reschedule a review meeting",
                description = "Resends the calendar invite so attendees' calendars move with it.")
     @PatchMapping("/{id}/reschedule")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<ReviewMeetingResponse>> reschedule(
             @PathVariable UUID id,
             @Valid @RequestBody RescheduleReviewRequest request,
@@ -191,7 +191,7 @@ public class ReviewMeetingController {
 
     @Operation(summary = "Cancel a review meeting")
     @PatchMapping("/{id}/cancel")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<ReviewMeetingResponse>> cancel(
             @PathVariable UUID id,
             @RequestBody(required = false) Map<String, String> body,
@@ -206,7 +206,7 @@ public class ReviewMeetingController {
 
     @Operation(summary = "Mark a review meeting as completed")
     @PatchMapping("/{id}/complete")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<ReviewMeetingResponse>> complete(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {

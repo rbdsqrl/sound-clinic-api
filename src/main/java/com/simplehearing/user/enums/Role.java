@@ -6,5 +6,6 @@ public enum Role {
     THERAPIST,
     DOCTOR,
     PATIENT,
-    PARENT
+    PARENT,
+    OFFICE_ADMIN
 }

@@ -118,7 +118,7 @@ public class TherapySessionController {
 
     @Operation(summary = "List therapy sessions, optionally filtered by date range and patient or therapist")
     @GetMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<List<TherapySessionResponse>>> list(
             @RequestParam(required = false) UUID patientId,
             @RequestParam(required = false) UUID therapistId,
@@ -167,7 +167,7 @@ public class TherapySessionController {
 
     @Operation(summary = "List all sessions for a specific enrollment")
     @GetMapping("/by-enrollment/{enrollmentId}")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<List<TherapySessionResponse>>> byEnrollment(
             @PathVariable UUID enrollmentId,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -294,7 +294,7 @@ public class TherapySessionController {
 
     @Operation(summary = "Reschedule a PENDING_RESCHEDULE session — set a new date and/or substitute therapist")
     @PatchMapping("/{id}/reschedule")
-    @PreAuthorize("hasAnyRole('CLINIC_HEAD', 'BUSINESS_OWNER')")
+    @PreAuthorize("hasAnyRole('CLINIC_HEAD', 'BUSINESS_OWNER', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<TherapySessionResponse>> reschedule(
             @PathVariable UUID id,
             @RequestBody RescheduleSessionRequest request,
@@ -425,7 +425,7 @@ public class TherapySessionController {
                     + "it consumes one of the sessions the family paid for."
     )
     @PostMapping("/ad-hoc")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<TherapySessionResponse>> createAdHoc(
             @Valid @RequestBody CreateAdHocSessionRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -519,7 +519,7 @@ public class TherapySessionController {
 
     @Operation(summary = "Request cancellation of a SCHEDULED session — requires admin approval")
     @PostMapping("/{id}/cancellation-request")
-    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'CLINIC_HEAD', 'BUSINESS_OWNER')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'CLINIC_HEAD', 'BUSINESS_OWNER', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<TherapySessionResponse>> cancellationRequest(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -542,7 +542,7 @@ public class TherapySessionController {
 
     @Operation(summary = "Approve a cancellation request — sets session to CANCELLED")
     @PostMapping("/{id}/approve-cancellation")
-    @PreAuthorize("hasAnyRole('CLINIC_HEAD', 'BUSINESS_OWNER')")
+    @PreAuthorize("hasAnyRole('CLINIC_HEAD', 'BUSINESS_OWNER', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<TherapySessionResponse>> approveCancellation(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -564,7 +564,7 @@ public class TherapySessionController {
 
     @Operation(summary = "Reject a cancellation request — reverts session to SCHEDULED")
     @PostMapping("/{id}/reject-cancellation")
-    @PreAuthorize("hasAnyRole('CLINIC_HEAD', 'BUSINESS_OWNER')")
+    @PreAuthorize("hasAnyRole('CLINIC_HEAD', 'BUSINESS_OWNER', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<TherapySessionResponse>> rejectCancellation(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {

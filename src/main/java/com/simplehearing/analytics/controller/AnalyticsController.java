@@ -70,7 +70,7 @@ public class AnalyticsController {
 
     @Operation(summary = "Progress series for one patient, with per-domain breakdown")
     @GetMapping("/patients/{patientId}/progress")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'PARENT')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'PARENT', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<TimeSeriesResponse>> patientProgress(
             @PathVariable UUID patientId,
             @RequestParam(defaultValue = "WEEKLY") Granularity granularity,
@@ -88,7 +88,7 @@ public class AnalyticsController {
 
     @Operation(summary = "Activity assignment/attempt progress for one patient — additive to /progress")
     @GetMapping("/patients/{patientId}/activities")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'PARENT')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'PARENT', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<ActivityProgressResponse>> patientActivityProgress(
             @PathVariable UUID patientId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
@@ -102,7 +102,7 @@ public class AnalyticsController {
 
     @Operation(summary = "Session cadence for one patient, folded across every concurrent enrollment")
     @GetMapping("/patients/{patientId}/frequency")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'PARENT')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'PARENT', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<FrequencyResponse>> patientFrequency(
             @PathVariable UUID patientId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
@@ -115,7 +115,7 @@ public class AnalyticsController {
     }
 
     @Operation(summary = "A therapist's caseload series plus a row per patient")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     @GetMapping("/therapists/{therapistId}/caseload")
     public ResponseEntity<ApiResponse<CaseloadResponse>> therapistCaseload(
             @PathVariable UUID therapistId,
@@ -132,7 +132,7 @@ public class AnalyticsController {
     }
 
     @Operation(summary = "Organisation-wide rollup — weekly or monthly only")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     @GetMapping("/overview")
     public ResponseEntity<ApiResponse<TimeSeriesResponse>> overview(
             @RequestParam(defaultValue = "MONTHLY") Granularity granularity,
@@ -153,7 +153,7 @@ public class AnalyticsController {
     }
 
     @Operation(summary = "Org-wide clinical-outcome rollup — avg therapy duration, program breakdown, admission→discharge funnel")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     @GetMapping("/snapshot")
     public ResponseEntity<ApiResponse<OrgSnapshotResponse>> snapshot(@AuthenticationPrincipal UserPrincipal principal) {
         OrgSnapshotResponse data = analyticsService.orgSnapshot(orgId(principal));
@@ -161,7 +161,7 @@ public class AnalyticsController {
     }
 
     @Operation(summary = "Org-wide engagement rollup for the Overview analytics tab — users, sessions, skills, checklist fills")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     @GetMapping("/engagement-overview")
     public ResponseEntity<ApiResponse<EngagementOverviewResponse>> engagementOverview(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
@@ -173,7 +173,7 @@ public class AnalyticsController {
     }
 
     @Operation(summary = "Session count per day in the window — powers the calendar heatmap")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     @GetMapping("/session-heatmap")
     public ResponseEntity<ApiResponse<List<EngagementOverviewResponse.TrendPoint>>> sessionHeatmap(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
@@ -185,7 +185,7 @@ public class AnalyticsController {
     }
 
     @Operation(summary = "One row per active patient — sessions, members/activities assigned, checklist fills, LT goals, payment status")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     @GetMapping("/cases")
     public ResponseEntity<ApiResponse<List<CaseSummaryResponse>>> cases(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
@@ -197,7 +197,7 @@ public class AnalyticsController {
     }
 
     @Operation(summary = "One row per therapist/doctor — cases/activities assigned, activities created, sessions cancelled, IEP plans")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     @GetMapping("/members")
     public ResponseEntity<ApiResponse<List<MemberSummaryResponse>>> members(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
@@ -209,7 +209,7 @@ public class AnalyticsController {
     }
 
     @Operation(summary = "Flat session log + KPI strip for the Schedule tab, optionally filtered by case/member/program")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     @GetMapping("/sessions")
     public ResponseEntity<ApiResponse<ScheduleResponse>> schedule(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
@@ -225,7 +225,7 @@ public class AnalyticsController {
 
     @Operation(summary = "Discharge success-criteria composite for one enrollment")
     @GetMapping("/enrollments/{enrollmentId}/success-criteria")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<SuccessCriteriaResponse>> successCriteria(
             @PathVariable UUID enrollmentId,
             @AuthenticationPrincipal UserPrincipal principal) {
