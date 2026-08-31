@@ -45,7 +45,7 @@ public class InvitationService {
 
     /** All roles a BUSINESS_OWNER / CLINIC_HEAD may invite. */
     private static final Set<Role> INVITABLE_ROLES = Set.of(
-            Role.CLINIC_HEAD, Role.THERAPIST, Role.DOCTOR,
+            Role.CLINIC_HEAD, Role.THERAPIST, Role.DOCTOR, Role.OFFICE_ADMIN,
             Role.PARENT, Role.PATIENT, Role.BUSINESS_OWNER
     );
 

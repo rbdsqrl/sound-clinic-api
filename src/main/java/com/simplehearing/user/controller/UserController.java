@@ -69,7 +69,7 @@ public class UserController {
 
     /** Everyone who works at the clinic — as opposed to parents and patients. */
     private static final List<Role> STAFF_ROLES = List.of(
-            Role.CLINIC_HEAD, Role.BUSINESS_OWNER, Role.THERAPIST, Role.DOCTOR);
+            Role.CLINIC_HEAD, Role.BUSINESS_OWNER, Role.THERAPIST, Role.DOCTOR, Role.OFFICE_ADMIN);
 
     @Operation(summary = "List all staff members in the organisation")
     @GetMapping("/members")
@@ -288,6 +288,23 @@ public class UserController {
             throw new ApiException(HttpStatus.FORBIDDEN, "User does not belong to this organisation");
         }
         target.setActive(false);
+        userRepository.save(target);
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    @Operation(summary = "Reactivate a deactivated member — restores login access with their existing role")
+    @PatchMapping("/{id}/activate")
+    @PreAuthorize("hasRole('BUSINESS_OWNER')")
+    public ResponseEntity<ApiResponse<Void>> activateMember(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        User target = userRepository.findById(id)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "User not found"));
+        if (!target.getOrgId().equals(principal.getOrgId())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "User does not belong to this organisation");
+        }
+        target.setActive(true);
         userRepository.save(target);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
