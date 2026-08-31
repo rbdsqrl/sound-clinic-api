@@ -79,8 +79,9 @@ public class ReviewMeetingController {
             meetings = meetingRepository.findByEnrollmentIdOrderByMeetingNumberAsc(enrollmentId);
         } else if (patientId != null) {
             meetings = meetingRepository.findByOrgIdAndPatientIdOrderByMeetingDateAsc(principal.getOrgId(), patientId);
-        } else if (isManager(principal)) {
-            // Unfiltered: admins get the whole organisation — this is what the calendar asks for
+        } else if (isManager(principal) || isOfficeAdmin(principal)) {
+            // Unfiltered: admins (and Office Admin, who schedules but never sees feedback
+            // content — see enrich()) get the whole organisation — this is what the calendar asks for
             meetings = meetingRepository.findByOrgIdOrderByMeetingDateAsc(principal.getOrgId());
         } else if (isParent(principal)) {
             meetings = meetingRepository.findForParent(principal.getOrgId(), principal.getId());
@@ -311,9 +312,13 @@ public class ReviewMeetingController {
         return meeting;
     }
 
-    /** Admins see everything; therapists their own meetings; parents their own children's. */
+    /**
+     * Admins and Office Admin see everything (Office Admin schedules these meetings but
+     * never sees feedback content — that's decided separately in enrich()); therapists see
+     * their own meetings; parents their own children's.
+     */
     private boolean canView(ReviewMeeting meeting, UserPrincipal principal) {
-        if (isManager(principal)) return true;
+        if (isManager(principal) || isOfficeAdmin(principal)) return true;
         if (isClinician(principal)) return meeting.getTherapistId().equals(principal.getId());
         if (isParent(principal)) return isLinkedParent(meeting.getPatientId(), principal.getId());
         return false;
@@ -336,6 +341,10 @@ public class ReviewMeetingController {
 
     private static boolean isParent(UserPrincipal principal) {
         return principal.getUser().hasRole(Role.PARENT);
+    }
+
+    private static boolean isOfficeAdmin(UserPrincipal principal) {
+        return principal.getUser().hasRole(Role.OFFICE_ADMIN);
     }
 
     /**
