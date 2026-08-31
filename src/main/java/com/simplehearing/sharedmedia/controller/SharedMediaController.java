@@ -33,7 +33,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-@Tag(name = "Shared Media", description = "Videos and notes shared between parents and the care team for a patient")
+@Tag(name = "Shared Media", description = "Files (videos, images, documents) and notes shared between parents and the care team for a patient")
 @RestController
 @RequestMapping("/api/v1/patients/{patientId}/shared-media")
 public class SharedMediaController {
@@ -59,7 +59,7 @@ public class SharedMediaController {
         this.storageService = storageService;
     }
 
-    @Operation(summary = "List videos/notes shared between the parent and the care team for a patient")
+    @Operation(summary = "List files/notes shared between the parent and the care team for a patient")
     @GetMapping
     @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'PARENT')")
     public ResponseEntity<ApiResponse<List<SharedMediaResponse>>> list(
@@ -85,24 +85,24 @@ public class SharedMediaController {
         return ResponseEntity.ok(ApiResponse.success(result));
     }
 
-    @Operation(summary = "Share a video and/or a note for a patient — video is optional so a note can be shared alone")
+    @Operation(summary = "Share a file and/or a note for a patient — video, document or image; file is optional so a note can be shared alone")
     @PostMapping
     @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'PARENT')")
     public ResponseEntity<ApiResponse<SharedMediaResponse>> upload(
             @PathVariable UUID patientId,
-            @RequestParam(value = "video", required = false) MultipartFile video,
+            @RequestParam(value = "file", required = false) MultipartFile file,
             @RequestParam(value = "note", required = false) String note,
             @AuthenticationPrincipal UserPrincipal principal) throws IOException {
 
         Patient patient = requireAccessible(patientId, principal);
 
-        boolean hasVideo = video != null && !video.isEmpty();
+        boolean hasFile = file != null && !file.isEmpty();
         boolean hasNote = StringUtils.hasText(note);
-        if (!hasVideo && !hasNote) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Add a video, a note, or both");
+        if (!hasFile && !hasNote) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Add a file, a note, or both");
         }
-        if (hasVideo && (video.getContentType() == null || !video.getContentType().startsWith("video/"))) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Only video files are supported");
+        if (hasFile && !isSupportedContentType(file.getContentType())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Unsupported file type — videos, images and documents (PDF, Word, Excel, PowerPoint, text) are supported");
         }
 
         User actor = principal.getUser();
@@ -117,12 +117,12 @@ public class SharedMediaController {
         media.setDirection(direction);
         media.setNote(hasNote ? note : null);
 
-        if (hasVideo) {
-            String url = storageService.store(video, "shared-media/" + patientId);
-            media.setFileName(video.getOriginalFilename() != null ? video.getOriginalFilename() : "video");
+        if (hasFile) {
+            String url = storageService.store(file, "shared-media/" + patientId);
+            media.setFileName(file.getOriginalFilename() != null ? file.getOriginalFilename() : "file");
             media.setFileUrl(url);
-            media.setContentType(video.getContentType());
-            media.setFileSizeBytes(video.getSize());
+            media.setContentType(file.getContentType());
+            media.setFileSizeBytes(file.getSize());
         }
 
         SharedMedia saved = sharedMediaRepository.save(media);
@@ -132,7 +132,7 @@ public class SharedMediaController {
                 SharedMediaResponse.from(saved, actor.getFirstName() + " " + actor.getLastName(), actor.getRole(), presignedUrl)));
     }
 
-    @Operation(summary = "Delete a shared video/note — the uploader, or BUSINESS_OWNER/CLINIC_HEAD")
+    @Operation(summary = "Delete a shared file/note — the uploader, or BUSINESS_OWNER/CLINIC_HEAD")
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'PARENT')")
     public ResponseEntity<ApiResponse<Void>> delete(
@@ -161,6 +161,26 @@ public class SharedMediaController {
         sharedMediaRepository.delete(media);
 
         return ResponseEntity.noContent().build();
+    }
+
+    // ── Content type allowlist ────────────────────────────────────────────────────
+
+    private static final java.util.Set<String> SUPPORTED_DOCUMENT_TYPES = java.util.Set.of(
+            "application/pdf",
+            "application/msword",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.ms-excel",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/vnd.ms-powerpoint",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            "text/plain", "text/csv"
+    );
+
+    private boolean isSupportedContentType(String contentType) {
+        if (contentType == null) return false;
+        return contentType.startsWith("video/")
+                || contentType.startsWith("image/")
+                || SUPPORTED_DOCUMENT_TYPES.contains(contentType);
     }
 
     // ── Access control ──────────────────────────────────────────────────────────
