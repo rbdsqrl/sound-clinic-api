@@ -8,6 +8,7 @@ import com.simplehearing.resource.entity.ResourceFolder;
 import com.simplehearing.resource.enums.ResourceType;
 import com.simplehearing.resource.repository.ResourceFolderRepository;
 import com.simplehearing.resource.repository.ResourceRepository;
+import com.simplehearing.storage.StorageService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,8 +26,10 @@ public class ResourceService {
 
     private final ResourceFolderRepository folderRepository;
     private final ResourceRepository resourceRepository;
+    private final StorageService storageService;
 
-    public ResourceService(ResourceFolderRepository folderRepository, ResourceRepository resourceRepository) {
+    public ResourceService(ResourceFolderRepository folderRepository, ResourceRepository resourceRepository, StorageService storageService) {
+        this.storageService = storageService;
         this.folderRepository = folderRepository;
         this.resourceRepository = resourceRepository;
     }
@@ -120,6 +123,16 @@ public class ResourceService {
 
     public void deleteResource(UUID orgId, UUID id) {
         resourceRepository.delete(requireResource(orgId, id));
+    }
+
+    /** Stores an uploaded file and returns its URL — used to fill a resource's `url` field
+     *  as an alternative to pasting an external link, for any resource type. */
+    public String uploadFile(UUID orgId, MultipartFile file) {
+        try {
+            return storageService.store(file, "resources/" + orgId);
+        } catch (IOException e) {
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to store file");
+        }
     }
 
     /**

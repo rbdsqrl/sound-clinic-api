@@ -14,6 +14,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.Map;
 import java.util.UUID;
 
 @Tag(name = "Resources", description = "Org-wide folder of external activities/worksheets — links, videos, images")
@@ -101,6 +102,17 @@ public class ResourceController {
 
         resourceService.deleteResource(principal.getOrgId(), id);
         return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "Upload a file (any type) and get back a URL to use as a resource's URL — lets Add/Edit Resource offer 'upload a file' alongside 'paste a link'")
+    @PostMapping("/upload")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
+    public ResponseEntity<ApiResponse<Map<String, String>>> upload(
+            @RequestParam("file") MultipartFile file,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        String url = resourceService.uploadFile(principal.getOrgId(), file);
+        return ResponseEntity.ok(ApiResponse.success(Map.of("url", url)));
     }
 
     @Operation(summary = "Bulk-import folders/resources from a CSV (columns: folder_path,name,type,url). " +
