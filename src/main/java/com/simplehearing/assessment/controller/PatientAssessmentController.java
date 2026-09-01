@@ -38,7 +38,7 @@ public class PatientAssessmentController {
 
     @Operation(summary = "Get an assessment type's category/item/option definition")
     @GetMapping("/definition")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'PARENT')")
     public ResponseEntity<ApiResponse<AssessmentDefinitionResponse>> getDefinition(
             @PathVariable UUID patientId,
             @PathVariable String type,
@@ -49,7 +49,7 @@ public class PatientAssessmentController {
 
     @Operation(summary = "List a patient's fills of this assessment, oldest first")
     @GetMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'PARENT')")
     public ResponseEntity<ApiResponse<List<PatientAssessmentResponse>>> list(
             @PathVariable UUID patientId,
             @PathVariable String type,
@@ -61,7 +61,7 @@ public class PatientAssessmentController {
 
     @Operation(summary = "Download one filled assessment as a PDF, laid out like the paper form")
     @GetMapping("/{assessmentId}/pdf")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'PARENT')")
     public ResponseEntity<ApiResponse<Map<String, String>>> pdf(
             @PathVariable UUID patientId,
             @PathVariable String type,
@@ -74,7 +74,7 @@ public class PatientAssessmentController {
 
     @Operation(summary = "Record a new fill of this assessment for a patient")
     @PostMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST')")
     public ResponseEntity<ApiResponse<PatientAssessmentResponse>> create(
             @PathVariable UUID patientId,
             @PathVariable String type,
@@ -87,7 +87,7 @@ public class PatientAssessmentController {
 
     @Operation(summary = "Upload a file for a FILE-type item (e.g. a prior assessment report) and get back a URL to submit in the fill")
     @PostMapping("/upload")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST')")
     public ResponseEntity<ApiResponse<Map<String, String>>> upload(
             @PathVariable UUID patientId,
             @PathVariable String type,

@@ -113,9 +113,9 @@ public class EnrollmentController {
             @RequestParam LocalDate startDate,
             @AuthenticationPrincipal UserPrincipal principal) {
 
-        // 1. All therapists and doctors in the org
+        // 1. All therapists in the org
         List<User> therapists = userRepository.findByOrgIdAndRoleIn(
-                principal.getOrgId(), List.of(Role.THERAPIST, Role.DOCTOR));
+                principal.getOrgId(), List.of(Role.THERAPIST));
 
         if (therapists.isEmpty()) {
             return ResponseEntity.ok(ApiResponse.success(List.of()));
@@ -160,7 +160,7 @@ public class EnrollmentController {
 
     @Operation(summary = "List enrollments for a patient")
     @GetMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT', 'OFFICE_ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'PARENT', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<List<EnrollmentResponse>>> list(
             @RequestParam UUID patientId,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -306,8 +306,8 @@ public class EnrollmentController {
         if (!therapist.isActive()) {
             throw new ApiException(HttpStatus.CONFLICT, "That therapist is deactivated");
         }
-        if (!therapist.hasRole(Role.THERAPIST) && !therapist.hasRole(Role.DOCTOR)) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "That user is not a therapist or doctor");
+        if (!therapist.hasRole(Role.THERAPIST)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "That user is not a therapist");
         }
 
         UUID previousTherapistId = enrollment.getTherapistId();
@@ -439,7 +439,7 @@ public class EnrollmentController {
                     + "enrollment's care status is REVIEW or PROGRAM_COMPLETED."
     )
     @PatchMapping("/{id}/therapist-signoff")
-    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('THERAPIST')")
     public ResponseEntity<ApiResponse<EnrollmentResponse>> therapistSignoff(
             @PathVariable UUID id,
             @RequestBody(required = false) TherapistSignoffRequest request,

@@ -349,7 +349,7 @@ public class AnalyticsService {
 
         // Active users
         List<User> staff = userRepository.findByOrgIdAndRoleIn(orgId,
-                List.of(Role.THERAPIST, Role.DOCTOR, Role.CLINIC_HEAD, Role.BUSINESS_OWNER));
+                List.of(Role.THERAPIST, Role.CLINIC_HEAD, Role.BUSINESS_OWNER));
         List<Patient> patients = patientRepository.findByOrgId(orgId);
         EngagementOverviewResponse.UserCounts activeUsers =
                 new EngagementOverviewResponse.UserCounts(staff.size(), patients.size());
@@ -559,7 +559,7 @@ public class AnalyticsService {
     public List<MemberSummaryResponse> members(UUID orgId, LocalDate from, LocalDate to) {
         validateWindow(from, to);
 
-        List<User> staff = userRepository.findByOrgIdAndRoleIn(orgId, List.of(Role.THERAPIST, Role.DOCTOR));
+        List<User> staff = userRepository.findByOrgIdAndRoleIn(orgId, List.of(Role.THERAPIST));
         if (staff.isEmpty()) return List.of();
         List<UUID> staffIds = staff.stream().map(User::getId).toList();
 

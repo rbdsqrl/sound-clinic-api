@@ -453,10 +453,10 @@ public class IEPService {
 
     // ── Private helpers ───────────────────────────────────────────────────────
 
-    /** THERAPIST/DOCTOR callers default to assigning themselves; others leave the plan unassigned. */
+    /** THERAPIST callers default to assigning themselves; others leave the plan unassigned. */
     private UUID defaultTherapistId(UserPrincipal principal) {
         Role role = principal.getUser().getRole();
-        return (role == Role.THERAPIST || role == Role.DOCTOR) ? principal.getId() : null;
+        return role == Role.THERAPIST ? principal.getId() : null;
     }
 
     private void validateTherapist(UUID therapistId, UUID orgId) {
@@ -465,11 +465,10 @@ public class IEPService {
         if (!therapist.getOrgId().equals(orgId)) {
             throw new ApiException(HttpStatus.FORBIDDEN, "Access denied");
         }
-        boolean isClinical = therapist.getRole() == Role.THERAPIST || therapist.getRole() == Role.DOCTOR
-                || therapist.getAdditionalRoles().contains(Role.THERAPIST)
-                || therapist.getAdditionalRoles().contains(Role.DOCTOR);
+        boolean isClinical = therapist.getRole() == Role.THERAPIST
+                || therapist.getAdditionalRoles().contains(Role.THERAPIST);
         if (!isClinical) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Selected user is not a therapist or doctor");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Selected user is not a therapist");
         }
     }
 

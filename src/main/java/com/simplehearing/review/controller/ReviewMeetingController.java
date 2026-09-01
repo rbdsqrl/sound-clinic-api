@@ -68,7 +68,7 @@ public class ReviewMeetingController {
     @Operation(summary = "List review meetings",
                description = "Filter by enrollment or patient. Parents only ever see meetings for their own children.")
     @GetMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT', 'OFFICE_ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'PARENT', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<List<ReviewMeetingResponse>>> list(
             @RequestParam(required = false) UUID enrollmentId,
             @RequestParam(required = false) UUID patientId,
@@ -102,7 +102,7 @@ public class ReviewMeetingController {
 
     @Operation(summary = "Get a single review meeting")
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT', 'OFFICE_ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'PARENT', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<ReviewMeetingResponse>> get(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -207,7 +207,7 @@ public class ReviewMeetingController {
 
     @Operation(summary = "Mark a review meeting as completed")
     @PatchMapping("/{id}/complete")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'OFFICE_ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<ReviewMeetingResponse>> complete(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -264,7 +264,7 @@ public class ReviewMeetingController {
 
     @Operation(summary = "Therapist shares feedback on the sessions under review")
     @PutMapping("/{id}/therapist-feedback")
-    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'CLINIC_HEAD', 'BUSINESS_OWNER')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'CLINIC_HEAD', 'BUSINESS_OWNER')")
     public ResponseEntity<ApiResponse<ReviewMeetingResponse>> submitTherapistFeedback(
             @PathVariable UUID id,
             @Valid @RequestBody TherapistFeedbackRequest request,
@@ -336,7 +336,7 @@ public class ReviewMeetingController {
     }
 
     private static boolean isClinician(UserPrincipal principal) {
-        return principal.getUser().hasRole(Role.THERAPIST) || principal.getUser().hasRole(Role.DOCTOR);
+        return principal.getUser().hasRole(Role.THERAPIST);
     }
 
     private static boolean isParent(UserPrincipal principal) {

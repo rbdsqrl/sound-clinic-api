@@ -34,7 +34,7 @@ public class MeetingController {
                description = "Staff only — parents and patients attend meetings but cannot create them. "
                            + "The organiser is added to the participant list automatically.")
     @PostMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST')")
     public ResponseEntity<ApiResponse<MeetingResponse>> create(
             @Valid @RequestBody CreateMeetingRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -71,7 +71,7 @@ public class MeetingController {
     @Operation(summary = "Cancel a meeting",
                description = "Sends a CANCEL calendar invite so the entry drops out of participants' calendars.")
     @PatchMapping("/{id}/cancel")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST')")
     public ResponseEntity<ApiResponse<MeetingResponse>> cancel(
             @PathVariable UUID id,
             @RequestBody(required = false) CancelMeetingRequest request,

@@ -14,6 +14,6 @@ public record CreateIEPPlanRequest(
         List<CreateIEPGoalRequest> goals,
         /** Which program this plan belongs to — lets goal mastery be attributed to the right enrollment. */
         UUID enrollmentId,
-        /** The therapist this plan is assigned to. Defaults to the caller when they're a THERAPIST/DOCTOR. */
+        /** The therapist this plan is assigned to. Defaults to the caller when they're a THERAPIST. */
         UUID therapistId
 ) {}

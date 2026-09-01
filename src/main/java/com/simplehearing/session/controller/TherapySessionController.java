@@ -118,7 +118,7 @@ public class TherapySessionController {
 
     @Operation(summary = "List therapy sessions, optionally filtered by date range and patient or therapist")
     @GetMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT', 'OFFICE_ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'PARENT', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<List<TherapySessionResponse>>> list(
             @RequestParam(required = false) UUID patientId,
             @RequestParam(required = false) UUID therapistId,
@@ -142,7 +142,7 @@ public class TherapySessionController {
         Role role   = caller.getRole();
 
         List<TherapySession> sessions;
-        if (role == Role.THERAPIST || role == Role.DOCTOR) {
+        if (role == Role.THERAPIST) {
             sessions = sessionRepository
                     .findByOrgIdAndTherapistIdAndSessionDateBetweenOrderBySessionDateAscStartTimeAsc(
                             principal.getOrgId(), principal.getId(), start, end);
@@ -167,7 +167,7 @@ public class TherapySessionController {
 
     @Operation(summary = "List all sessions for a specific enrollment")
     @GetMapping("/by-enrollment/{enrollmentId}")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT', 'OFFICE_ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'PARENT', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<List<TherapySessionResponse>>> byEnrollment(
             @PathVariable UUID enrollmentId,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -178,9 +178,9 @@ public class TherapySessionController {
             throw new ApiException(HttpStatus.FORBIDDEN, "Access denied");
         }
 
-        // Therapists and doctors can only see sessions for enrollments assigned to them
+        // Therapists can only see sessions for enrollments assigned to them
         Role role = principal.getUser().getRole();
-        if (role == Role.THERAPIST || role == Role.DOCTOR) {
+        if (role == Role.THERAPIST) {
             enrollmentRepository.findById(enrollmentId).ifPresent(enrollment -> {
                 if (!enrollment.getTherapistId().equals(principal.getId())) {
                     throw new ApiException(HttpStatus.FORBIDDEN, "Access denied");
@@ -195,7 +195,7 @@ public class TherapySessionController {
 
     @Operation(summary = "Update therapy session status (COMPLETED / CANCELLED / NO_SHOW)")
     @PatchMapping("/{id}/status")
-    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'CLINIC_HEAD', 'BUSINESS_OWNER')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'CLINIC_HEAD', 'BUSINESS_OWNER')")
     public ResponseEntity<ApiResponse<TherapySessionResponse>> updateStatus(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateSessionStatusRequest request,
@@ -206,7 +206,7 @@ public class TherapySessionController {
 
         Role callerRole = principal.getUser().getRole();
         if (request.status() == TherapySessionStatus.CANCELLED
-                && (callerRole == Role.THERAPIST || callerRole == Role.DOCTOR)) {
+                && (callerRole == Role.THERAPIST)) {
             throw new ApiException(HttpStatus.FORBIDDEN,
                     "Therapists cannot cancel sessions directly — use cancellation-request instead");
         }
@@ -227,7 +227,7 @@ public class TherapySessionController {
 
     @Operation(summary = "Update session feedback, progress report, and notes")
     @PatchMapping("/{id}/notes")
-    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'CLINIC_HEAD', 'BUSINESS_OWNER')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'CLINIC_HEAD', 'BUSINESS_OWNER')")
     public ResponseEntity<ApiResponse<TherapySessionResponse>> updateNotes(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateSessionNotesRequest request,
@@ -249,7 +249,7 @@ public class TherapySessionController {
 
     @Operation(summary = "Get the session feedback checklist template and this session's answers")
     @GetMapping("/{id}/feedback")
-    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'CLINIC_HEAD', 'BUSINESS_OWNER')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'CLINIC_HEAD', 'BUSINESS_OWNER')")
     public ResponseEntity<ApiResponse<SessionFeedbackResponse>> getFeedback(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -267,7 +267,7 @@ public class TherapySessionController {
 
     @Operation(summary = "Save this session's feedback checklist answers")
     @PutMapping("/{id}/feedback")
-    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'CLINIC_HEAD', 'BUSINESS_OWNER')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'CLINIC_HEAD', 'BUSINESS_OWNER')")
     public ResponseEntity<ApiResponse<Void>> updateFeedback(
             @PathVariable UUID id,
             @RequestBody UpdateSessionFeedbackRequest request,
@@ -519,7 +519,7 @@ public class TherapySessionController {
 
     @Operation(summary = "Request cancellation of a SCHEDULED session — requires admin approval")
     @PostMapping("/{id}/cancellation-request")
-    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'CLINIC_HEAD', 'BUSINESS_OWNER', 'OFFICE_ADMIN')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'CLINIC_HEAD', 'BUSINESS_OWNER', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<TherapySessionResponse>> cancellationRequest(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -586,7 +586,7 @@ public class TherapySessionController {
 
     @Operation(summary = "Upload a file attachment to a session")
     @PostMapping("/{id}/attachments")
-    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'CLINIC_HEAD', 'BUSINESS_OWNER')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'CLINIC_HEAD', 'BUSINESS_OWNER')")
     public ResponseEntity<ApiResponse<SessionAttachmentResponse>> uploadAttachment(
             @PathVariable UUID id,
             @RequestParam("file") MultipartFile file,
@@ -616,7 +616,7 @@ public class TherapySessionController {
 
     @Operation(summary = "List all attachments for a session")
     @GetMapping("/{id}/attachments")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'PARENT')")
     public ResponseEntity<ApiResponse<List<SessionAttachmentResponse>>> listAttachments(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -635,7 +635,7 @@ public class TherapySessionController {
 
     @Operation(summary = "Delete a session attachment")
     @DeleteMapping("/{id}/attachments/{attachmentId}")
-    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'CLINIC_HEAD', 'BUSINESS_OWNER')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'CLINIC_HEAD', 'BUSINESS_OWNER')")
     public ResponseEntity<ApiResponse<Void>> deleteAttachment(
             @PathVariable UUID id,
             @PathVariable UUID attachmentId,
@@ -649,7 +649,7 @@ public class TherapySessionController {
         }
 
         User caller = principal.getUser();
-        if ((caller.getRole() == Role.THERAPIST || caller.getRole() == Role.DOCTOR)
+        if ((caller.getRole() == Role.THERAPIST)
                 && !att.getTherapistId().equals(principal.getId())) {
             throw new ApiException(HttpStatus.FORBIDDEN, "You can only delete your own attachments");
         }
@@ -672,7 +672,7 @@ public class TherapySessionController {
 
     private void requireTherapistOwnership(TherapySession session, UserPrincipal principal) {
         User caller = principal.getUser();
-        if ((caller.getRole() == Role.THERAPIST || caller.getRole() == Role.DOCTOR)
+        if ((caller.getRole() == Role.THERAPIST)
                 && !session.getTherapistId().equals(principal.getId())) {
             throw new ApiException(HttpStatus.FORBIDDEN, "You can only modify your own sessions");
         }

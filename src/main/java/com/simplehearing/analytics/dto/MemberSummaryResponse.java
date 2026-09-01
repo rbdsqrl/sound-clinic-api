@@ -3,7 +3,7 @@ package com.simplehearing.analytics.dto;
 import java.util.UUID;
 
 /**
- * One row per therapist/doctor for the "Members" analytics tab — a Kidaura-parity list view.
+ * One row per therapist for the "Members" analytics tab — a Kidaura-parity list view.
  * {@code sessionsCancelled} and {@code activitiesAssigned} are scoped to the requested
  * [from, to] window; {@code casesAssigned} and {@code activitiesCreated} reflect current
  * standing state rather than window activity, matching how caseload size is reported

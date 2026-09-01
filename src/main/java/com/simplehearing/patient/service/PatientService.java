@@ -121,7 +121,7 @@ public class PatientService {
     @Transactional(readOnly = true)
     public List<PatientResponse> listForOrg(UserPrincipal principal) {
         Role role = principal.getUser().getRole();
-        if (role == Role.THERAPIST || role == Role.DOCTOR) {
+        if (role == Role.THERAPIST) {
             List<UUID> patientIds = therapistPatientRepository
                     .findByTherapistIdAndIsActive(principal.getId(), true)
                     .stream().map(TherapistPatient::getPatientId).toList();
@@ -180,7 +180,7 @@ public class PatientService {
         Role role = principal.getUser().getRole();
         List<Patient> patients;
 
-        if (role == Role.THERAPIST || role == Role.DOCTOR) {
+        if (role == Role.THERAPIST) {
             List<UUID> patientIds = therapistPatientRepository
                     .findByTherapistIdAndIsActive(principal.getId(), true)
                     .stream().map(TherapistPatient::getPatientId).toList();

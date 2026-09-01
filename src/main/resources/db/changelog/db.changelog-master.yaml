@@ -266,3 +266,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/089-migrate-legacy-assessments.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/090-remove-doctor-role.sql
+      relativeToChangelogFile: false

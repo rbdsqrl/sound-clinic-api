@@ -41,7 +41,7 @@ public class PublicHolidayController {
 
     @Operation(summary = "List all public holidays for the organisation")
     @GetMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST')")
     public ResponseEntity<ApiResponse<List<PublicHolidayResponse>>> list(
             @AuthenticationPrincipal UserPrincipal principal) {
 

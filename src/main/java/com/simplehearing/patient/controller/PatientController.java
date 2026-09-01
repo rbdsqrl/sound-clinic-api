@@ -41,7 +41,7 @@ public class PatientController {
 
     @Operation(summary = "List all patients in your organisation")
     @GetMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'OFFICE_ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<List<PatientResponse>>> list(
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(patientService.listForOrg(principal)));
@@ -49,7 +49,7 @@ public class PatientController {
 
     @Operation(summary = "Patients whose birthday falls in the next 30 days")
     @GetMapping("/upcoming-birthdays")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'OFFICE_ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<List<UpcomingBirthdayResponse>>> upcomingBirthdays(
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(patientService.upcomingBirthdays(principal)));
@@ -65,7 +65,7 @@ public class PatientController {
 
     @Operation(summary = "Get a patient by ID")
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT', 'OFFICE_ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'PARENT', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<PatientResponse>> get(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -84,7 +84,7 @@ public class PatientController {
 
     @Operation(summary = "Update patient journey stage")
     @PatchMapping("/{id}/stage")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'DOCTOR', 'OFFICE_ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<PatientResponse>> updateStage(
             @PathVariable UUID id,
             @Valid @RequestBody UpdatePatientStageRequest request,

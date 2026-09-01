@@ -39,7 +39,7 @@ public class BaselineReportController {
 
     @Operation(summary = "Get the patient's baseline report, or null if none has been created yet")
     @GetMapping
-    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'BUSINESS_OWNER', 'CLINIC_HEAD', 'PARENT')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'BUSINESS_OWNER', 'CLINIC_HEAD', 'PARENT')")
     public ResponseEntity<ApiResponse<BaselineReportResponse>> getReport(
             @PathVariable UUID patientId,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -50,7 +50,7 @@ public class BaselineReportController {
 
     @Operation(summary = "Create the baseline report for a patient — header fields and initial per-domain baseline values")
     @PostMapping
-    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'BUSINESS_OWNER', 'CLINIC_HEAD')")
     public ResponseEntity<ApiResponse<BaselineReportResponse>> createReport(
             @PathVariable UUID patientId,
             @RequestBody CreateBaselineReportRequest request,
@@ -62,7 +62,7 @@ public class BaselineReportController {
 
     @Operation(summary = "Update the baseline report's header fields and/or per-domain baseline text")
     @PatchMapping
-    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'BUSINESS_OWNER', 'CLINIC_HEAD')")
     public ResponseEntity<ApiResponse<BaselineReportResponse>> updateReport(
             @PathVariable UUID patientId,
             @RequestBody UpdateBaselineReportRequest request,
@@ -74,7 +74,7 @@ public class BaselineReportController {
 
     @Operation(summary = "Log a dated 'current' entry for one domain")
     @PostMapping("/domains/{domain}/progress")
-    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'BUSINESS_OWNER', 'CLINIC_HEAD')")
     public ResponseEntity<ApiResponse<BaselineProgressEntryResponse>> addProgress(
             @PathVariable UUID patientId,
             @PathVariable BaselineDomain domain,
@@ -87,7 +87,7 @@ public class BaselineReportController {
 
     @Operation(summary = "List one domain's dated 'current' entries, newest first")
     @GetMapping("/domains/{domain}/progress")
-    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'BUSINESS_OWNER', 'CLINIC_HEAD', 'PARENT')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'BUSINESS_OWNER', 'CLINIC_HEAD', 'PARENT')")
     public ResponseEntity<ApiResponse<List<BaselineProgressEntryResponse>>> listProgress(
             @PathVariable UUID patientId,
             @PathVariable BaselineDomain domain,

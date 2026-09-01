@@ -58,7 +58,7 @@ public class SubscriptionController {
 
     @Operation(summary = "List subscriptions for a patient")
     @GetMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT', 'OFFICE_ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'PARENT', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<List<SubscriptionResponse>>> list(
             @RequestParam UUID patientId,
             @AuthenticationPrincipal UserPrincipal principal) {

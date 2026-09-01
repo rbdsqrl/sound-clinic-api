@@ -56,7 +56,7 @@ public class AppointmentController {
 
     @Operation(summary = "List availability slots — optionally filter by therapistId")
     @GetMapping("/availability-slots")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT', 'OFFICE_ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'PARENT', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<List<SlotResponse>>> listSlots(
             @RequestParam(required = false) UUID therapistId,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -87,7 +87,7 @@ public class AppointmentController {
 
     @Operation(summary = "List appointments (role-scoped)")
     @GetMapping("/appointments")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT', 'OFFICE_ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'PARENT', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<List<AppointmentResponse>>> list(
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(appointmentService.listForCaller(principal)));
@@ -95,7 +95,7 @@ public class AppointmentController {
 
     @Operation(summary = "Update appointment status")
     @PatchMapping("/appointments/{id}/status")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT', 'OFFICE_ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'PARENT', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<AppointmentResponse>> updateStatus(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateAppointmentStatusRequest request,

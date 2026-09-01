@@ -44,7 +44,7 @@ public class UserController {
     private static final Set<Role> GRANTABLE_ADDITIONAL_ROLES = Set.of(Role.PARENT);
 
     /** Primary roles allowed to acquire an additional role. */
-    private static final Set<Role> ELIGIBLE_PRIMARY_ROLES = Set.of(Role.BUSINESS_OWNER, Role.THERAPIST, Role.DOCTOR);
+    private static final Set<Role> ELIGIBLE_PRIMARY_ROLES = Set.of(Role.BUSINESS_OWNER, Role.THERAPIST);
 
     private final UserRepository userRepository;
     private final TherapistPatientRepository therapistPatientRepository;
@@ -65,11 +65,11 @@ public class UserController {
     }
 
     /** Roles that count as "clinical staff" for the therapists list. */
-    private static final List<Role> CLINICAL_ROLES = List.of(Role.THERAPIST, Role.DOCTOR);
+    private static final List<Role> CLINICAL_ROLES = List.of(Role.THERAPIST);
 
     /** Everyone who works at the clinic — as opposed to parents and patients. */
     private static final List<Role> STAFF_ROLES = List.of(
-            Role.CLINIC_HEAD, Role.BUSINESS_OWNER, Role.THERAPIST, Role.DOCTOR, Role.OFFICE_ADMIN);
+            Role.CLINIC_HEAD, Role.BUSINESS_OWNER, Role.THERAPIST, Role.OFFICE_ADMIN);
 
     @Operation(summary = "List all staff members in the organisation")
     @GetMapping("/members")
@@ -105,7 +105,7 @@ public class UserController {
                     + "since anyone can create a task and assign it; personal details are deliberately left out."
     )
     @GetMapping("/assignable")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST')")
     public ResponseEntity<ApiResponse<List<AssignableUserResponse>>> listAssignable(
             @RequestParam(defaultValue = "false") boolean includeParents,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -128,8 +128,8 @@ public class UserController {
     }
 
     @Operation(
-        summary = "List all therapists (and doctors) in the organisation",
-        description = "Returns every THERAPIST and DOCTOR user in the caller's org. " +
+        summary = "List all therapists in the organisation",
+        description = "Returns every THERAPIST user in the caller's org. " +
                       "Pass an optional clinicId to scope the results to a single clinic. " +
                       "Office admins are included because they reassign therapists on ongoing plans."
     )
@@ -334,7 +334,7 @@ public class UserController {
         User user = principal.getUser();
         if (!ELIGIBLE_PRIMARY_ROLES.contains(user.getRole())) {
             throw new ApiException(HttpStatus.FORBIDDEN,
-                    "Only BUSINESS_OWNER, THERAPIST, or DOCTOR users may add a secondary role");
+                    "Only BUSINESS_OWNER or THERAPIST users may add a secondary role");
         }
 
         if (user.getAdditionalRoles().contains(roleToAdd)) {

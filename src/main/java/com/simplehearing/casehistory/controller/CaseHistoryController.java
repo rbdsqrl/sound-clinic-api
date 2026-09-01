@@ -33,7 +33,7 @@ public class CaseHistoryController {
 
     @Operation(summary = "Get a patient's case history — null data if none recorded yet")
     @GetMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT', 'OFFICE_ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'PARENT', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<CaseHistoryResponse>> get(
             @PathVariable UUID patientId,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -44,7 +44,7 @@ public class CaseHistoryController {
 
     @Operation(summary = "Create or update a patient's case history — saves the whole form at once")
     @PutMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'OFFICE_ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<CaseHistoryResponse>> upsert(
             @PathVariable UUID patientId,
             @RequestBody UpdateCaseHistoryRequest request,

@@ -196,7 +196,7 @@ public class AnalyticsController {
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 
-    @Operation(summary = "One row per therapist/doctor — cases/activities assigned, activities created, sessions cancelled, IEP plans")
+    @Operation(summary = "One row per therapist — cases/activities assigned, activities created, sessions cancelled, IEP plans")
     @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     @GetMapping("/members")
     public ResponseEntity<ApiResponse<List<MemberSummaryResponse>>> members(
@@ -225,7 +225,7 @@ public class AnalyticsController {
 
     @Operation(summary = "Discharge success-criteria composite for one enrollment")
     @GetMapping("/enrollments/{enrollmentId}/success-criteria")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT', 'OFFICE_ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'PARENT', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<SuccessCriteriaResponse>> successCriteria(
             @PathVariable UUID enrollmentId,
             @AuthenticationPrincipal UserPrincipal principal) {

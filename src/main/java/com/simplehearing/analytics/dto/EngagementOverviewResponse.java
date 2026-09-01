@@ -19,7 +19,7 @@ public record EngagementOverviewResponse(
         List<TrendPoint> checklistFilledTrend,
         List<NameCount> mostAssignedActivities
 ) {
-    /** Members = staff (therapist/doctor/clinic head/business owner); Cases = patients. */
+    /** Members = staff (therapist/clinic head/business owner); Cases = patients. */
     public record UserCounts(int members, int cases) {}
 
     public record NameCount(String name, int count) {}

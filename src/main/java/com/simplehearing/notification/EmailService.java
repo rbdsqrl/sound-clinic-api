@@ -402,7 +402,6 @@ public class EmailService {
     private String formatRole(Role role) {
         return switch (role) {
             case THERAPIST -> "Therapist";
-            case DOCTOR -> "Doctor";
             case PARENT -> "Parent";
             case PATIENT -> "Patient";
             case CLINIC_HEAD -> "Clinic Head";

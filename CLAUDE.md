@@ -88,7 +88,7 @@ com.simplehearing
 │   ├── dto/UserResponse.java
 │   ├── entity/User.java                 # id, orgId, clinicId, email, passwordHash, role, additionalRoles...
 │   ├── enums/
-│   │   ├── Role.java                    # BUSINESS_OWNER, CLINIC_HEAD, THERAPIST, DOCTOR, PARENT, PATIENT
+│   │   ├── Role.java                    # BUSINESS_OWNER, CLINIC_HEAD, THERAPIST, PARENT, PATIENT
 │   │   └── Gender.java                  # MALE, FEMALE, OTHER
 │   └── repository/UserRepository.java
 │
@@ -192,16 +192,16 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | POST     | `/api/v1/auth/refresh`                  | Public                                                  | Rotate refresh token                |
 | POST     | `/api/v1/auth/logout`                   | Authenticated                                           | Invalidate refresh token            |
 | GET      | `/api/v1/users/me`                      | Authenticated                                           | Caller's profile                    |
-| GET      | `/api/v1/users/therapists`              | BUSINESS_OWNER, CLINIC_HEAD                                   | All therapists/doctors in org       |
+| GET      | `/api/v1/users/therapists`              | BUSINESS_OWNER, CLINIC_HEAD                                   | All therapists in org       |
 | GET      | `/api/v1/users/{id}/profile`            | BUSINESS_OWNER, CLINIC_HEAD                                   | One member's profile — contact, qualification, specialization, languages, case count |
 | PATCH    | `/api/v1/users/{id}/profile`            | BUSINESS_OWNER, CLINIC_HEAD (role change: BUSINESS_OWNER only) | Update a member's phone/clinic/qualification/specialization/languages, and their role (staff roles only, not own role) |
 | GET      | `/api/v1/analytics/patients/{id}/progress` | BUSINESS_OWNER, CLINIC_HEAD, PARENT (own child) | Mastery series + per-domain breakdown |
 | GET      | `/api/v1/analytics/patients/{id}/activities` | BUSINESS_OWNER, CLINIC_HEAD, PARENT (own child) | Activity assignment/attempt progress |
 | GET      | `/api/v1/analytics/patients/{id}/frequency` | BUSINESS_OWNER, CLINIC_HEAD, PARENT (own child) | Sessions/week across every concurrent enrollment |
 | GET      | `/api/v1/analytics/enrollments/{id}/success-criteria` | All staff + PARENT (own child)             | Goal mastery / therapist sign-off / parent satisfaction composite |
-| PATCH    | `/api/v1/enrollments/{id}/therapist-signoff` | THERAPIST/DOCTOR (own, once care status is Review or Program Completed) | Confirm this program's goals were met |
-| GET      | `/api/v1/patients/{id}/discharge/preview` | BUSINESS_OWNER, CLINIC_HEAD, DOCTOR                              | Dry run of what discharging this patient now would look like |
-| POST     | `/api/v1/patients/{id}/discharge`       | BUSINESS_OWNER, CLINIC_HEAD, DOCTOR                                | Discharge — closes every enrollment in the current episode, sets patient stage |
+| PATCH    | `/api/v1/enrollments/{id}/therapist-signoff` | THERAPIST (own, once care status is Review or Program Completed) | Confirm this program's goals were met |
+| GET      | `/api/v1/patients/{id}/discharge/preview` | BUSINESS_OWNER, CLINIC_HEAD | Dry run of what discharging this patient now would look like |
+| POST     | `/api/v1/patients/{id}/discharge`       | BUSINESS_OWNER, CLINIC_HEAD | Discharge — closes every enrollment in the current episode, sets patient stage |
 | GET      | `/api/v1/patients/{id}/discharge`       | All staff + PARENT (own child)                               | List discharge episodes, most recent first |
 | GET      | `/api/v1/patients/{id}/discharge/{dischargeId}` | All staff + PARENT (own child)                       | One discharge episode's report |
 | GET      | `/api/v1/patients/{id}/discharge/{dischargeId}/pdf` | All staff + PARENT (own child)                   | Discharge PDF — generated on first call, then a fresh short-lived URL each time |
@@ -210,9 +210,9 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | GET      | `/api/v1/analytics/engagement-overview` | BUSINESS_OWNER, CLINIC_HEAD                     | Org-wide engagement rollup for the Overview analytics tab — users, sessions, skills, checklist fills |
 | GET      | `/api/v1/analytics/session-heatmap`     | BUSINESS_OWNER, CLINIC_HEAD                     | Session count per day in the window — powers the calendar heatmap |
 | GET      | `/api/v1/analytics/cases`               | BUSINESS_OWNER, CLINIC_HEAD                     | One row per active patient — sessions, members/activities assigned, checklist fills, LT goals, payment status |
-| GET      | `/api/v1/analytics/members`             | BUSINESS_OWNER, CLINIC_HEAD                     | One row per therapist/doctor — cases/activities assigned, activities created, sessions cancelled, IEP plans |
+| GET      | `/api/v1/analytics/members`             | BUSINESS_OWNER, CLINIC_HEAD                     | One row per therapist — cases/activities assigned, activities created, sessions cancelled, IEP plans |
 | GET      | `/api/v1/analytics/sessions`            | BUSINESS_OWNER, CLINIC_HEAD                     | Flat session log + KPI strip for the Schedule tab, optionally filtered by patientId/therapistId/programId |
-| GET      | `/api/v1/users/assignable`              | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST, DOCTOR  | Staff names + roles for assignee pickers |
+| GET      | `/api/v1/users/assignable`              | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST | Staff names + roles for assignee pickers |
 | GET      | `/api/v1/review-meetings`               | All staff + PARENT (own children)                       | List review meetings                |
 | POST     | `/api/v1/review-meetings`               | BUSINESS_OWNER, CLINIC_HEAD                     | Add one review meeting to a plan    |
 | POST     | `/api/v1/review-meetings/schedule/{enrollmentId}` | BUSINESS_OWNER, CLINIC_HEAD           | Generate a recurring review schedule |
@@ -220,22 +220,22 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | PATCH    | `/api/v1/review-meetings/{id}/cancel`   | BUSINESS_OWNER, CLINIC_HEAD                     | Cancel; sends a CANCEL ics          |
 | PATCH    | `/api/v1/review-meetings/{id}/complete` | All staff                                               | Mark a meeting completed            |
 | PUT      | `/api/v1/review-meetings/{id}/parent-feedback`    | PARENT (linked to patient)                    | Rating + comments on the therapist  |
-| PUT      | `/api/v1/review-meetings/{id}/therapist-feedback` | THERAPIST, DOCTOR, CLINIC_HEAD, BUSINESS_OWNER      | Summary + progress notes            |
+| PUT      | `/api/v1/review-meetings/{id}/therapist-feedback` | THERAPIST, CLINIC_HEAD, BUSINESS_OWNER      | Summary + progress notes            |
 | PATCH    | `/api/v1/enrollments/{id}/therapist`    | BUSINESS_OWNER, CLINIC_HEAD                     | Reassign an ongoing plan's therapist |
 | PATCH    | `/api/v1/enrollments/{id}/care-status`  | THERAPIST (own), CLINIC_HEAD, BUSINESS_OWNER    | Set clinical-health signal; PROGRAM_COMPLETED also completes the enrollment |
 | POST     | `/api/v1/enrollment-concerns`           | PARENT (own child)                                      | Raise a concern about an active program |
 | GET      | `/api/v1/enrollment-concerns`           | All staff + PARENT (own child)                          | List concerns by `enrollmentId`, `patientId`, or org-wide `status` |
-| GET      | `/api/v1/enrollment-concerns/open-count`| All staff                                                | Open-concern count (own caseload for THERAPIST/DOCTOR) |
-| PATCH    | `/api/v1/enrollment-concerns/{id}/acknowledge` | All staff (own caseload for THERAPIST/DOCTOR)     | Acknowledge a concern |
-| PATCH    | `/api/v1/enrollment-concerns/{id}/resolve` | All staff (own caseload for THERAPIST/DOCTOR)         | Resolve a concern |
+| GET      | `/api/v1/enrollment-concerns/open-count`| All staff                                                | Open-concern count (own caseload for THERAPIST) |
+| PATCH    | `/api/v1/enrollment-concerns/{id}/acknowledge` | All staff (own caseload for THERAPIST)     | Acknowledge a concern |
+| PATCH    | `/api/v1/enrollment-concerns/{id}/resolve` | All staff (own caseload for THERAPIST)         | Resolve a concern |
 | POST     | `/api/v1/therapy-sessions/ad-hoc`       | BUSINESS_OWNER, CLINIC_HEAD                     | Book a one-off session from the calendar |
-| GET      | `/api/v1/therapy-sessions/{id}/feedback` | THERAPIST, DOCTOR, CLINIC_HEAD, BUSINESS_OWNER | Session feedback checklist template (per the session's program) + this session's answers |
-| PUT      | `/api/v1/therapy-sessions/{id}/feedback` | THERAPIST, DOCTOR, CLINIC_HEAD, BUSINESS_OWNER | Save this session's feedback checklist answers |
+| GET      | `/api/v1/therapy-sessions/{id}/feedback` | THERAPIST, CLINIC_HEAD, BUSINESS_OWNER | Session feedback checklist template (per the session's program) + this session's answers |
+| PUT      | `/api/v1/therapy-sessions/{id}/feedback` | THERAPIST, CLINIC_HEAD, BUSINESS_OWNER | Save this session's feedback checklist answers |
 | GET      | `/api/v1/programs/{id}/feedback-template` | BUSINESS_OWNER, CLINIC_HEAD                    | Get a program's session feedback checklist template |
 | PUT      | `/api/v1/programs/{id}/feedback-template` | BUSINESS_OWNER, CLINIC_HEAD                    | Replace a program's session feedback checklist template |
 | GET      | `/api/v1/patients/{patientId}/assessments/{type}/definition` | All staff + PARENT (own child) | Fixed ISAA/PRBA item/section definition |
 | GET      | `/api/v1/patients/{patientId}/assessments/{type}` | All staff + PARENT (own child)             | List a patient's ISAA/PRBA fills, oldest first |
-| POST     | `/api/v1/patients/{patientId}/assessments/{type}` | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST, DOCTOR | Record a new ISAA/PRBA fill — score + classification computed server-side |
+| POST     | `/api/v1/patients/{patientId}/assessments/{type}` | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST | Record a new ISAA/PRBA fill — score + classification computed server-side |
 | POST     | `/api/v1/meetings`                      | All staff (not PARENT/PATIENT)                          | Schedule a meeting + email invites  |
 | GET      | `/api/v1/meetings`                      | Authenticated                                           | Meetings in a date range (scoped)   |
 | GET      | `/api/v1/meetings/{id}`                 | Authenticated                                           | One meeting with participants       |
@@ -247,9 +247,9 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | POST     | `/api/v1/clinics`                       | BUSINESS_OWNER, CLINIC_HEAD                                   | Create clinic                       |
 | GET      | `/api/v1/clinics/{id}`                  | All authenticated                                       | Clinic detail                       |
 | PATCH    | `/api/v1/clinics/{id}`                  | BUSINESS_OWNER, CLINIC_HEAD                                   | Update clinic                       |
-| GET      | `/api/v1/patients`                      | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST, DOCTOR                | List patients                       |
+| GET      | `/api/v1/patients`                      | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST | List patients                       |
 | POST     | `/api/v1/patients`                      | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST                        | Create patient                      |
-| GET      | `/api/v1/patients/{id}`                 | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST, DOCTOR                | Patient detail                      |
+| GET      | `/api/v1/patients/{id}`                 | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST | Patient detail                      |
 | POST     | `/api/v1/patients/{id}/conditions`      | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST                        | Add condition to patient            |
 | POST     | `/api/v1/patients/{id}/parents`         | BUSINESS_OWNER, CLINIC_HEAD                                   | Link parent to patient              |
 | POST     | `/api/v1/patients/{id}/therapists`      | BUSINESS_OWNER, CLINIC_HEAD                                   | Assign therapist to patient         |
@@ -265,10 +265,10 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | GET      | `/api/v1/appointments`                  | All authenticated                                       | List appointments (role-scoped)     |
 | POST     | `/api/v1/appointments`                  | PARENT, BUSINESS_OWNER, CLINIC_HEAD                           | Book appointment                    |
 | PATCH    | `/api/v1/appointments/{id}/status`      | All authenticated                                       | Update appointment status           |
-| POST     | `/api/v1/leaves`                        | THERAPIST, DOCTOR                                       | Apply for leave                     |
-| GET      | `/api/v1/leaves`                        | BUSINESS_OWNER/CLINIC_HEAD (all), THERAPIST/DOCTOR (own only) | List leave requests; optional `?status=PENDING\|APPROVED\|REJECTED` |
+| POST     | `/api/v1/leaves`                        | THERAPIST | Apply for leave                     |
+| GET      | `/api/v1/leaves`                        | BUSINESS_OWNER/CLINIC_HEAD (all), THERAPIST (own only) | List leave requests; optional `?status=PENDING\|APPROVED\|REJECTED` |
 | PATCH    | `/api/v1/leaves/{id}/review`            | BUSINESS_OWNER, CLINIC_HEAD                                   | Approve or reject a leave request   |
-| DELETE   | `/api/v1/leaves/{id}`                   | THERAPIST, DOCTOR                                       | Cancel own pending leave            |
+| DELETE   | `/api/v1/leaves/{id}`                   | THERAPIST | Cancel own pending leave            |
 | GET      | `/api/v1/patients/{patientId}/shared-media` | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST (assigned), PARENT (own child) | List videos/notes shared between the parent and the care team |
 | POST     | `/api/v1/patients/{patientId}/shared-media` | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST (assigned), PARENT (own child) | Share a video and/or a note — video is optional |
 | DELETE   | `/api/v1/patients/{patientId}/shared-media/{id}` | Uploader, or BUSINESS_OWNER/CLINIC_HEAD             | Delete a shared video/note          |

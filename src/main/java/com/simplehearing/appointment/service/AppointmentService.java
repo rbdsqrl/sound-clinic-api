@@ -72,7 +72,7 @@ public class AppointmentService {
         // Validate therapist exists in org
         User therapist = userRepository.findById(req.therapistId())
                 .filter(u -> u.getOrgId().equals(principal.getOrgId()))
-                .filter(u -> u.hasRole(Role.THERAPIST) || u.hasRole(Role.DOCTOR))
+                .filter(u -> u.hasRole(Role.THERAPIST))
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Therapist not found in your organisation"));
 
         // Validate clinic exists in org
@@ -242,7 +242,7 @@ public class AppointmentService {
         List<Appointment> appts;
         Role role = principal.getUser().getRole();
 
-        if (role == Role.THERAPIST || role == Role.DOCTOR) {
+        if (role == Role.THERAPIST) {
             appts = appointmentRepository.findByTherapistIdAndOrgIdOrderByAppointmentDateAscStartTimeAsc(
                     principal.getId(), principal.getOrgId());
         } else if (role == Role.PARENT) {
@@ -263,7 +263,7 @@ public class AppointmentService {
         Role role = principal.getUser().getRole();
 
         // Therapists can confirm or cancel their own appointments
-        if (role == Role.THERAPIST || role == Role.DOCTOR) {
+        if (role == Role.THERAPIST) {
             if (!appt.getTherapistId().equals(principal.getId())) {
                 throw new ApiException(HttpStatus.FORBIDDEN, "Not your appointment");
             }

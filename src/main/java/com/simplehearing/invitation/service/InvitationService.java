@@ -41,17 +41,17 @@ public class InvitationService {
     private static final Logger log = LoggerFactory.getLogger(InvitationService.class);
 
     /** Roles that require a clinicId in the invitation. */
-    private static final Set<Role> CLINIC_SCOPED_ROLES = Set.of(Role.PARENT, Role.THERAPIST, Role.DOCTOR);
+    private static final Set<Role> CLINIC_SCOPED_ROLES = Set.of(Role.PARENT, Role.THERAPIST);
 
     /** All roles a BUSINESS_OWNER / CLINIC_HEAD may invite. */
     private static final Set<Role> INVITABLE_ROLES = Set.of(
-            Role.CLINIC_HEAD, Role.THERAPIST, Role.DOCTOR, Role.OFFICE_ADMIN,
+            Role.CLINIC_HEAD, Role.THERAPIST, Role.OFFICE_ADMIN,
             Role.PARENT, Role.PATIENT, Role.BUSINESS_OWNER
     );
 
     /** OFFICE_ADMIN can invite front-line staff, but not org leadership. */
     private static final Set<Role> OFFICE_ADMIN_INVITABLE_ROLES = Set.of(
-            Role.THERAPIST, Role.DOCTOR, Role.OFFICE_ADMIN, Role.PARENT, Role.PATIENT
+            Role.THERAPIST, Role.OFFICE_ADMIN, Role.PARENT, Role.PATIENT
     );
 
     private static final long EXPIRY_HOURS = 72;

@@ -59,7 +59,7 @@ public class LeaveController {
 
     @Operation(summary = "Apply for a leave day")
     @PostMapping
-    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'CLINIC_HEAD', 'BUSINESS_OWNER', 'OFFICE_ADMIN')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'CLINIC_HEAD', 'BUSINESS_OWNER', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<LeaveResponse>> apply(
             @Valid @RequestBody CreateLeaveRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -118,7 +118,7 @@ public class LeaveController {
 
     @Operation(summary = "List leaves — business owner/admin sees all org leaves")
     @GetMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'OFFICE_ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<List<LeaveResponse>>> list(
             @RequestParam(required = false) LeaveStatus status,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -245,7 +245,7 @@ public class LeaveController {
 
     @Operation(summary = "Cancel a pending leave request (own leaves only)")
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('THERAPIST', 'DOCTOR', 'CLINIC_HEAD', 'BUSINESS_OWNER', 'OFFICE_ADMIN')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'CLINIC_HEAD', 'BUSINESS_OWNER', 'OFFICE_ADMIN')")
     public ResponseEntity<Void> cancel(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {

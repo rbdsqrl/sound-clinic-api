@@ -36,7 +36,7 @@ public class DischargeController {
 
     @Operation(summary = "Dry run — what discharging this patient right now would look like")
     @GetMapping("/preview")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
     public ResponseEntity<ApiResponse<DischargePreviewResponse>> preview(
             @PathVariable UUID patientId,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -46,7 +46,7 @@ public class DischargeController {
 
     @Operation(summary = "Discharge a patient — closes every enrollment in their current episode")
     @PostMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
     public ResponseEntity<ApiResponse<DischargeRecordResponse>> create(
             @PathVariable UUID patientId,
             @RequestBody(required = false) CreateDischargeRequest request,
@@ -60,7 +60,7 @@ public class DischargeController {
 
     @Operation(summary = "List a patient's discharge episodes, most recent first")
     @GetMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'PARENT')")
     public ResponseEntity<ApiResponse<List<DischargeRecordResponse>>> list(
             @PathVariable UUID patientId,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -70,7 +70,7 @@ public class DischargeController {
 
     @Operation(summary = "One discharge episode's report")
     @GetMapping("/{dischargeId}")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'PARENT')")
     public ResponseEntity<ApiResponse<DischargeRecordResponse>> get(
             @PathVariable UUID patientId,
             @PathVariable UUID dischargeId,
@@ -86,7 +86,7 @@ public class DischargeController {
     @Operation(summary = "Download this discharge episode's PDF report",
                description = "Generates the PDF on first call, then always returns a fresh short-lived URL.")
     @GetMapping("/{dischargeId}/pdf")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'PARENT')")
     public ResponseEntity<ApiResponse<java.util.Map<String, String>>> pdf(
             @PathVariable UUID patientId,
             @PathVariable UUID dischargeId,

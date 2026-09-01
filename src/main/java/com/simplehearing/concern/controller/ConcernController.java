@@ -120,7 +120,7 @@ public class ConcernController {
 
     @Operation(summary = "List concerns, filterable by enrollment, patient, or org-wide status")
     @GetMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT', 'OFFICE_ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'PARENT', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<List<ConcernResponse>>> list(
             @RequestParam(required = false) UUID enrollmentId,
             @RequestParam(required = false) UUID patientId,
@@ -165,7 +165,7 @@ public class ConcernController {
 
     @Operation(summary = "Count of open concerns — for a dashboard badge")
     @GetMapping("/open-count")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'OFFICE_ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<Integer>> openCount(@AuthenticationPrincipal UserPrincipal principal) {
         int count = isClinicianOnly(principal)
                 ? concernRepository.countByOrgIdAndTherapistIdAndStatus(principal.getOrgId(), principal.getId(), ConcernStatus.OPEN)
@@ -177,7 +177,7 @@ public class ConcernController {
 
     @Operation(summary = "Acknowledge a concern")
     @PatchMapping("/{id}/acknowledge")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST')")
     public ResponseEntity<ApiResponse<ConcernResponse>> acknowledge(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -198,7 +198,7 @@ public class ConcernController {
 
     @Operation(summary = "Resolve a concern")
     @PatchMapping("/{id}/resolve")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST')")
     public ResponseEntity<ApiResponse<ConcernResponse>> resolve(
             @PathVariable UUID id,
             @RequestBody(required = false) ResolveConcernRequest request,
@@ -268,10 +268,10 @@ public class ConcernController {
         return principal.getUser().hasRole(Role.PARENT);
     }
 
-    /** A THERAPIST/DOCTOR who is not also an admin-tier role — scoped to their own assigned patients. */
+    /** A THERAPIST who is not also an admin-tier role — scoped to their own assigned patients. */
     private static boolean isClinicianOnly(UserPrincipal principal) {
         User user = principal.getUser();
-        boolean clinician = user.hasRole(Role.THERAPIST) || user.hasRole(Role.DOCTOR);
+        boolean clinician = user.hasRole(Role.THERAPIST);
         boolean adminTier = user.hasRole(Role.BUSINESS_OWNER) || user.hasRole(Role.CLINIC_HEAD);
         return clinician && !adminTier;
     }
