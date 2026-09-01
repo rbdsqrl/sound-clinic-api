@@ -15,4 +15,8 @@ public interface ResourceFolderRepository extends JpaRepository<ResourceFolder, 
     List<ResourceFolder> findByOrgIdAndParentFolderId(UUID orgId, UUID parentFolderId);
 
     long countByOrgIdAndParentFolderId(UUID orgId, UUID parentFolderId);
+
+    java.util.Optional<ResourceFolder> findByOrgIdAndParentFolderIdIsNullAndName(UUID orgId, String name);
+
+    java.util.Optional<ResourceFolder> findByOrgIdAndParentFolderIdAndName(UUID orgId, UUID parentFolderId, String name);
 }

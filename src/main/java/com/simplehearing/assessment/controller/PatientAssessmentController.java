@@ -3,7 +3,6 @@ package com.simplehearing.assessment.controller;
 import com.simplehearing.assessment.dto.AssessmentDefinitionResponse;
 import com.simplehearing.assessment.dto.CreateAssessmentRequest;
 import com.simplehearing.assessment.dto.PatientAssessmentResponse;
-import com.simplehearing.assessment.enums.AssessmentType;
 import com.simplehearing.assessment.service.AssessmentService;
 import com.simplehearing.auth.security.UserPrincipal;
 import com.simplehearing.common.dto.ApiResponse;
@@ -18,11 +17,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
-@Tag(name = "Patient Assessments", description = "ISAA / PRBA clinical assessment fills, per patient, over time")
+@Tag(name = "Patient Assessments", description = "Clinical assessment fills (ISAA, PRBA, M-CHAT-R, ADL, Pre Assessment Form), per patient, over time")
 @RestController
 @RequestMapping("/api/v1/patients/{patientId}/assessments/{type}")
 public class PatientAssessmentController {
@@ -35,15 +36,15 @@ public class PatientAssessmentController {
         this.patientParentRepository = patientParentRepository;
     }
 
-    @Operation(summary = "Get an assessment's fixed item/section definition")
+    @Operation(summary = "Get an assessment type's category/item/option definition")
     @GetMapping("/definition")
     @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT')")
     public ResponseEntity<ApiResponse<AssessmentDefinitionResponse>> getDefinition(
             @PathVariable UUID patientId,
-            @PathVariable AssessmentType type,
+            @PathVariable String type,
             @AuthenticationPrincipal UserPrincipal principal) {
         requireViewable(patientId, principal);
-        return ResponseEntity.ok(ApiResponse.success(AssessmentDefinitionResponse.from(type)));
+        return ResponseEntity.ok(ApiResponse.success(assessmentService.getDefinition(type)));
     }
 
     @Operation(summary = "List a patient's fills of this assessment, oldest first")
@@ -51,7 +52,7 @@ public class PatientAssessmentController {
     @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT')")
     public ResponseEntity<ApiResponse<List<PatientAssessmentResponse>>> list(
             @PathVariable UUID patientId,
-            @PathVariable AssessmentType type,
+            @PathVariable String type,
             @AuthenticationPrincipal UserPrincipal principal) {
         requireViewable(patientId, principal);
         return ResponseEntity.ok(ApiResponse.success(
@@ -61,14 +62,14 @@ public class PatientAssessmentController {
     @Operation(summary = "Download one filled assessment as a PDF, laid out like the paper form")
     @GetMapping("/{assessmentId}/pdf")
     @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR', 'PARENT')")
-    public ResponseEntity<ApiResponse<java.util.Map<String, String>>> pdf(
+    public ResponseEntity<ApiResponse<Map<String, String>>> pdf(
             @PathVariable UUID patientId,
-            @PathVariable AssessmentType type,
+            @PathVariable String type,
             @PathVariable UUID assessmentId,
             @AuthenticationPrincipal UserPrincipal principal) {
         requireViewable(patientId, principal);
         String url = assessmentService.generatePdfUrl(principal.getOrgId(), patientId, assessmentId);
-        return ResponseEntity.ok(ApiResponse.success(java.util.Map.of("url", url)));
+        return ResponseEntity.ok(ApiResponse.success(Map.of("url", url)));
     }
 
     @Operation(summary = "Record a new fill of this assessment for a patient")
@@ -76,12 +77,23 @@ public class PatientAssessmentController {
     @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR')")
     public ResponseEntity<ApiResponse<PatientAssessmentResponse>> create(
             @PathVariable UUID patientId,
-            @PathVariable AssessmentType type,
+            @PathVariable String type,
             @Valid @RequestBody CreateAssessmentRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
         PatientAssessmentResponse created = assessmentService.create(
                 principal.getOrgId(), patientId, principal.getId(), type, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(created));
+    }
+
+    @Operation(summary = "Upload a file for a FILE-type item (e.g. a prior assessment report) and get back a URL to submit in the fill")
+    @PostMapping("/upload")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'DOCTOR')")
+    public ResponseEntity<ApiResponse<Map<String, String>>> upload(
+            @PathVariable UUID patientId,
+            @PathVariable String type,
+            @RequestParam("file") MultipartFile file) {
+        String url = assessmentService.uploadFile(patientId, file);
+        return ResponseEntity.ok(ApiResponse.success(Map.of("url", url)));
     }
 
     private void requireViewable(UUID patientId, UserPrincipal principal) {

@@ -12,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.UUID;
 
@@ -100,5 +101,17 @@ public class ResourceController {
 
         resourceService.deleteResource(principal.getOrgId(), id);
         return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "Bulk-import folders/resources from a CSV (columns: folder_path,name,type,url). " +
+            "Not wired into any UI — call directly against the org/environment you intend to seed.")
+    @PostMapping("/import")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
+    public ResponseEntity<ApiResponse<ImportResourcesResponse>> importCsv(
+            @RequestParam("file") MultipartFile file,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        return ResponseEntity.ok(ApiResponse.success(
+                resourceService.importCsv(principal.getOrgId(), principal.getId(), file)));
     }
 }

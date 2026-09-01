@@ -251,3 +251,18 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/084-create-resources.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/085-create-assessment-engine.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/086-seed-assessment-isaa-prba.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/087-seed-assessment-mchat-preform.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/088-seed-assessment-adl.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/089-migrate-legacy-assessments.sql
+      relativeToChangelogFile: false

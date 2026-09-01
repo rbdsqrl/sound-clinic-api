@@ -1,16 +1,19 @@
 package com.simplehearing.assessment.dto;
 
-import com.simplehearing.assessment.def.AssessmentDefinitions;
-import com.simplehearing.assessment.enums.AssessmentType;
-
 import java.util.List;
+import java.util.UUID;
 
 public record AssessmentDefinitionResponse(
-        AssessmentType assessmentType,
-        int maxScore,
-        List<AssessmentDefinitions.Section> sections
+        String code,
+        String name,
+        String description,
+        String scoringType,
+        Integer maxScore,
+        List<CategoryDto> categories
 ) {
-    public static AssessmentDefinitionResponse from(AssessmentType type) {
-        return new AssessmentDefinitionResponse(type, AssessmentDefinitions.maxScoreFor(type), AssessmentDefinitions.sectionsFor(type));
-    }
+    public record CategoryDto(String name, List<ItemDto> items) {}
+
+    public record ItemDto(int number, String text, String itemType, List<OptionDto> options) {}
+
+    public record OptionDto(UUID id, String label, Integer score) {}
 }

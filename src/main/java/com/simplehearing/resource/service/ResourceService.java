@@ -1,17 +1,23 @@
 package com.simplehearing.resource.service;
 
+import com.simplehearing.common.exception.ApiException;
 import com.simplehearing.common.exception.ResourceNotFoundException;
 import com.simplehearing.resource.dto.*;
 import com.simplehearing.resource.entity.Resource;
 import com.simplehearing.resource.entity.ResourceFolder;
+import com.simplehearing.resource.enums.ResourceType;
 import com.simplehearing.resource.repository.ResourceFolderRepository;
 import com.simplehearing.resource.repository.ResourceRepository;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
-import java.util.LinkedList;
-import java.util.List;
-import java.util.UUID;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
 
 @Service
 @Transactional
@@ -114,6 +120,140 @@ public class ResourceService {
 
     public void deleteResource(UUID orgId, UUID id) {
         resourceRepository.delete(requireResource(orgId, id));
+    }
+
+    /**
+     * Bulk-imports resources from a CSV with columns folder_path,name,type,url — folder_path
+     * is "/"-separated (e.g. "Alphabet/Tracing"), empty for a root-level resource. Missing
+     * folders along a path are created and reused across rows in the same import; an existing
+     * folder with a matching name at that level is reused rather than duplicated.
+     * Not exposed in any UI — org-scoped, callable directly against whichever environment/org
+     * the caller is authenticated against.
+     */
+    public ImportResourcesResponse importCsv(UUID orgId, UUID createdBy, MultipartFile file) {
+        List<String> lines;
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
+            lines = reader.lines().toList();
+        } catch (IOException e) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Failed to read CSV file");
+        }
+        if (lines.isEmpty()) {
+            return new ImportResourcesResponse(0, 0, List.of());
+        }
+
+        int foldersCreated = 0;
+        int resourcesCreated = 0;
+        List<String> errors = new ArrayList<>();
+        Map<String, UUID> pathCache = new HashMap<>();
+
+        for (int rowNum = 2; rowNum <= lines.size(); rowNum++) {
+            String line = lines.get(rowNum - 1);
+            if (line.isBlank()) continue;
+
+            List<String> fields = parseCsvLine(line);
+            if (fields.size() != 4) {
+                errors.add("Row " + rowNum + ": expected 4 columns, got " + fields.size());
+                continue;
+            }
+            String folderPath = fields.get(0).trim();
+            String name = fields.get(1).trim();
+            String typeStr = fields.get(2).trim();
+            String url = fields.get(3).trim();
+
+            if (name.isEmpty() || url.isEmpty()) {
+                errors.add("Row " + rowNum + ": name and url are required");
+                continue;
+            }
+            ResourceType type;
+            try {
+                type = ResourceType.valueOf(typeStr.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                errors.add("Row " + rowNum + ": invalid type '" + typeStr + "'");
+                continue;
+            }
+
+            UUID folderId = null;
+            if (!folderPath.isEmpty()) {
+                UUID parentId = null;
+                StringBuilder pathSoFar = new StringBuilder();
+                for (String rawSegment : folderPath.split("/")) {
+                    String segment = rawSegment.trim();
+                    if (segment.isEmpty()) continue;
+                    pathSoFar.append(pathSoFar.isEmpty() ? "" : "/").append(segment);
+                    String key = pathSoFar.toString();
+
+                    UUID cached = pathCache.get(key);
+                    if (cached != null) {
+                        parentId = cached;
+                        continue;
+                    }
+
+                    UUID finalParentId = parentId;
+                    Optional<ResourceFolder> existing = parentId == null
+                            ? folderRepository.findByOrgIdAndParentFolderIdIsNullAndName(orgId, segment)
+                            : folderRepository.findByOrgIdAndParentFolderIdAndName(orgId, finalParentId, segment);
+
+                    UUID resolvedId;
+                    if (existing.isPresent()) {
+                        resolvedId = existing.get().getId();
+                    } else {
+                        ResourceFolder folder = new ResourceFolder();
+                        folder.setOrgId(orgId);
+                        folder.setParentFolderId(parentId);
+                        folder.setName(segment);
+                        folder.setCreatedBy(createdBy);
+                        resolvedId = folderRepository.save(folder).getId();
+                        foldersCreated++;
+                    }
+                    pathCache.put(key, resolvedId);
+                    parentId = resolvedId;
+                }
+                folderId = parentId;
+            }
+
+            Resource resource = new Resource();
+            resource.setOrgId(orgId);
+            resource.setFolderId(folderId);
+            resource.setName(name);
+            resource.setType(type);
+            resource.setUrl(url);
+            resource.setCreatedBy(createdBy);
+            resourceRepository.save(resource);
+            resourcesCreated++;
+        }
+
+        return new ImportResourcesResponse(foldersCreated, resourcesCreated, errors);
+    }
+
+    /** Minimal CSV line parser — handles double-quoted fields with "" as an escaped quote. */
+    private List<String> parseCsvLine(String line) {
+        List<String> fields = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        boolean inQuotes = false;
+        for (int i = 0; i < line.length(); i++) {
+            char c = line.charAt(i);
+            if (inQuotes) {
+                if (c == '"') {
+                    if (i + 1 < line.length() && line.charAt(i + 1) == '"') {
+                        current.append('"');
+                        i++;
+                    } else {
+                        inQuotes = false;
+                    }
+                } else {
+                    current.append(c);
+                }
+            } else if (c == '"') {
+                inQuotes = true;
+            } else if (c == ',') {
+                fields.add(current.toString());
+                current.setLength(0);
+            } else {
+                current.append(c);
+            }
+        }
+        fields.add(current.toString());
+        return fields;
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────────
