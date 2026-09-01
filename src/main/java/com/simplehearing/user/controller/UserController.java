@@ -73,7 +73,7 @@ public class UserController {
 
     @Operation(summary = "List all staff members in the organisation")
     @GetMapping("/members")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<List<StaffMemberResponse>>> listMembers(
             @AuthenticationPrincipal UserPrincipal principal) {
 
@@ -193,7 +193,7 @@ public class UserController {
 
     @Operation(summary = "Get one member's profile — the member profile page")
     @GetMapping("/{id}/profile")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<MemberProfileResponse>> getMemberProfile(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {

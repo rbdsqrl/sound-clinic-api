@@ -29,7 +29,7 @@ public class InvitationController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<List<InviteResponse>>> list(
             @AuthenticationPrincipal UserPrincipal principal) {
 
@@ -37,11 +37,11 @@ public class InvitationController {
     }
 
     /**
-     * Send an invitation to a new PARENT or THERAPIST user.
-     * Restricted to BUSINESS_OWNER role only.
+     * Send an invitation to a new staff or family member. BUSINESS_OWNER / CLINIC_HEAD may invite
+     * any role; OFFICE_ADMIN is further restricted to non-leadership roles in the service layer.
      */
     @PostMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<InviteResponse>> invite(
             @Valid @RequestBody InviteRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {

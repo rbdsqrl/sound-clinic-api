@@ -49,6 +49,11 @@ public class InvitationService {
             Role.PARENT, Role.PATIENT, Role.BUSINESS_OWNER
     );
 
+    /** OFFICE_ADMIN can invite front-line staff, but not org leadership. */
+    private static final Set<Role> OFFICE_ADMIN_INVITABLE_ROLES = Set.of(
+            Role.THERAPIST, Role.DOCTOR, Role.OFFICE_ADMIN, Role.PARENT, Role.PATIENT
+    );
+
     private static final long EXPIRY_HOURS = 72;
 
     private final InvitationRepository invitationRepository;
@@ -84,6 +89,11 @@ public class InvitationService {
         if (!INVITABLE_ROLES.contains(request.role())) {
             throw new ApiException(HttpStatus.FORBIDDEN,
                     "Cannot invite users with role: " + request.role());
+        }
+
+        if (caller.getUser().hasRole(Role.OFFICE_ADMIN) && !OFFICE_ADMIN_INVITABLE_ROLES.contains(request.role())) {
+            throw new ApiException(HttpStatus.FORBIDDEN,
+                    "Office Admin cannot invite users with role: " + request.role());
         }
 
         // Validate clinic requirement for clinic-scoped roles
