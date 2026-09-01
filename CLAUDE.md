@@ -257,7 +257,8 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | POST     | `/api/v1/invitations`                   | BUSINESS_OWNER, CLINIC_HEAD                                   | Invite user by email + role         |
 | GET      | `/api/v1/invitations`                   | BUSINESS_OWNER, CLINIC_HEAD                                   | List sent invitations               |
 | POST     | `/api/v1/inquiries/manual`              | BUSINESS_OWNER, CLINIC_HEAD                     | Record a walk-in / phoned-in inquiry |
-| PATCH    | `/api/v1/invitations/{id}/cancel`       | BUSINESS_OWNER, CLINIC_HEAD                                   | Withdraw an unaccepted invitation   |
+| POST     | `/api/v1/invitations/{id}/resend`       | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN               | Resend an unaccepted invitation     |
+| PATCH    | `/api/v1/invitations/{id}/cancel`       | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN               | Withdraw an unaccepted invitation   |
 | POST     | `/api/v1/invitations/accept`            | Public                                                  | Accept invite → create account      |
 | GET      | `/api/v1/availability-slots`            | All authenticated                                       | List availability slots             |
 | POST     | `/api/v1/availability-slots`            | BUSINESS_OWNER, CLINIC_HEAD                                   | Create availability slot            |

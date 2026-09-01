@@ -52,7 +52,7 @@ public class InvitationController {
     }
 
     @PostMapping("/{id}/resend")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<InviteResponse>> resend(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -68,7 +68,7 @@ public class InvitationController {
                     + "deactivate the member instead."
     )
     @PatchMapping("/{id}/cancel")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<InviteResponse>> cancel(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
