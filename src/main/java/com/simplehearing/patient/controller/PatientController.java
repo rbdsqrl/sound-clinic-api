@@ -31,7 +31,7 @@ public class PatientController {
 
     @Operation(summary = "Create a patient")
     @PostMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'OFFICE_ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<PatientResponse>> create(
             @Valid @RequestBody CreatePatientRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {

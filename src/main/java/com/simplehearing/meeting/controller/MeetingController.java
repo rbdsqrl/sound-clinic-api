@@ -31,10 +31,11 @@ public class MeetingController {
     }
 
     @Operation(summary = "Schedule a meeting",
-               description = "Staff only — parents and patients attend meetings but cannot create them. "
-                           + "The organiser is added to the participant list automatically.")
+               description = "Scheduling a new meeting is a front-desk/management action — therapists attend "
+                           + "meetings but don't create them. Parents and patients attend meetings but cannot "
+                           + "create them either. The organiser is added to the participant list automatically.")
     @PostMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
     public ResponseEntity<ApiResponse<MeetingResponse>> create(
             @Valid @RequestBody CreateMeetingRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {

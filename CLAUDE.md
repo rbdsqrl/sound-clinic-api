@@ -236,7 +236,7 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | GET      | `/api/v1/patients/{patientId}/assessments/{type}/definition` | All staff + PARENT (own child) | Fixed ISAA/PRBA item/section definition |
 | GET      | `/api/v1/patients/{patientId}/assessments/{type}` | All staff + PARENT (own child)             | List a patient's ISAA/PRBA fills, oldest first |
 | POST     | `/api/v1/patients/{patientId}/assessments/{type}` | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST | Record a new ISAA/PRBA fill — score + classification computed server-side |
-| POST     | `/api/v1/meetings`                      | All staff (not PARENT/PATIENT)                          | Schedule a meeting + email invites  |
+| POST     | `/api/v1/meetings`                      | BUSINESS_OWNER, CLINIC_HEAD                             | Schedule a meeting + email invites  |
 | GET      | `/api/v1/meetings`                      | Authenticated                                           | Meetings in a date range (scoped)   |
 | GET      | `/api/v1/meetings/{id}`                 | Authenticated                                           | One meeting with participants       |
 | PATCH    | `/api/v1/meetings/{id}/cancel`          | All staff (not PARENT/PATIENT)                          | Cancel + send CANCEL ics            |
@@ -248,7 +248,7 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | GET      | `/api/v1/clinics/{id}`                  | All authenticated                                       | Clinic detail                       |
 | PATCH    | `/api/v1/clinics/{id}`                  | BUSINESS_OWNER, CLINIC_HEAD                                   | Update clinic                       |
 | GET      | `/api/v1/patients`                      | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST | List patients                       |
-| POST     | `/api/v1/patients`                      | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST                        | Create patient                      |
+| POST     | `/api/v1/patients`                      | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN                     | Create patient                      |
 | GET      | `/api/v1/patients/{id}`                 | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST | Patient detail                      |
 | POST     | `/api/v1/patients/{id}/conditions`      | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST                        | Add condition to patient            |
 | POST     | `/api/v1/patients/{id}/parents`         | BUSINESS_OWNER, CLINIC_HEAD                                   | Link parent to patient              |
