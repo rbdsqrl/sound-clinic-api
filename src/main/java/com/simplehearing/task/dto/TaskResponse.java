@@ -1,6 +1,5 @@
 package com.simplehearing.task.dto;
 
-import com.simplehearing.task.entity.Task;
 import com.simplehearing.task.enums.TaskPriority;
 import com.simplehearing.task.enums.TaskStatus;
 

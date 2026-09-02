@@ -8,7 +8,6 @@ import com.simplehearing.common.exception.ResourceNotFoundException;
 import com.simplehearing.inquiry.dto.*;
 import com.simplehearing.inquiry.entity.Inquiry;
 import com.simplehearing.inquiry.entity.InquiryLog;
-import com.simplehearing.inquiry.enums.InquiryActionOutcome;
 import com.simplehearing.inquiry.enums.InquiryLogType;
 import com.simplehearing.inquiry.enums.InquirySource;
 import com.simplehearing.inquiry.enums.InquiryStatus;

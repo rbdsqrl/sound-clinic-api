@@ -5,7 +5,6 @@ import com.simplehearing.activity.entity.ActivityAssignment;
 import com.simplehearing.activity.entity.ActivityAttemptLog;
 import com.simplehearing.activity.entity.ActivitySkill;
 import com.simplehearing.activity.entity.Skill;
-import com.simplehearing.activity.enums.AssignmentStatus;
 import com.simplehearing.activity.repository.ActivityAssignmentRepository;
 import com.simplehearing.activity.repository.ActivityAttemptLogRepository;
 import com.simplehearing.activity.repository.ActivityRepository;

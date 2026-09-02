@@ -26,7 +26,6 @@ import java.time.Instant;
 import com.simplehearing.leave.entity.Leave;
 import com.simplehearing.leave.enums.LeaveStatus;
 import com.simplehearing.leave.repository.LeaveRepository;
-import com.simplehearing.patient.entity.Patient;
 import com.simplehearing.patient.entity.TherapistPatient;
 import com.simplehearing.patient.enums.PatientStage;
 import com.simplehearing.patient.repository.PatientRepository;

@@ -6,8 +6,6 @@ import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
@@ -15,8 +13,6 @@ import java.util.Date;
 
 @Service
 public class TokenService {
-
-    private static final Logger log = LoggerFactory.getLogger(TokenService.class);
 
     private final JwtProperties properties;
     private final SecretKey secretKey;

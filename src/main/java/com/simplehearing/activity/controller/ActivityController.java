@@ -2,9 +2,7 @@ package com.simplehearing.activity.controller;
 
 import com.simplehearing.activity.dto.*;
 import com.simplehearing.activity.entity.Activity;
-import com.simplehearing.activity.entity.ActivityAssignment;
 import com.simplehearing.activity.entity.ActivityResource;
-import com.simplehearing.activity.enums.AssignmentStatus;
 import com.simplehearing.activity.repository.ActivityResourceRepository;
 import com.simplehearing.activity.service.ActivityService;
 import com.simplehearing.activity.service.ActivitySharingService;
@@ -26,7 +24,6 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 

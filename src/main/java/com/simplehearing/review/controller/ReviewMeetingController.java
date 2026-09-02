@@ -7,7 +7,6 @@ import com.simplehearing.common.exception.ApiException;
 import com.simplehearing.common.exception.ResourceNotFoundException;
 import com.simplehearing.enrollment.entity.Enrollment;
 import com.simplehearing.enrollment.repository.EnrollmentRepository;
-import com.simplehearing.patient.entity.Patient;
 import com.simplehearing.patient.repository.PatientParentRepository;
 import com.simplehearing.patient.repository.PatientRepository;
 import com.simplehearing.review.dto.*;
@@ -28,7 +27,6 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;

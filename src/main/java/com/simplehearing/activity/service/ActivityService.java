@@ -11,7 +11,6 @@ import com.simplehearing.organisation.repository.OrganisationRepository;
 import com.simplehearing.patient.entity.Patient;
 import com.simplehearing.patient.repository.PatientRepository;
 import com.simplehearing.program.repository.ProgramRepository;
-import com.simplehearing.user.entity.User;
 import com.simplehearing.user.repository.UserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -19,7 +18,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 public class ActivityService {
