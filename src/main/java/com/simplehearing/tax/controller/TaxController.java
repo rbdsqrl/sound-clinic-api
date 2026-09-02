@@ -32,7 +32,7 @@ public class TaxController {
 
     @Operation(summary = "List all active tax rates for the org")
     @GetMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<List<TaxResponse>>> list(
             @AuthenticationPrincipal UserPrincipal principal) {
         List<TaxResponse> results = taxRepository
@@ -43,7 +43,7 @@ public class TaxController {
 
     @Operation(summary = "Add a tax rate for this org")
     @PostMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<TaxResponse>> create(
             @RequestBody CreateTaxRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -57,7 +57,7 @@ public class TaxController {
 
     @Operation(summary = "Delete a tax rate")
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<Void>> delete(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {

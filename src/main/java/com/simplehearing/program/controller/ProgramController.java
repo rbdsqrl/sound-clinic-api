@@ -72,7 +72,7 @@ public class ProgramController {
 
     @Operation(summary = "Create a new therapy program")
     @PostMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<ProgramResponse>> create(
             @Valid @RequestBody CreateProgramRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -103,7 +103,7 @@ public class ProgramController {
 
     @Operation(summary = "Update program name, cost, or active status")
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<ProgramResponse>> update(
             @PathVariable UUID id,
             @RequestBody UpdateProgramRequest request,
@@ -150,7 +150,7 @@ public class ProgramController {
 
     @Operation(summary = "Deactivate a program (soft delete)")
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<ProgramResponse>> deactivate(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -172,7 +172,7 @@ public class ProgramController {
 
     @Operation(summary = "Get a program's session feedback checklist template")
     @GetMapping("/{id}/feedback-template")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<List<ProgramFeedbackQuestionResponse>>> getFeedbackTemplate(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -188,7 +188,7 @@ public class ProgramController {
 
     @Operation(summary = "Replace a program's session feedback checklist template")
     @PutMapping("/{id}/feedback-template")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<List<ProgramFeedbackQuestionResponse>>> updateFeedbackTemplate(
             @PathVariable UUID id,
             @RequestBody UpdateProgramFeedbackTemplateRequest request,

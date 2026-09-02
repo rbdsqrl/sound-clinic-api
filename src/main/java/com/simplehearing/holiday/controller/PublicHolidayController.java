@@ -41,7 +41,7 @@ public class PublicHolidayController {
 
     @Operation(summary = "List all public holidays for the organisation")
     @GetMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<List<PublicHolidayResponse>>> list(
             @AuthenticationPrincipal UserPrincipal principal) {
 
@@ -54,7 +54,7 @@ public class PublicHolidayController {
 
     @Operation(summary = "Add a public holiday and flag scheduled sessions on that date as needing reschedule")
     @PostMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<PublicHolidayResponse>> create(
             @Valid @RequestBody CreatePublicHolidayRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -86,7 +86,7 @@ public class PublicHolidayController {
 
     @Operation(summary = "Delete a public holiday (does not auto-restore flagged sessions)")
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<Void> delete(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {

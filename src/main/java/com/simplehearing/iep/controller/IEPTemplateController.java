@@ -25,14 +25,14 @@ public class IEPTemplateController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<List<IEPTemplateResponse>>> listTemplates(
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(templateService.listTemplates(principal)));
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<IEPTemplateResponse>> createTemplate(
             @Valid @RequestBody CreateIEPTemplateRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -41,7 +41,7 @@ public class IEPTemplateController {
     }
 
     @PatchMapping("/{id}")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<IEPTemplateResponse>> updateTemplate(
             @PathVariable UUID id,
             @RequestBody UpdateIEPTemplateRequest request,
@@ -51,7 +51,7 @@ public class IEPTemplateController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<Void> deleteTemplate(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -60,7 +60,7 @@ public class IEPTemplateController {
     }
 
     @PostMapping("/{templateId}/goals")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<IEPTemplateResponse>> addGoal(
             @PathVariable UUID templateId,
             @Valid @RequestBody CreateIEPTemplateGoalRequest request,
@@ -70,7 +70,7 @@ public class IEPTemplateController {
     }
 
     @DeleteMapping("/goals/{goalId}")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<Void> deleteGoal(
             @PathVariable UUID goalId,
             @AuthenticationPrincipal UserPrincipal principal) {

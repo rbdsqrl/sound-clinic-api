@@ -28,7 +28,7 @@ public class OrganisationController {
 
     @Operation(summary = "Get your organisation")
     @GetMapping
-    @PreAuthorize("hasRole('BUSINESS_OWNER')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<OrganisationResponse>> getMyOrg(
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(organisationService.getMyOrg(principal)));
@@ -36,7 +36,7 @@ public class OrganisationController {
 
     @Operation(summary = "Update your organisation")
     @PatchMapping
-    @PreAuthorize("hasRole('BUSINESS_OWNER')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<OrganisationResponse>> updateMyOrg(
             @RequestBody UpdateOrganisationRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
