@@ -134,14 +134,14 @@ public class UserController {
                       "Office admins are included because they reassign therapists on ongoing plans."
     )
     @GetMapping("/therapists")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<List<UserResponse>>> listTherapists(
             @RequestParam(required = false) UUID clinicId,
             @AuthenticationPrincipal UserPrincipal principal) {
 
         if (!principal.getUser().hasRole(Role.BUSINESS_OWNER) &&
                 !principal.getUser().hasRole(Role.CLINIC_HEAD) &&
-                !principal.getUser().hasRole(Role.CLINIC_HEAD)) {
+                !principal.getUser().hasRole(Role.OFFICE_ADMIN)) {
             throw new ApiException(HttpStatus.FORBIDDEN,
                     "Only a business owner, admin or office admin may list therapists");
         }

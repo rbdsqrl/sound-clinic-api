@@ -54,7 +54,8 @@ public class MeetingController {
             @AuthenticationPrincipal UserPrincipal principal) {
 
         boolean seesEverything = principal.getUser().getRole() == Role.BUSINESS_OWNER
-                              || principal.getUser().getRole() == Role.CLINIC_HEAD;
+                              || principal.getUser().getRole() == Role.CLINIC_HEAD
+                              || principal.getUser().getRole() == Role.OFFICE_ADMIN;
 
         return ResponseEntity.ok(ApiResponse.success(
                 meetingService.list(principal.getOrgId(), principal.getId(), seesEverything, from, to)));

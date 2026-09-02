@@ -24,6 +24,10 @@ public interface TherapySessionRepository extends JpaRepository<TherapySession, 
     List<TherapySession> findByOrgIdAndPatientIdAndSessionDateBetweenOrderBySessionDateAscStartTimeAsc(
             UUID orgId, UUID patientId, LocalDate from, LocalDate to);
 
+    /** A parent's children's sessions in a date range (calendar view) */
+    List<TherapySession> findByOrgIdAndPatientIdInAndSessionDateBetweenOrderBySessionDateAscStartTimeAsc(
+            UUID orgId, List<UUID> patientIds, LocalDate from, LocalDate to);
+
     /** All sessions belonging to a specific enrollment (for detail view) */
     List<TherapySession> findByEnrollmentIdOrderBySessionNumberAsc(UUID enrollmentId);
 

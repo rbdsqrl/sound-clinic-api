@@ -146,6 +146,13 @@ public class TherapySessionController {
             sessions = sessionRepository
                     .findByOrgIdAndTherapistIdAndSessionDateBetweenOrderBySessionDateAscStartTimeAsc(
                             principal.getOrgId(), principal.getId(), start, end);
+        } else if (role == Role.PARENT) {
+            List<UUID> childIds = patientParentRepository.findById_ParentId(principal.getId()).stream()
+                    .map(pp -> pp.getId().getPatientId())
+                    .toList();
+            sessions = childIds.isEmpty() ? List.of() : sessionRepository
+                    .findByOrgIdAndPatientIdInAndSessionDateBetweenOrderBySessionDateAscStartTimeAsc(
+                            principal.getOrgId(), childIds, start, end);
         } else if (patientId != null) {
             sessions = sessionRepository
                     .findByOrgIdAndPatientIdAndSessionDateBetweenOrderBySessionDateAscStartTimeAsc(
