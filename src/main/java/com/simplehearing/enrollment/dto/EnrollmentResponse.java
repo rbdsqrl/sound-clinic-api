@@ -33,7 +33,11 @@ public record EnrollmentResponse(
         String therapistSignoffNotes,
         int sessionsCompleted,
         int totalSessions,
-        Instant createdAt
+        Instant createdAt,
+        /** Set only when this enrollment was closed by a patient discharge — a force-completed
+         *  one (via the care-status override) stays null, which is how the frontend knows
+         *  whether "Reactivate" is even offered. */
+        UUID dischargedInRecordId
 ) {
     public static EnrollmentResponse from(
             Enrollment enrollment,
@@ -63,7 +67,8 @@ public record EnrollmentResponse(
                 enrollment.getTherapistSignoffNotes(),
                 sessionsCompleted,
                 totalSessions,
-                enrollment.getCreatedAt()
+                enrollment.getCreatedAt(),
+                enrollment.getDischargedInRecordId()
         );
     }
 }

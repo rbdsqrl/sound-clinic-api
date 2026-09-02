@@ -393,11 +393,15 @@ public class EnrollmentController {
 
     @Operation(
         summary = "Set the clinical-health signal on an active enrollment",
-        description = "PROGRAM_COMPLETED also flips the enrollment's status to COMPLETED. "
+        description = "PROGRAM_COMPLETED also flips the enrollment's status to COMPLETED, overriding the "
+                    + "normal completion path (finishing every session) — only CLINIC_HEAD, OFFICE_ADMIN, "
+                    + "and BUSINESS_OWNER may set it; the assigned THERAPIST can set the other three. "
+                    + "Any of the enrollment's sessions still SCHEDULED/PENDING_RESCHEDULE/CANCELLATION_REQUESTED "
+                    + "on or after today are cancelled along with it. "
                     + "Does not touch the patient's own stage — discharge is a patient-level event, not a program one."
     )
     @PatchMapping("/{id}/care-status")
-    @PreAuthorize("hasAnyRole('THERAPIST', 'CLINIC_HEAD', 'BUSINESS_OWNER')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'CLINIC_HEAD', 'BUSINESS_OWNER', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<EnrollmentResponse>> updateCareStatus(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateCareStatusRequest request,
@@ -411,9 +415,13 @@ public class EnrollmentController {
         }
         boolean isAdminTier = principal.getUser().hasRole(Role.CLINIC_HEAD)
                 || principal.getUser().hasRole(Role.BUSINESS_OWNER)
-                || principal.getUser().hasRole(Role.CLINIC_HEAD);
+                || principal.getUser().hasRole(Role.OFFICE_ADMIN);
         if (!isAdminTier && !enrollment.getTherapistId().equals(principal.getId())) {
             throw new ApiException(HttpStatus.FORBIDDEN, "You are not the assigned therapist for this plan");
+        }
+        if (request.careStatus() == EnrollmentCareStatus.PROGRAM_COMPLETED && !isAdminTier) {
+            throw new ApiException(HttpStatus.FORBIDDEN,
+                    "Only Clinic Head, Office Admin, or Business Owner can mark a program completed");
         }
         if (enrollment.getStatus() != EnrollmentStatus.ACTIVE) {
             throw new ApiException(HttpStatus.CONFLICT, "Care status can only be set on an active enrollment");
@@ -425,7 +433,95 @@ public class EnrollmentController {
         enrollment.setCareStatusUpdatedAt(Instant.now());
         if (request.careStatus() == EnrollmentCareStatus.PROGRAM_COMPLETED) {
             enrollment.setStatus(EnrollmentStatus.COMPLETED);
+
+            // The program is closed early — any of its sessions still ahead on the
+            // calendar no longer make sense and would otherwise sit there forever as
+            // "upcoming" on a completed program.
+            LocalDate today = LocalDate.now();
+            List<TherapySession> stillAhead = therapySessionRepository
+                    .findByEnrollmentIdOrderBySessionNumberAsc(id).stream()
+                    .filter(s -> !s.getSessionDate().isBefore(today))
+                    .filter(s -> s.getStatus() == TherapySessionStatus.SCHEDULED
+                            || s.getStatus() == TherapySessionStatus.PENDING_RESCHEDULE
+                            || s.getStatus() == TherapySessionStatus.CANCELLATION_REQUESTED)
+                    .toList();
+            stillAhead.forEach(s -> {
+                s.setStatus(TherapySessionStatus.CANCELLED);
+                s.setCancelledByProgramCompletion(true);
+            });
+            therapySessionRepository.saveAll(stillAhead);
+
+            // Manual entry for the discharge success criteria that would otherwise never
+            // arrive on a program closed this way — each left null (unset) is skipped, so
+            // an admin filling in only one of the three doesn't clobber the others.
+            if (request.manualGoalMasteryPct() != null) {
+                enrollment.setManualGoalMasteryPct(request.manualGoalMasteryPct());
+            }
+            if (request.manualParentSatisfactionPct() != null) {
+                enrollment.setManualParentSatisfactionPct(request.manualParentSatisfactionPct());
+            }
+            if (Boolean.TRUE.equals(request.therapistSignedOff())) {
+                enrollment.setTherapistSignedOff(true);
+                enrollment.setTherapistSignoffBy(principal.getId());
+                enrollment.setTherapistSignoffAt(Instant.now());
+            }
         }
+
+        Enrollment saved = enrollmentRepository.save(enrollment);
+
+        List<EnrollmentResponse> enriched = enrichEnrollments(List.of(saved));
+        return ResponseEntity.ok(ApiResponse.success(enriched.get(0)));
+    }
+
+    // ── Reactivate a force-completed enrollment ───────────────────────────────
+
+    @Operation(
+        summary = "Undo a \"Mark as Completed\" override — resume the program",
+        description = "Only reverses a program that was force-completed via the care-status "
+                    + "override, never one closed by a patient discharge (those carry a "
+                    + "discharged-in-record id and are a bigger, separate thing to undo). "
+                    + "Sets status back to ACTIVE, care status back to ON_TRACK, clears the manual "
+                    + "goal-mastery/parent-satisfaction overrides, and restores to SCHEDULED exactly "
+                    + "the sessions that the completion auto-cancelled — no others."
+    )
+    @PatchMapping("/{id}/reactivate")
+    @PreAuthorize("hasAnyRole('CLINIC_HEAD', 'BUSINESS_OWNER', 'OFFICE_ADMIN')")
+    public ResponseEntity<ApiResponse<EnrollmentResponse>> reactivate(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        Enrollment enrollment = enrollmentRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Enrollment not found"));
+
+        if (!enrollment.getOrgId().equals(principal.getOrgId())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Access denied");
+        }
+        if (enrollment.getStatus() != EnrollmentStatus.COMPLETED) {
+            throw new ApiException(HttpStatus.CONFLICT, "Only a completed enrollment can be reactivated");
+        }
+        if (enrollment.getDischargedInRecordId() != null) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "This program was closed by a patient discharge, not the completion override — "
+                            + "it can't be reactivated on its own");
+        }
+
+        enrollment.setStatus(EnrollmentStatus.ACTIVE);
+        enrollment.setCareStatus(EnrollmentCareStatus.ON_TRACK);
+        enrollment.setCareStatusNote(null);
+        enrollment.setCareStatusUpdatedBy(principal.getId());
+        enrollment.setCareStatusUpdatedAt(Instant.now());
+        enrollment.setManualGoalMasteryPct(null);
+        enrollment.setManualParentSatisfactionPct(null);
+
+        List<TherapySession> toRestore = therapySessionRepository
+                .findByEnrollmentIdOrderBySessionNumberAsc(id).stream()
+                .filter(TherapySession::isCancelledByProgramCompletion)
+                .toList();
+        toRestore.forEach(s -> {
+            s.setStatus(TherapySessionStatus.SCHEDULED);
+            s.setCancelledByProgramCompletion(false);
+        });
+        therapySessionRepository.saveAll(toRestore);
 
         Enrollment saved = enrollmentRepository.save(enrollment);
 

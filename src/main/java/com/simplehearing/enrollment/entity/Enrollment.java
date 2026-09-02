@@ -94,6 +94,15 @@ public class Enrollment {
     @Column(name = "therapist_signoff_notes", columnDefinition = "TEXT")
     private String therapistSignoffNotes;
 
+    /** Manual override for the other two discharge success criteria, set only when a program is
+     *  force-completed by an admin-tier override — otherwise both stay null and the computed
+     *  (IEP trial log / review meeting rating) value is used instead. */
+    @Column(name = "manual_goal_mastery_pct")
+    private Double manualGoalMasteryPct;
+
+    @Column(name = "manual_parent_satisfaction_pct")
+    private Double manualParentSatisfactionPct;
+
     /** Which discharge episode closed this enrollment. NULL = belongs to the patient's current, still-open episode. */
     @Column(name = "discharged_in_record_id")
     private UUID dischargedInRecordId;
@@ -150,6 +159,10 @@ public class Enrollment {
     public void setTherapistSignoffAt(Instant therapistSignoffAt) { this.therapistSignoffAt = therapistSignoffAt; }
     public String getTherapistSignoffNotes() { return therapistSignoffNotes; }
     public void setTherapistSignoffNotes(String therapistSignoffNotes) { this.therapistSignoffNotes = therapistSignoffNotes; }
+    public Double getManualGoalMasteryPct() { return manualGoalMasteryPct; }
+    public void setManualGoalMasteryPct(Double manualGoalMasteryPct) { this.manualGoalMasteryPct = manualGoalMasteryPct; }
+    public Double getManualParentSatisfactionPct() { return manualParentSatisfactionPct; }
+    public void setManualParentSatisfactionPct(Double manualParentSatisfactionPct) { this.manualParentSatisfactionPct = manualParentSatisfactionPct; }
     public UUID getDischargedInRecordId() { return dischargedInRecordId; }
     public void setDischargedInRecordId(UUID dischargedInRecordId) { this.dischargedInRecordId = dischargedInRecordId; }
     public UUID getCreatedBy() { return createdBy; }

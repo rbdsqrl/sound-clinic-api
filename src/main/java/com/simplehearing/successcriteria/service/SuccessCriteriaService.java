@@ -72,9 +72,13 @@ public class SuccessCriteriaService {
             trialsPassed += p.getTrialsPassed() == null ? 0 : Math.min(p.getTrialsPassed(), p.getTrialsTotal());
         }
         // Not computable (no linked plan, or no trial data) — surfaced as null, never as a false failure.
-        Double goalMasteryPct = trialsTotal > 0
+        // A manual override (set only via the admin force-complete action) always wins over the
+        // derived figure — it exists precisely because the derived one will never arrive.
+        Double computedGoalMasteryPct = trialsTotal > 0
                 ? Math.round((100.0 * trialsPassed / trialsTotal) * 10.0) / 10.0
                 : null;
+        Double goalMasteryPct = enrollment.getManualGoalMasteryPct() != null
+                ? enrollment.getManualGoalMasteryPct() : computedGoalMasteryPct;
         Boolean goalMasteryMet = goalMasteryPct != null ? goalMasteryPct >= org.getGoalMasteryThresholdPct() : null;
 
         // ── Parent satisfaction ───────────────────────────────────────────────
@@ -83,8 +87,10 @@ public class SuccessCriteriaService {
                 .map(ReviewMeeting::getProgressRatingPct)
                 .filter(r -> r != null)
                 .toList();
-        Double parentSatisfactionPct = progressRatings.isEmpty() ? null
+        Double computedParentSatisfactionPct = progressRatings.isEmpty() ? null
                 : progressRatings.stream().mapToInt(Integer::intValue).average().orElse(0);
+        Double parentSatisfactionPct = enrollment.getManualParentSatisfactionPct() != null
+                ? enrollment.getManualParentSatisfactionPct() : computedParentSatisfactionPct;
         Boolean parentSatisfactionMet = parentSatisfactionPct != null
                 ? parentSatisfactionPct >= org.getParentSatisfactionThresholdPct() : null;
 

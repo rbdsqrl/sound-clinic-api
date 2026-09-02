@@ -222,7 +222,8 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | PUT      | `/api/v1/review-meetings/{id}/parent-feedback`    | PARENT (linked to patient)                    | Rating + comments on the therapist  |
 | PUT      | `/api/v1/review-meetings/{id}/therapist-feedback` | THERAPIST, CLINIC_HEAD, BUSINESS_OWNER      | Summary + progress notes            |
 | PATCH    | `/api/v1/enrollments/{id}/therapist`    | BUSINESS_OWNER, CLINIC_HEAD                     | Reassign an ongoing plan's therapist |
-| PATCH    | `/api/v1/enrollments/{id}/care-status`  | THERAPIST (own), CLINIC_HEAD, BUSINESS_OWNER    | Set clinical-health signal; PROGRAM_COMPLETED also completes the enrollment |
+| PATCH    | `/api/v1/enrollments/{id}/care-status`  | THERAPIST (own, not PROGRAM_COMPLETED), CLINIC_HEAD, BUSINESS_OWNER, OFFICE_ADMIN | Set clinical-health signal; PROGRAM_COMPLETED also completes the enrollment and cancels its still-upcoming sessions (admin tier only — overrides the normal all-sessions-attended completion path), and optionally accepts `manualGoalMasteryPct`/`manualParentSatisfactionPct`/`therapistSignedOff` to fill in the discharge success criteria by hand |
+| PATCH    | `/api/v1/enrollments/{id}/reactivate`   | CLINIC_HEAD, BUSINESS_OWNER, OFFICE_ADMIN | Undo a force-complete override — back to ACTIVE/ON_TRACK, clears the manual success-criteria overrides, restores exactly the sessions that override auto-cancelled; refused if the enrollment was closed by a discharge instead |
 | POST     | `/api/v1/enrollment-concerns`           | PARENT (own child)                                      | Raise a concern about an active program |
 | GET      | `/api/v1/enrollment-concerns`           | All staff + PARENT (own child)                          | List concerns by `enrollmentId`, `patientId`, or org-wide `status` |
 | GET      | `/api/v1/enrollment-concerns/open-count`| All staff                                                | Open-concern count (own caseload for THERAPIST) |
@@ -331,6 +332,9 @@ Master file: `db.changelog-master.yaml` — lists migrations in order.
 | 080-member-profile-fields.sql       | `users.qualification`/`users.specialization` (free text) + `user_languages` join table (reuses the existing `languages` lookup) — member profile page |
 | 081-baseline-score-percent.sql      | `baseline_domain_values.score_percent`/`baseline_progress_entries.score_percent` — optional 0-100 score alongside the free-text value, so a domain can be charted |
 | 082-create-shared-media.sql         | `shared_media` table — videos/notes shared between parents and the care team per patient; either `file_url` or `note` must be set |
+| 092-session-notes-history.sql       | `session_notes_history` — snapshot of a session's feedback/progress report/notes/performance score right before a later edit overwrites them |
+| 093-enrollment-manual-success-criteria.sql | `enrollments.manual_goal_mastery_pct`/`manual_parent_satisfaction_pct` — admin-entered override for the two computed discharge success criteria, used only when a program is force-completed |
+| 094-session-cancelled-by-completion.sql | `therapy_sessions.cancelled_by_program_completion` — marks a session auto-cancelled by the force-complete override, so reactivating restores exactly those and no others |
 
 **To add a migration:** create `NNN-description.sql` with the Liquibase header, then add it to the master YAML.
 

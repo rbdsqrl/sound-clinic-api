@@ -92,6 +92,12 @@ public class TherapySession {
     @Column(name = "requires_payment", nullable = false)
     private boolean requiresPayment = false;
 
+    /** True when this session was auto-cancelled by the enrollment's force-complete override,
+     *  as opposed to any other cancellation reason — lets reactivating the enrollment restore
+     *  precisely these sessions and no others. */
+    @Column(name = "cancelled_by_program_completion", nullable = false)
+    private boolean cancelledByProgramCompletion = false;
+
     @Column(name = "completed_by")
     private UUID completedBy;
 
@@ -137,6 +143,8 @@ public class TherapySession {
     public void setRescheduleReason(RescheduleReason rescheduleReason) { this.rescheduleReason = rescheduleReason; }
     public boolean isRequiresPayment() { return requiresPayment; }
     public void setRequiresPayment(boolean v) { this.requiresPayment = v; }
+    public boolean isCancelledByProgramCompletion() { return cancelledByProgramCompletion; }
+    public void setCancelledByProgramCompletion(boolean v) { this.cancelledByProgramCompletion = v; }
 
     public int getRescheduleCount() { return rescheduleCount; }
     public void setRescheduleCount(int rescheduleCount) { this.rescheduleCount = rescheduleCount; }

@@ -275,3 +275,9 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/092-session-notes-history.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/093-enrollment-manual-success-criteria.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/094-session-cancelled-by-completion.sql
+      relativeToChangelogFile: false
