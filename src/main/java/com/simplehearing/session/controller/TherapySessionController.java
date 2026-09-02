@@ -195,7 +195,7 @@ public class TherapySessionController {
 
     @Operation(summary = "Update therapy session status (COMPLETED / CANCELLED / NO_SHOW)")
     @PatchMapping("/{id}/status")
-    @PreAuthorize("hasAnyRole('THERAPIST', 'CLINIC_HEAD', 'BUSINESS_OWNER')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'CLINIC_HEAD', 'BUSINESS_OWNER', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<TherapySessionResponse>> updateStatus(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateSessionStatusRequest request,
@@ -209,6 +209,12 @@ public class TherapySessionController {
                 && (callerRole == Role.THERAPIST)) {
             throw new ApiException(HttpStatus.FORBIDDEN,
                     "Therapists cannot cancel sessions directly — use cancellation-request instead");
+        }
+        // Office Admin schedules and cancels, but doesn't record clinical outcomes.
+        if (request.status() != TherapySessionStatus.CANCELLED
+                && callerRole == Role.OFFICE_ADMIN) {
+            throw new ApiException(HttpStatus.FORBIDDEN,
+                    "Office Admin can only cancel a session directly, not mark it completed or a no-show");
         }
 
         session.setStatus(request.status());

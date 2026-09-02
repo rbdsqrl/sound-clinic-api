@@ -417,18 +417,30 @@ public class InquiryController {
 
         Patient savedPatient = patientRepository.save(patient);
 
-        // Optionally invite the inquiry submitter and auto-link them to the new patient
+        // Optionally invite the inquiry submitter and auto-link them to the new patient.
+        // The case itself is already created at this point — a failure here (e.g. the
+        // email already belongs to an existing account) must not fail the whole request
+        // or leave the inquiry re-convertible, which would create a second, duplicate
+        // patient the next time this endpoint is called. It's reported back instead, so
+        // the caller can link that person to the case by hand from its profile.
         String linkedUserInviteLink = null;
+        String linkedUserError = null;
         if (request.linkedUserEmail() != null && !request.linkedUserEmail().isBlank()) {
             Role linkedRole = request.linkedUserRole() != null ? request.linkedUserRole() : Role.PARENT;
-            linkedUserInviteLink = invitationService.createLinkedInvitation(
-                    request.linkedUserEmail().trim(),
-                    linkedRole,
-                    request.clinicId(),
-                    savedPatient.getId(),
-                    principal.getOrgId(),
-                    principal.getId()
-            );
+            try {
+                linkedUserInviteLink = invitationService.createLinkedInvitation(
+                        request.linkedUserEmail().trim(),
+                        linkedRole,
+                        request.clinicId(),
+                        savedPatient.getId(),
+                        principal.getOrgId(),
+                        principal.getId()
+                );
+            } catch (ApiException e) {
+                log.warn("Could not link {} to new patient {}: {}",
+                        request.linkedUserEmail(), savedPatient.getId(), e.getMessage());
+                linkedUserError = e.getMessage() + " — link them to this case from its profile instead.";
+            }
         }
 
         // Mark inquiry as CONVERTED
@@ -439,13 +451,15 @@ public class InquiryController {
         String actorName = principal.getUser().getFirstName() + " " + principal.getUser().getLastName();
         addLog(inquiry.getId(), InquiryLogType.CONVERTED,
                 "Converted to patient: " + request.firstName() + " " + request.lastName()
-                        + " (patient ID: " + savedPatient.getId() + ")",
+                        + " (patient ID: " + savedPatient.getId() + ")"
+                        + (linkedUserError != null ? " — linked user setup failed: " + linkedUserError : ""),
                 principal.getId(), actorName);
 
         ConvertInquiryResponse response = new ConvertInquiryResponse(
                 savedPatient.getId(),
                 savedPatient.getFirstName() + " " + savedPatient.getLastName(),
-                linkedUserInviteLink
+                linkedUserInviteLink,
+                linkedUserError
         );
 
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
