@@ -272,3 +272,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/091-enrollment-session-days.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/092-session-notes-history.sql
+      relativeToChangelogFile: false

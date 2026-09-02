@@ -30,10 +30,13 @@ import com.simplehearing.session.dto.SessionAttachmentResponse;
 import com.simplehearing.session.dto.TherapySessionResponse;
 import com.simplehearing.session.dto.UpdateSessionNotesRequest;
 import com.simplehearing.session.dto.UpdateSessionStatusRequest;
+import com.simplehearing.session.dto.SessionNotesHistoryResponse;
 import com.simplehearing.session.entity.SessionAttachment;
+import com.simplehearing.session.entity.SessionNotesHistory;
 import com.simplehearing.session.entity.TherapySession;
 import com.simplehearing.session.enums.TherapySessionStatus;
 import com.simplehearing.session.repository.SessionAttachmentRepository;
+import com.simplehearing.session.repository.SessionNotesHistoryRepository;
 import com.simplehearing.session.repository.TherapySessionRepository;
 import com.simplehearing.storage.StorageService;
 import com.simplehearing.subscription.entity.Subscription;
@@ -71,6 +74,7 @@ public class TherapySessionController {
     private final PatientRepository patientRepository;
     private final UserRepository userRepository;
     private final SessionAttachmentRepository attachmentRepository;
+    private final SessionNotesHistoryRepository notesHistoryRepository;
     private final StorageService storageService;
     private final TherapistPatientRepository therapistPatientRepository;
     private final PatientParentRepository patientParentRepository;
@@ -93,6 +97,7 @@ public class TherapySessionController {
             PatientRepository patientRepository,
             UserRepository userRepository,
             SessionAttachmentRepository attachmentRepository,
+            SessionNotesHistoryRepository notesHistoryRepository,
             StorageService storageService,
             TherapistPatientRepository therapistPatientRepository,
             PatientParentRepository patientParentRepository,
@@ -106,6 +111,7 @@ public class TherapySessionController {
         this.patientRepository    = patientRepository;
         this.userRepository       = userRepository;
         this.attachmentRepository = attachmentRepository;
+        this.notesHistoryRepository = notesHistoryRepository;
         this.storageService       = storageService;
         this.therapistPatientRepository = therapistPatientRepository;
         this.patientParentRepository = patientParentRepository;
@@ -238,9 +244,14 @@ public class TherapySessionController {
 
     // ── Update session notes / feedback / progress report ─────────────────────
 
-    @Operation(summary = "Update session feedback, progress report, and notes")
+    @Operation(
+        summary = "Update session feedback, progress report, and notes",
+        description = "Editable any time, including well after the session — e.g. amending notes on a "
+                    + "later date. If the session already had any notes content, the values it held right "
+                    + "before this edit are recorded to session_notes_history first."
+    )
     @PatchMapping("/{id}/notes")
-    @PreAuthorize("hasAnyRole('THERAPIST', 'CLINIC_HEAD', 'BUSINESS_OWNER')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'CLINIC_HEAD', 'BUSINESS_OWNER', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<TherapySessionResponse>> updateNotes(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateSessionNotesRequest request,
@@ -248,6 +259,21 @@ public class TherapySessionController {
 
         TherapySession session = findOwned(id, principal);
         requireTherapistOwnership(session, principal);
+
+        boolean hadPriorContent = session.getFeedback() != null || session.getProgressReport() != null
+                || session.getNotes() != null || session.getPerformanceScore() != null;
+        if (hadPriorContent) {
+            SessionNotesHistory history = new SessionNotesHistory();
+            history.setOrgId(session.getOrgId());
+            history.setSessionId(session.getId());
+            history.setChangedBy(principal.getId());
+            history.setChangedAt(Instant.now());
+            history.setPreviousFeedback(session.getFeedback());
+            history.setPreviousProgressReport(session.getProgressReport());
+            history.setPreviousNotes(session.getNotes());
+            history.setPreviousPerformanceScore(session.getPerformanceScore());
+            notesHistoryRepository.save(history);
+        }
 
         if (request.feedback()          != null) session.setFeedback(request.feedback());
         if (request.progressReport()    != null) session.setProgressReport(request.progressReport());
@@ -258,11 +284,41 @@ public class TherapySessionController {
         return ResponseEntity.ok(ApiResponse.success(enrich(List.of(saved)).get(0)));
     }
 
+    @Operation(
+        summary = "List a session's notes edit history",
+        description = "Newest first — each entry is the feedback/progress report/notes/performance score "
+                    + "as they stood right before that edit overwrote them."
+    )
+    @GetMapping("/{id}/notes-history")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'CLINIC_HEAD', 'BUSINESS_OWNER', 'OFFICE_ADMIN')")
+    public ResponseEntity<ApiResponse<List<SessionNotesHistoryResponse>>> notesHistory(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        TherapySession session = findOwned(id, principal);
+        requireTherapistOwnership(session, principal);
+
+        List<SessionNotesHistory> history = notesHistoryRepository.findBySessionIdOrderByChangedAtDesc(id);
+        Map<UUID, User> users = userRepository.findAllById(
+                history.stream().map(SessionNotesHistory::getChangedBy).collect(Collectors.toSet())
+        ).stream().collect(Collectors.toMap(User::getId, u -> u));
+
+        List<SessionNotesHistoryResponse> result = history.stream()
+                .map(h -> {
+                    User u = users.get(h.getChangedBy());
+                    String name = u != null ? (u.getFirstName() + " " + u.getLastName()) : "Unknown";
+                    return SessionNotesHistoryResponse.from(h, name);
+                })
+                .toList();
+
+        return ResponseEntity.ok(ApiResponse.success(result));
+    }
+
     // ── Session feedback checklist (per the session's program) ────────────────
 
     @Operation(summary = "Get the session feedback checklist template and this session's answers")
     @GetMapping("/{id}/feedback")
-    @PreAuthorize("hasAnyRole('THERAPIST', 'CLINIC_HEAD', 'BUSINESS_OWNER')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'CLINIC_HEAD', 'BUSINESS_OWNER', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<SessionFeedbackResponse>> getFeedback(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -280,7 +336,7 @@ public class TherapySessionController {
 
     @Operation(summary = "Save this session's feedback checklist answers")
     @PutMapping("/{id}/feedback")
-    @PreAuthorize("hasAnyRole('THERAPIST', 'CLINIC_HEAD', 'BUSINESS_OWNER')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'CLINIC_HEAD', 'BUSINESS_OWNER', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<Void>> updateFeedback(
             @PathVariable UUID id,
             @RequestBody UpdateSessionFeedbackRequest request,
