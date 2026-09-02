@@ -10,6 +10,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.DayOfWeek;
+import java.util.EnumSet;
+import java.util.Set;
+
 @Service
 @Transactional
 public class OrganisationService {
@@ -24,6 +28,17 @@ public class OrganisationService {
         Organisation org = organisationRepository.findById(principal.getOrgId())
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Organisation not found"));
         return OrganisationResponse.from(org);
+    }
+
+    /**
+     * Just the weekly off days — a narrower read than {@link #getMyOrg} so roles that can
+     * schedule sessions (Clinic Head, Office Admin) but not see the full org profile can
+     * still default a new plan's Session Days away from days that would never generate one.
+     */
+    public Set<DayOfWeek> getWeeklyOffDays(UserPrincipal principal) {
+        return organisationRepository.findById(principal.getOrgId())
+                .map(Organisation::getWeeklyOffDays)
+                .orElse(EnumSet.noneOf(DayOfWeek.class));
     }
 
     public OrganisationResponse updateMyOrg(UpdateOrganisationRequest request, UserPrincipal principal) {

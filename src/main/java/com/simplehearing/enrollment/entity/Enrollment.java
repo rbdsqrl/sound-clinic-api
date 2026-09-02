@@ -10,6 +10,8 @@ import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.EnumSet;
+import java.util.Set;
 import java.util.UUID;
 
 @Entity
@@ -49,6 +51,14 @@ public class Enrollment {
     @Enumerated(EnumType.STRING)
     @Column(name = "day_of_week")
     private DayOfWeek dayOfWeek;
+
+    /** Which weekdays this plan's sessions land on. Empty = no restriction (every day is a
+     *  candidate) — same as the app's original behaviour, so old enrollments are unaffected. */
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "enrollment_session_days", joinColumns = @JoinColumn(name = "enrollment_id"))
+    @Column(name = "day_of_week", length = 10)
+    @Enumerated(EnumType.STRING)
+    private Set<DayOfWeek> sessionDays = EnumSet.noneOf(DayOfWeek.class);
 
     @Column(name = "start_time", nullable = false)
     private LocalTime startTime;
@@ -118,6 +128,8 @@ public class Enrollment {
     public void setEndDate(LocalDate endDate) { this.endDate = endDate; }
     public DayOfWeek getDayOfWeek() { return dayOfWeek; }
     public void setDayOfWeek(DayOfWeek dayOfWeek) { this.dayOfWeek = dayOfWeek; }
+    public Set<DayOfWeek> getSessionDays() { return sessionDays; }
+    public void setSessionDays(Set<DayOfWeek> sessionDays) { this.sessionDays = sessionDays; }
     public LocalTime getStartTime() { return startTime; }
     public void setStartTime(LocalTime startTime) { this.startTime = startTime; }
     public EnrollmentStatus getStatus() { return status; }

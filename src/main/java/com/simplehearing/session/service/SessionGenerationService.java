@@ -1,11 +1,13 @@
 package com.simplehearing.session.service;
 
+import com.simplehearing.common.exception.ApiException;
 import com.simplehearing.enrollment.entity.Enrollment;
 import com.simplehearing.holiday.repository.PublicHolidayRepository;
 import com.simplehearing.organisation.entity.Organisation;
 import com.simplehearing.organisation.repository.OrganisationRepository;
 import com.simplehearing.session.entity.TherapySession;
 import com.simplehearing.session.repository.TherapySessionRepository;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import java.time.DayOfWeek;
@@ -35,7 +37,8 @@ public class SessionGenerationService {
     /**
      * Generates {@code numSessions} {@link TherapySession} records starting from
      * {@code enrollment.getStartDate()}, advancing one day at a time and skipping
-     * any dates that are public holidays or the org's weekly off days.
+     * any dates that are public holidays, the org's weekly off days, or — when the
+     * enrollment restricts itself to specific weekdays — not one of those days.
      *
      * @return the saved sessions in date order — the last one's date is the plan's real end
      */
@@ -54,12 +57,32 @@ public class SessionGenerationService {
                 .map(Organisation::getWeeklyOffDays)
                 .orElse(EnumSet.noneOf(DayOfWeek.class));
 
+        // Empty means no restriction — every day is a candidate, same as before this field existed.
+        Set<DayOfWeek> sessionDays = enrollment.getSessionDays();
+        boolean restrictToSessionDays = sessionDays != null && !sessionDays.isEmpty();
+
+        // A day the enrollment is restricted to that also happens to be an org-wide weekly
+        // off day would never be reachable — the skip loop below would spin forever advancing
+        // one day at a time, so fail fast instead of hanging the request.
+        if (restrictToSessionDays && weeklyOffDays.containsAll(sessionDays)) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "Every selected day is a weekly off day for this organisation — choose a different day");
+        }
+
         List<TherapySession> sessions = new ArrayList<>(numSessions);
         LocalDate date = enrollment.getStartDate();
         for (int i = 0; i < numSessions; i++) {
-            // Skip past any public holidays or the org's weekly off days
-            while (holidays.contains(date) || weeklyOffDays.contains(date.getDayOfWeek())) {
+            // Skip past any public holidays, the org's weekly off days, or a weekday this
+            // plan isn't scheduled on. Bounded to just over two years out — long enough that a
+            // real schedule never hits it, but finite so a bad combination can't hang the request.
+            LocalDate searchLimit = date.plusDays(800);
+            while (holidays.contains(date) || weeklyOffDays.contains(date.getDayOfWeek())
+                    || (restrictToSessionDays && !sessionDays.contains(date.getDayOfWeek()))) {
                 date = date.plusDays(1);
+                if (date.isAfter(searchLimit)) {
+                    throw new ApiException(HttpStatus.CONFLICT,
+                            "Couldn't find enough valid session dates — check the selected days against holidays and weekly off days");
+                }
             }
             TherapySession s = new TherapySession();
             s.setOrgId(enrollment.getOrgId());

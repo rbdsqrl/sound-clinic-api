@@ -12,6 +12,9 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.DayOfWeek;
+import java.util.Set;
+
 @Tag(name = "Organisation", description = "Organisation profile management")
 @RestController
 @RequestMapping("/api/v1/organisation")
@@ -38,5 +41,18 @@ public class OrganisationController {
             @RequestBody UpdateOrganisationRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(organisationService.updateMyOrg(request, principal)));
+    }
+
+    @Operation(
+        summary = "Get just the weekly off days",
+        description = "A narrower read than GET /organisation, for roles that can schedule sessions "
+                    + "but not see the full org profile — lets the enrollment schedule form default "
+                    + "Session Days away from days that would never generate a session anyway."
+    )
+    @GetMapping("/weekly-off-days")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
+    public ResponseEntity<ApiResponse<Set<DayOfWeek>>> getWeeklyOffDays(
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(organisationService.getWeeklyOffDays(principal)));
     }
 }

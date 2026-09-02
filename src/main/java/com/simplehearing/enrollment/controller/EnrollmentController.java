@@ -205,6 +205,9 @@ public class EnrollmentController {
         enrollment.setSessionDurationMinutes(request.sessionDurationMinutes());
         enrollment.setStartDate(request.startDate());
         enrollment.setDayOfWeek(request.startDate().getDayOfWeek());
+        if (request.sessionDays() != null) {
+            enrollment.setSessionDays(new HashSet<>(request.sessionDays()));
+        }
         enrollment.setStartTime(request.startTime());
         enrollment.setCreatedBy(principal.getId());
 

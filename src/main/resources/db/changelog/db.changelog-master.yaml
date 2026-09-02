@@ -269,3 +269,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/090-remove-doctor-role.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/091-enrollment-session-days.sql
+      relativeToChangelogFile: false

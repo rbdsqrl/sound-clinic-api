@@ -8,6 +8,7 @@ import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.Set;
 import java.util.UUID;
 
 public record EnrollmentResponse(
@@ -22,6 +23,8 @@ public record EnrollmentResponse(
         LocalDate startDate,
         LocalDate endDate,
         DayOfWeek dayOfWeek,
+        /** Empty = no restriction — sessions can land on any day (skipping only holidays/org off-days). */
+        Set<DayOfWeek> sessionDays,
         LocalTime startTime,
         EnrollmentStatus status,
         EnrollmentCareStatus careStatus,
@@ -51,6 +54,7 @@ public record EnrollmentResponse(
                 enrollment.getStartDate(),
                 enrollment.getEndDate(),
                 enrollment.getDayOfWeek(),
+                enrollment.getSessionDays(),
                 enrollment.getStartTime(),
                 enrollment.getStatus(),
                 enrollment.getCareStatus(),

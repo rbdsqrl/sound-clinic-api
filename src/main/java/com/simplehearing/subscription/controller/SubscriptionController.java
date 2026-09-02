@@ -102,7 +102,12 @@ public class SubscriptionController {
         sub.setPatientId(request.patientId());
         sub.setProgramId(request.programId());
         sub.setNumSessions(request.numSessions());
-        sub.setPerSessionCost(ProgramResponse.effectiveCost(program, tax));   // snapshot at creation time, tax included
+        // A caller-supplied fee overrides the program's price for this case only — the
+        // program's own price is never touched. Omit it to keep the old snapshot-at-creation
+        // behaviour (program price, tax included).
+        sub.setPerSessionCost(request.perSessionCost() != null
+                ? request.perSessionCost()
+                : ProgramResponse.effectiveCost(program, tax));
         sub.setNotes(request.notes());
         sub.setCreatedBy(principal.getId());
 
