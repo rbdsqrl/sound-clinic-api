@@ -128,6 +128,7 @@ public class EnrollmentController {
                 .collect(Collectors.toSet());
 
         List<User> available = therapists.stream()
+                .filter(User::isActive)
                 .filter(u -> !onLeave.contains(u.getId()))
                 .toList();
 

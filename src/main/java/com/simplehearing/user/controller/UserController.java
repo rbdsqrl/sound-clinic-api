@@ -157,6 +157,7 @@ public class UserController {
                 ? userRepository.findByOrgIdAndClinicIdAndRoleIn(principal.getOrgId(), clinicId, CLINICAL_ROLES)
                 : userRepository.findByOrgIdAndRoleIn(principal.getOrgId(), CLINICAL_ROLES))
                 .stream()
+                .filter(User::isActive)
                 .map(UserResponse::from)
                 .toList();
 
@@ -191,6 +192,7 @@ public class UserController {
         List<UserResponse> results = userRepository
                 .searchByOrgId(principal.getOrgId(), q.trim())
                 .stream()
+                .filter(User::isActive)
                 .filter(u -> finalRoleFilter == null || u.hasRole(finalRoleFilter))
                 .map(UserResponse::from)
                 .toList();
