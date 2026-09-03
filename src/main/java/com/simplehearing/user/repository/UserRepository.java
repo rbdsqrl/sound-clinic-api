@@ -2,6 +2,8 @@ package com.simplehearing.user.repository;
 
 import com.simplehearing.user.entity.User;
 import com.simplehearing.user.enums.Role;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -48,4 +50,17 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     /** Same as above, scoped to a single clinic. */
     List<User> findByOrgIdAndClinicIdAndRoleIn(UUID orgId, UUID clinicId, Collection<Role> roles);
+
+    /** Backs the paginated Members list. {@code roles} is the fixed staff-role scope; {@code role} further narrows to one role when the caller picks a role filter. */
+    @Query("SELECT u FROM User u WHERE u.orgId = :orgId AND u.role IN :roles AND u.isActive = :active " +
+           "AND (:search = '' OR LOWER(CONCAT(u.firstName, ' ', u.lastName, ' ', u.email)) LIKE LOWER(CONCAT('%', :search, '%'))) " +
+           "AND (:role IS NULL OR u.role = :role) " +
+           "AND (:clinicId IS NULL OR u.clinicId = :clinicId)")
+    Page<User> search(@Param("orgId") UUID orgId,
+                       @Param("roles") Collection<Role> roles,
+                       @Param("search") String search,
+                       @Param("role") Role role,
+                       @Param("clinicId") UUID clinicId,
+                       @Param("active") boolean active,
+                       Pageable pageable);
 }

@@ -6,6 +6,7 @@ import com.simplehearing.auth.security.UserPrincipal;
 import com.simplehearing.clinic.entity.Clinic;
 import com.simplehearing.clinic.repository.ClinicRepository;
 import com.simplehearing.common.dto.ApiResponse;
+import com.simplehearing.common.dto.PagedResponse;
 import com.simplehearing.common.exception.ApiException;
 import com.simplehearing.common.exception.ResourceNotFoundException;
 import com.simplehearing.patient.repository.TherapistPatientRepository;
@@ -21,6 +22,10 @@ import com.simplehearing.user.repository.UserLanguageRepository;
 import com.simplehearing.user.repository.UserRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -71,30 +76,37 @@ public class UserController {
     private static final List<Role> STAFF_ROLES = List.of(
             Role.CLINIC_HEAD, Role.BUSINESS_OWNER, Role.THERAPIST, Role.OFFICE_ADMIN);
 
-    @Operation(summary = "List all staff members in the organisation")
+    @Operation(
+        summary = "List staff members in the organisation, paginated",
+        description = "Defaults to 20 per page, sorted by createdAt (year joined) descending. " +
+                      "`active` defaults to true (the Members tab); pass false for the Archived tab."
+    )
     @GetMapping("/members")
     @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
-    public ResponseEntity<ApiResponse<List<StaffMemberResponse>>> listMembers(
+    public ResponseEntity<ApiResponse<PagedResponse<StaffMemberResponse>>> listMembers(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Role role,
+            @RequestParam(required = false) UUID clinicId,
+            @RequestParam(defaultValue = "true") boolean active,
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable,
             @AuthenticationPrincipal UserPrincipal principal) {
 
-        List<User> staff = userRepository.findByOrgIdAndRoleIn(principal.getOrgId(), STAFF_ROLES)
-                .stream()
-                .sorted(Comparator.comparing(User::getFirstName).thenComparing(User::getLastName))
-                .toList();
+        String q = (search == null || search.isBlank()) ? "" : search.trim();
 
-        List<UUID> therapistIds = staff.stream().map(User::getId).toList();
+        Page<User> page = userRepository.search(
+                principal.getOrgId(), STAFF_ROLES, q, role, clinicId, active, pageable);
+
+        List<UUID> pageUserIds = page.getContent().stream().map(User::getId).toList();
         Map<UUID, Long> caseCountByTherapist = therapistPatientRepository
-                .countCasesByTherapistIds(therapistIds)
+                .countCasesByTherapistIds(pageUserIds)
                 .stream()
                 .collect(Collectors.toMap(
                         row -> (UUID) row[0],
                         row -> (Long) row[1]
                 ));
 
-        List<StaffMemberResponse> results = staff.stream()
-                .map(u -> StaffMemberResponse.from(u,
-                        caseCountByTherapist.getOrDefault(u.getId(), 0L).intValue()))
-                .toList();
+        PagedResponse<StaffMemberResponse> results = PagedResponse.from(page,
+                u -> StaffMemberResponse.from(u, caseCountByTherapist.getOrDefault(u.getId(), 0L).intValue()));
 
         return ResponseEntity.ok(ApiResponse.success(results));
     }

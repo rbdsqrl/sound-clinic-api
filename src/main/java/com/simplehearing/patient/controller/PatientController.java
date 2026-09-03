@@ -2,11 +2,15 @@ package com.simplehearing.patient.controller;
 
 import com.simplehearing.auth.security.UserPrincipal;
 import com.simplehearing.common.dto.ApiResponse;
+import com.simplehearing.common.dto.PagedResponse;
 import com.simplehearing.patient.dto.*;
 import com.simplehearing.patient.service.PatientService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -39,12 +43,23 @@ public class PatientController {
                 .body(ApiResponse.success(patientService.create(request, principal)));
     }
 
-    @Operation(summary = "List all patients in your organisation")
+    @Operation(
+        summary = "List patients in your organisation, paginated",
+        description = "Defaults to 20 per page, sorted by createdAt (year joined) descending. " +
+                      "`status` is a comma-separated subset of ACTIVE,NOT_INVITED,INACTIVE — omitted defaults " +
+                      "to ACTIVE,NOT_INVITED; an explicitly empty value returns every status. `mine` scopes to " +
+                      "patients assigned to the caller (always on for THERAPIST, regardless of this param)."
+    )
     @GetMapping
     @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'OFFICE_ADMIN')")
-    public ResponseEntity<ApiResponse<List<PatientResponse>>> list(
+    public ResponseEntity<ApiResponse<PagedResponse<PatientResponse>>> list(
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "false") boolean mine,
+            @RequestParam(required = false) String status,
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable,
             @AuthenticationPrincipal UserPrincipal principal) {
-        return ResponseEntity.ok(ApiResponse.success(patientService.listForOrg(principal)));
+        return ResponseEntity.ok(ApiResponse.success(
+                patientService.listForOrg(search, mine, status, pageable, principal)));
     }
 
     @Operation(summary = "Patients whose birthday falls in the next 30 days")

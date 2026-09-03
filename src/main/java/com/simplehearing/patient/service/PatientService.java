@@ -3,6 +3,7 @@ package com.simplehearing.patient.service;
 import com.simplehearing.appointment.repository.AppointmentRepository;
 import com.simplehearing.auth.security.UserPrincipal;
 import com.simplehearing.clinic.repository.ClinicRepository;
+import com.simplehearing.common.dto.PagedResponse;
 import com.simplehearing.common.exception.ApiException;
 import com.simplehearing.condition.entity.Condition;
 import com.simplehearing.condition.repository.ConditionRepository;
@@ -25,6 +26,8 @@ import com.simplehearing.subscription.repository.SubscriptionRepository;
 import com.simplehearing.user.entity.User;
 import com.simplehearing.user.enums.Role;
 import com.simplehearing.user.repository.UserRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,9 +36,12 @@ import java.time.LocalDate;
 import java.time.MonthDay;
 import java.time.temporal.ChronoUnit;
 import java.util.AbstractMap;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -117,22 +123,40 @@ public class PatientService {
         return buildResponse(patient);
     }
 
+    /**
+     * Paginated, filtered Cases list. {@code status} is a comma-separated subset of
+     * ACTIVE/NOT_INVITED/INACTIVE (matching the UI's filter pills); omitted or blank defaults to
+     * ACTIVE+NOT_INVITED, and an explicitly empty selection shows every status (mirrors the
+     * frontend's prior client-side behaviour, where clearing all pills showed everything rather
+     * than nothing). A THERAPIST is always scoped to their own assigned patients regardless of
+     * {@code mine} — that param only matters for admin-tier roles filtering to their own caseload.
+     */
     @Transactional(readOnly = true)
-    public List<PatientResponse> listForOrg(UserPrincipal principal) {
+    public PagedResponse<PatientResponse> listForOrg(String search, boolean mine, String status,
+                                                       Pageable pageable, UserPrincipal principal) {
         Role role = principal.getUser().getRole();
-        if (role == Role.THERAPIST) {
-            List<UUID> patientIds = therapistPatientRepository
-                    .findByTherapistIdAndIsActive(principal.getId(), true)
-                    .stream().map(TherapistPatient::getPatientId).toList();
-            if (patientIds.isEmpty()) return List.of();
-            return patientRepository.findAllById(patientIds).stream()
-                    .filter(p -> p.getOrgId().equals(principal.getOrgId()))
-                    .map(this::buildResponse)
-                    .toList();
-        }
-        return patientRepository.findByOrgId(principal.getOrgId()).stream()
-                .map(this::buildResponse)
-                .toList();
+        boolean onlyMine = mine || role == Role.THERAPIST;
+
+        String q = (search == null || search.isBlank()) ? "" : search.trim();
+
+        Set<String> statuses = status == null
+                ? Set.of("ACTIVE", "NOT_INVITED")
+                : Arrays.stream(status.split(","))
+                        .map(String::trim)
+                        .filter(s -> !s.isEmpty())
+                        .map(String::toUpperCase)
+                        .collect(Collectors.toSet());
+        // An explicit but empty selection (every pill toggled off) shows everything, not nothing.
+        boolean anyStatus = statuses.isEmpty();
+
+        Page<Patient> page = patientRepository.search(
+                principal.getOrgId(), q, onlyMine, principal.getId(),
+                anyStatus || statuses.contains("ACTIVE"),
+                anyStatus || statuses.contains("NOT_INVITED"),
+                anyStatus || statuses.contains("INACTIVE"),
+                pageable);
+
+        return PagedResponse.from(page, this::buildResponse);
     }
 
     /** Returns patients where the calling user is a linked parent. */

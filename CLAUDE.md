@@ -202,6 +202,7 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | POST     | `/api/v1/auth/logout`                   | Authenticated                                           | Invalidate refresh token            |
 | GET      | `/api/v1/users/me`                      | Authenticated                                           | Caller's profile                    |
 | GET      | `/api/v1/users/therapists`              | BUSINESS_OWNER, CLINIC_HEAD                                   | All therapists in org       |
+| GET      | `/api/v1/users/members`                 | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN                     | Paginated staff list — 20/page, sorted `createdAt` desc by default; `search`, `role`, `clinicId`, `active` (default true) filters |
 | GET      | `/api/v1/users/{id}/profile`            | BUSINESS_OWNER, CLINIC_HEAD                                   | One member's profile — contact, qualification, specialization, languages, case count |
 | PATCH    | `/api/v1/users/{id}/profile`            | BUSINESS_OWNER, CLINIC_HEAD (role change: BUSINESS_OWNER only) | Update a member's phone/clinic/qualification/specialization/languages, and their role (staff roles only, not own role) |
 | GET      | `/api/v1/analytics/patients/{id}/progress` | BUSINESS_OWNER, CLINIC_HEAD, PARENT (own child) | Mastery series + per-domain breakdown |
@@ -261,7 +262,7 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | POST     | `/api/v1/clinics`                       | BUSINESS_OWNER, CLINIC_HEAD                                   | Create clinic                       |
 | GET      | `/api/v1/clinics/{id}`                  | All authenticated                                       | Clinic detail                       |
 | PATCH    | `/api/v1/clinics/{id}`                  | BUSINESS_OWNER, CLINIC_HEAD                                   | Update clinic                       |
-| GET      | `/api/v1/patients`                      | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST | List patients                       |
+| GET      | `/api/v1/patients`                      | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST | Paginated patients list — 20/page, sorted `createdAt` desc by default; `search`, `mine`, `status` (comma-separated ACTIVE/NOT_INVITED/INACTIVE) filters |
 | POST     | `/api/v1/patients`                      | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN                     | Create patient                      |
 | GET      | `/api/v1/patients/{id}`                 | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST | Patient detail                      |
 | POST     | `/api/v1/patients/{id}/conditions`      | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST                        | Add condition to patient            |
