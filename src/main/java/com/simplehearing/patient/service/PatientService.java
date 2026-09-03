@@ -17,6 +17,7 @@ import com.simplehearing.patient.dto.*;
 import com.simplehearing.patient.entity.*;
 import com.simplehearing.patient.enums.PatientStage;
 import com.simplehearing.patient.repository.*;
+import com.simplehearing.program.entity.Program;
 import com.simplehearing.program.repository.ProgramRepository;
 import com.simplehearing.session.repository.SessionAttachmentRepository;
 import com.simplehearing.session.repository.TherapySessionRepository;
@@ -37,8 +38,10 @@ import java.time.MonthDay;
 import java.time.temporal.ChronoUnit;
 import java.util.AbstractMap;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -162,7 +165,8 @@ public class PatientService {
                         anyStatus || statuses.contains("INACTIVE"),
                         pageable);
 
-        return PagedResponse.from(page, this::buildResponse);
+        List<PatientResponse> content = buildResponses(page.getContent());
+        return new PagedResponse<>(content, page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
     }
 
     /** Returns patients where the calling user is a linked parent. */
@@ -170,10 +174,7 @@ public class PatientService {
     public List<PatientResponse> listMyChildren(UserPrincipal principal) {
         List<PatientParent> links = patientParentRepository.findById_ParentId(principal.getId());
         List<UUID> patientIds = links.stream().map(pp -> pp.getId().getPatientId()).toList();
-        return patientIds.isEmpty() ? List.of()
-                : patientRepository.findAllById(patientIds).stream()
-                        .map(this::buildResponse)
-                        .toList();
+        return buildResponses(patientIds.isEmpty() ? List.of() : patientRepository.findAllById(patientIds));
     }
 
     @Transactional(readOnly = true)
@@ -391,34 +392,88 @@ public class PatientService {
     }
 
     private PatientResponse buildResponse(Patient patient) {
-        List<PatientCondition> pcs = patientConditionRepository.findById_PatientId(patient.getId());
-        List<UUID> conditionIds = pcs.stream().map(pc -> pc.getId().getConditionId()).toList();
-        List<Condition> conditionDetails = conditionIds.isEmpty()
-                ? List.of()
-                : conditionRepository.findAllById(conditionIds);
+        return buildResponses(List.of(patient)).get(0);
+    }
 
-        List<PatientParent> pps = patientParentRepository.findById_PatientId(patient.getId());
-        List<UUID> parentIds = pps.stream().map(pp -> pp.getId().getParentId()).toList();
-        List<User> parents = parentIds.isEmpty() ? List.of() : userRepository.findAllById(parentIds);
+    /**
+     * Batched form of the single-patient builder above — one round trip per related table for the
+     * whole page instead of one per patient. The single-patient version funnels through this for
+     * the handful of call sites that only ever touch one patient (create/update/etc); every list
+     * endpoint (Cases page, and every other page's "give me all patients" call via patientsApi.list)
+     * calls this directly. With real cross-region latency to the DB, the old per-patient version
+     * turned a page of 18 patients into 90+ sequential round trips — seconds of wall-clock time for
+     * what should be a handful of queries.
+     */
+    private List<PatientResponse> buildResponses(List<Patient> patients) {
+        if (patients.isEmpty()) return List.of();
 
-        List<TherapistPatient> assignments = therapistPatientRepository
-                .findByPatientIdAndIsActive(patient.getId(), true);
-        List<UUID> therapistIds = assignments.stream().map(TherapistPatient::getTherapistId).toList();
-        List<User> therapists = therapistIds.isEmpty() ? List.of() : userRepository.findAllById(therapistIds);
+        List<UUID> patientIds = patients.stream().map(Patient::getId).toList();
+        UUID orgId = patients.get(0).getOrgId();
 
-        List<UUID> activeProgramIds = subscriptionRepository
-                .findByOrgIdAndPatientIdOrderByCreatedAtDesc(patient.getOrgId(), patient.getId())
-                .stream()
+        Map<UUID, List<PatientCondition>> conditionsByPatient = patientConditionRepository
+                .findById_PatientIdIn(patientIds).stream()
+                .collect(Collectors.groupingBy(pc -> pc.getId().getPatientId()));
+        Set<UUID> conditionIds = conditionsByPatient.values().stream()
+                .flatMap(List::stream).map(pc -> pc.getId().getConditionId()).collect(Collectors.toSet());
+        Map<UUID, Condition> conditionMap = conditionIds.isEmpty() ? Map.of()
+                : conditionRepository.findAllById(conditionIds).stream()
+                        .collect(Collectors.toMap(Condition::getId, c -> c));
+
+        Map<UUID, List<PatientParent>> parentsByPatient = patientParentRepository
+                .findById_PatientIdIn(patientIds).stream()
+                .collect(Collectors.groupingBy(pp -> pp.getId().getPatientId()));
+
+        Map<UUID, List<TherapistPatient>> assignmentsByPatient = therapistPatientRepository
+                .findByPatientIdInAndIsActive(patientIds, true).stream()
+                .collect(Collectors.groupingBy(TherapistPatient::getPatientId));
+
+        Set<UUID> userIds = new HashSet<>();
+        parentsByPatient.values().forEach(list -> list.forEach(pp -> userIds.add(pp.getId().getParentId())));
+        assignmentsByPatient.values().forEach(list -> list.forEach(a -> userIds.add(a.getTherapistId())));
+        Map<UUID, User> userMap = userIds.isEmpty() ? Map.of()
+                : userRepository.findAllById(userIds).stream().collect(Collectors.toMap(User::getId, u -> u));
+
+        Map<UUID, List<Subscription>> subscriptionsByPatient = subscriptionRepository
+                .findByOrgIdAndPatientIdInOrderByCreatedAtDesc(orgId, patientIds).stream()
+                .collect(Collectors.groupingBy(Subscription::getPatientId));
+        Set<UUID> programIds = subscriptionsByPatient.values().stream().flatMap(List::stream)
                 .filter(s -> s.getStatus() == SubscriptionStatus.ACTIVE)
-                .map(Subscription::getProgramId)
-                .distinct()
-                .toList();
-        List<PatientResponse.TherapySummary> therapySummaries = activeProgramIds.isEmpty()
-                ? List.of()
-                : programRepository.findAllById(activeProgramIds).stream()
-                        .map(p -> new PatientResponse.TherapySummary(p.getId(), p.getName()))
-                        .toList();
+                .map(Subscription::getProgramId).collect(Collectors.toSet());
+        Map<UUID, Program> programMap = programIds.isEmpty() ? Map.of()
+                : programRepository.findAllById(programIds).stream()
+                        .collect(Collectors.toMap(Program::getId, p -> p));
 
-        return PatientResponse.from(patient, pcs, conditionDetails, parents, assignments, therapists, therapySummaries);
+        return patients.stream().map(patient -> {
+            List<PatientCondition> pcs = conditionsByPatient.getOrDefault(patient.getId(), List.of());
+            List<Condition> conditionDetails = pcs.stream()
+                    .map(pc -> conditionMap.get(pc.getId().getConditionId()))
+                    .filter(Objects::nonNull)
+                    .toList();
+
+            List<PatientParent> pps = parentsByPatient.getOrDefault(patient.getId(), List.of());
+            List<User> parents = pps.stream()
+                    .map(pp -> userMap.get(pp.getId().getParentId()))
+                    .filter(Objects::nonNull)
+                    .toList();
+
+            List<TherapistPatient> assignments = assignmentsByPatient.getOrDefault(patient.getId(), List.of());
+            List<User> therapists = assignments.stream()
+                    .map(a -> userMap.get(a.getTherapistId()))
+                    .filter(Objects::nonNull)
+                    .toList();
+
+            List<UUID> activeProgramIds = subscriptionsByPatient.getOrDefault(patient.getId(), List.of()).stream()
+                    .filter(s -> s.getStatus() == SubscriptionStatus.ACTIVE)
+                    .map(Subscription::getProgramId)
+                    .distinct()
+                    .toList();
+            List<PatientResponse.TherapySummary> therapySummaries = activeProgramIds.stream()
+                    .map(programMap::get)
+                    .filter(Objects::nonNull)
+                    .map(p -> new PatientResponse.TherapySummary(p.getId(), p.getName()))
+                    .toList();
+
+            return PatientResponse.from(patient, pcs, conditionDetails, parents, assignments, therapists, therapySummaries);
+        }).toList();
     }
 }
