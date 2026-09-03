@@ -759,24 +759,39 @@ public class TherapySessionController {
         Map<UUID, User>    therapistMap = userRepository.findAllById(therapistIds).stream()
                 .collect(Collectors.toMap(User::getId, u -> u));
 
+        // One count per plan rather than per session — the allowance is a plan-level figure.
+        // Batched (was one query per enrollment) — this loop runs on every Cases/Calendar/Dashboard
+        // sessions fetch, so a day with sessions across a dozen plans was a dozen round trips.
+        Map<UUID, Long> rescheduleCounts = sessionRepository
+                .countParentReschedulesByEnrollmentIds(enrollmentIds).stream()
+                .collect(Collectors.toMap(row -> (UUID) row[0], row -> (Long) row[1]));
+        Map<UUID, Integer> parentReschedulesLeft = enrollmentIds.stream()
+                .collect(Collectors.toMap(eid -> eid, eid ->
+                        Math.max(0, PARENT_RESCHEDULE_LIMIT - rescheduleCounts.getOrDefault(eid, 0L).intValue())));
+
+        // Same batching for enrollment -> subscription -> program — was up to three queries per
+        // enrollment (findById chained three deep), now three findAllById calls total.
+        Map<UUID, Enrollment> enrollmentMap = enrollmentRepository.findAllById(enrollmentIds).stream()
+                .collect(Collectors.toMap(Enrollment::getId, e -> e));
+        Set<UUID> subscriptionIds = enrollmentMap.values().stream()
+                .map(Enrollment::getSubscriptionId).collect(Collectors.toSet());
+        Map<UUID, Subscription> subscriptionMap = subscriptionRepository.findAllById(subscriptionIds).stream()
+                .collect(Collectors.toMap(Subscription::getId, s -> s));
+        Set<UUID> programIds = subscriptionMap.values().stream()
+                .map(Subscription::getProgramId).collect(Collectors.toSet());
+        Map<UUID, Program> programMap = programRepository.findAllById(programIds).stream()
+                .collect(Collectors.toMap(Program::getId, p -> p));
+
         Map<UUID, Integer> totalSessionsMap = new HashMap<>();
         Map<UUID, String>  programNameMap   = new HashMap<>();
-
-        // One count per plan rather than per session — the allowance is a plan-level figure.
-        Map<UUID, Integer> parentReschedulesLeft = new HashMap<>();
         for (UUID eid : enrollmentIds) {
-            int used = sessionRepository.countByEnrollmentIdAndParentRescheduleRequestedTrue(eid);
-            parentReschedulesLeft.put(eid, Math.max(0, PARENT_RESCHEDULE_LIMIT - used));
-        }
-
-        for (UUID eid : enrollmentIds) {
-            enrollmentRepository.findById(eid).ifPresent(enrollment ->
-                subscriptionRepository.findById(enrollment.getSubscriptionId()).ifPresent(sub -> {
-                    totalSessionsMap.put(eid, sub.getNumSessions());
-                    programRepository.findById(sub.getProgramId()).ifPresent(prog ->
-                            programNameMap.put(eid, prog.getName()));
-                })
-            );
+            Enrollment enrollment = enrollmentMap.get(eid);
+            if (enrollment == null) continue;
+            Subscription sub = subscriptionMap.get(enrollment.getSubscriptionId());
+            if (sub == null) continue;
+            totalSessionsMap.put(eid, sub.getNumSessions());
+            Program prog = programMap.get(sub.getProgramId());
+            if (prog != null) programNameMap.put(eid, prog.getName());
         }
 
         return sessions.stream().map(s -> {

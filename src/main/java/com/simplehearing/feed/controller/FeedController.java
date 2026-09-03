@@ -2,6 +2,7 @@ package com.simplehearing.feed.controller;
 
 import com.simplehearing.auth.security.UserPrincipal;
 import com.simplehearing.common.dto.ApiResponse;
+import com.simplehearing.common.dto.PagedResponse;
 import com.simplehearing.common.exception.ApiException;
 import com.simplehearing.common.exception.ResourceNotFoundException;
 import com.simplehearing.feed.dto.CreateFeedCommentRequest;
@@ -29,6 +30,10 @@ import com.simplehearing.user.repository.UserRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -84,12 +89,17 @@ public class FeedController {
 
     // ── List ─────────────────────────────────────────────────────────────────────
 
-    @Operation(summary = "List feed posts for the org, newest first")
+    @Operation(
+        summary = "List feed posts for the org, paginated, newest first",
+        description = "Defaults to 20 per page, sorted by createdAt descending."
+    )
     @GetMapping
-    public ResponseEntity<ApiResponse<List<FeedPostResponse>>> list(
+    public ResponseEntity<ApiResponse<PagedResponse<FeedPostResponse>>> list(
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable,
             @AuthenticationPrincipal UserPrincipal principal) {
 
-        List<FeedPost> posts = feedPostRepository.findByOrgIdOrderByCreatedAtDesc(principal.getOrgId());
+        Page<FeedPost> page = feedPostRepository.findByOrgIdOrderByCreatedAtDesc(principal.getOrgId(), pageable);
+        List<FeedPost> posts = page.getContent();
         List<UUID> postIds = posts.stream().map(FeedPost::getId).toList();
 
         Map<UUID, User> authorsById = userRepository
@@ -119,7 +129,10 @@ public class FeedController {
                         imagesByPost.getOrDefault(p.getId(), List.of())))
                 .toList();
 
-        return ResponseEntity.ok(ApiResponse.success(result));
+        PagedResponse<FeedPostResponse> paged = new PagedResponse<>(
+                result, page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
+
+        return ResponseEntity.ok(ApiResponse.success(paged));
     }
 
     // ── Create / Update / Delete ────────────────────────────────────────────────

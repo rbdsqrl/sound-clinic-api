@@ -2,6 +2,7 @@ package com.simplehearing.task.controller;
 
 import com.simplehearing.auth.security.UserPrincipal;
 import com.simplehearing.common.dto.ApiResponse;
+import com.simplehearing.common.dto.PagedResponse;
 import com.simplehearing.common.exception.ApiException;
 import com.simplehearing.common.exception.ResourceNotFoundException;
 import com.simplehearing.notification.EmailService;
@@ -28,6 +29,10 @@ import com.simplehearing.user.repository.UserRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -78,18 +83,45 @@ public class TaskController {
 
     // ── List tasks ─────────────────────────────────────────────────────────────
 
-    @Operation(summary = "List tasks — admins see all, others see the ones they were assigned or raised")
+    @Operation(
+        summary = "List tasks, paginated — admins see all, others see the ones they were assigned or raised",
+        description = "Defaults to 20 per page, sorted by createdAt descending. Pass `mine=true` and/or " +
+                      "`status` (comma-separated) to scope to tasks assigned to the caller in specific " +
+                      "statuses — used by the Dashboard's \"My Tasks\" widget; omitted, the endpoint behaves " +
+                      "exactly as before (board view, scoped by role)."
+    )
     @GetMapping
     @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'OFFICE_ADMIN')")
-    public ResponseEntity<ApiResponse<List<TaskResponse>>> list(
+    public ResponseEntity<ApiResponse<PagedResponse<TaskResponse>>> list(
+            @RequestParam(defaultValue = "false") boolean mine,
+            @RequestParam(required = false) String status,
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable,
             @AuthenticationPrincipal UserPrincipal principal) {
 
-        Role role = principal.getUser().getRole();
-        List<Task> tasks = isManager(role)
-                ? taskRepository.findByOrgIdOrderByCreatedAtDesc(principal.getOrgId())
-                : taskRepository.findByOrgIdAndAssigneeOrCreator(principal.getOrgId(), principal.getId());
+        Page<Task> page;
+        if (mine || status != null) {
+            Set<TaskStatus> statuses = status == null
+                    ? Set.of()
+                    : Arrays.stream(status.split(","))
+                            .map(String::trim)
+                            .filter(s -> !s.isEmpty())
+                            .map(String::toUpperCase)
+                            .map(TaskStatus::valueOf)
+                            .collect(Collectors.toSet());
+            boolean anyStatus = statuses.isEmpty();
+            page = taskRepository.search(principal.getOrgId(), mine, principal.getId(), anyStatus, statuses, pageable);
+        } else {
+            Role role = principal.getUser().getRole();
+            page = isManager(role)
+                    ? taskRepository.findByOrgIdOrderByCreatedAtDesc(principal.getOrgId(), pageable)
+                    : taskRepository.findByOrgIdAndAssigneeOrCreator(principal.getOrgId(), principal.getId(), pageable);
+        }
 
-        return ResponseEntity.ok(ApiResponse.success(enrich(tasks)));
+        List<TaskResponse> content = enrich(page.getContent());
+        PagedResponse<TaskResponse> result = new PagedResponse<>(
+                content, page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
+
+        return ResponseEntity.ok(ApiResponse.success(result));
     }
 
     // ── Create task ────────────────────────────────────────────────────────────

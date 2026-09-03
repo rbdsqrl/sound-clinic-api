@@ -12,6 +12,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 
 import java.util.stream.Collectors;
 
@@ -52,6 +53,19 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleAuthentication(AuthenticationException ex) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    /**
+     * The client (browser) closed the connection while we were still writing the response —
+     * navigated away, cancelled the request, lost connectivity, or a newer request (e.g. a
+     * debounced search) superseded this one. There is nothing listening any more, so there is
+     * nothing to write back; a void return tells Spring MVC not to attempt one. This used to fall
+     * through to the generic handler below and get logged as "Unexpected error" at ERROR level,
+     * which is just noise from ordinary client behaviour, not a server fault.
+     */
+    @ExceptionHandler(AsyncRequestNotUsableException.class)
+    public void handleClientDisconnect(AsyncRequestNotUsableException ex) {
+        log.debug("Client disconnected before the response could be written", ex);
     }
 
     @ExceptionHandler(Exception.class)
