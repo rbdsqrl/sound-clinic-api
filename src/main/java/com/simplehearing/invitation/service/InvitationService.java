@@ -214,7 +214,7 @@ public class InvitationService {
         user.setClinicId(invitation.getClinicId());
         user.setEmail(email);
         user.setFirstName(request.firstName());
-        user.setLastName(request.lastName());
+        user.setLastName(request.lastName() == null ? "" : request.lastName().trim());
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setRole(invitation.getRole());
         user.setActive(true);

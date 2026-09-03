@@ -406,7 +406,7 @@ public class InquiryController {
         patient.setOrgId(principal.getOrgId());
         patient.setClinicId(request.clinicId());
         patient.setFirstName(request.firstName());
-        patient.setLastName(request.lastName());
+        patient.setLastName(request.lastName() == null ? "" : request.lastName().trim());
         patient.setStage(PatientStage.INQUIRY_CONVERTED);
         patient.setActive(true);
 
@@ -450,7 +450,7 @@ public class InquiryController {
         // Auto-log the conversion
         String actorName = principal.getUser().getFirstName() + " " + principal.getUser().getLastName();
         addLog(inquiry.getId(), InquiryLogType.CONVERTED,
-                "Converted to patient: " + request.firstName() + " " + request.lastName()
+                "Converted to patient: " + savedPatient.getFirstName() + " " + savedPatient.getLastName()
                         + " (patient ID: " + savedPatient.getId() + ")"
                         + (linkedUserError != null ? " — linked user setup failed: " + linkedUserError : ""),
                 principal.getId(), actorName);

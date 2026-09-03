@@ -7,7 +7,7 @@ import java.util.UUID;
 
 public record ConvertInquiryRequest(
         @NotBlank String firstName,
-        @NotBlank String lastName,
+        String lastName,
         @NotNull UUID clinicId,
         // Optional: invite the inquiry submitter and auto-link them to the patient
         String linkedUserEmail,

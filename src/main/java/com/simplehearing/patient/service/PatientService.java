@@ -108,7 +108,7 @@ public class PatientService {
         patient.setOrgId(principal.getOrgId());
         patient.setClinicId(request.clinicId());
         patient.setFirstName(request.firstName());
-        patient.setLastName(request.lastName());
+        patient.setLastName(request.lastName() == null ? "" : request.lastName().trim());
         patient.setDateOfBirth(request.dateOfBirth());
         patient.setGender(request.gender());
         patient.setNotes(request.notes());

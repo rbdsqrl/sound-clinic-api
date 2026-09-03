@@ -10,7 +10,6 @@ public record AcceptInviteRequest(
         @NotBlank(message = "First name is required")
         String firstName,
 
-        @NotBlank(message = "Last name is required")
         String lastName,
 
         @NotBlank(message = "Password is required")
