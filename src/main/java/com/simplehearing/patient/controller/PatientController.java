@@ -46,8 +46,9 @@ public class PatientController {
     @Operation(
         summary = "List patients in your organisation, paginated",
         description = "Defaults to 20 per page, sorted by createdAt (year joined) descending. " +
-                      "`status` is a comma-separated subset of ACTIVE,NOT_INVITED,INACTIVE — omitted defaults " +
-                      "to ACTIVE,NOT_INVITED; an explicitly empty value returns every status. `mine` scopes to " +
+                      "`status` is a comma-separated subset of ACTIVE,INACTIVE (Active = not discharged, " +
+                      "Inactive = stage DISCHARGED) — omitted defaults to ACTIVE; an explicitly empty value " +
+                      "returns every status. `mine` scopes to " +
                       "patients assigned to the caller (always on for THERAPIST, regardless of this param). " +
                       "`compact=true` returns parents/therapists as id-only stubs (blank name/email) — for " +
                       "callers that only read .length (e.g. the Cases page's invite-status pill and specialist " +

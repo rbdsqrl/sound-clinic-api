@@ -128,11 +128,12 @@ public class PatientService {
 
     /**
      * Paginated, filtered Cases list. {@code status} is a comma-separated subset of
-     * ACTIVE/NOT_INVITED/INACTIVE (matching the UI's filter pills); omitted or blank defaults to
-     * ACTIVE+NOT_INVITED, and an explicitly empty selection shows every status (mirrors the
-     * frontend's prior client-side behaviour, where clearing all pills showed everything rather
-     * than nothing). A THERAPIST is always scoped to their own assigned patients regardless of
-     * {@code mine} — that param only matters for admin-tier roles filtering to their own caseload.
+     * ACTIVE/INACTIVE (matching the UI's two filter pills) — a case is Active until discharged,
+     * Inactive means stage = DISCHARGED. Omitted or blank defaults to ACTIVE only, and an
+     * explicitly empty selection shows every status (mirrors the frontend's prior client-side
+     * behaviour, where clearing all pills showed everything rather than nothing). A THERAPIST is
+     * always scoped to their own assigned patients regardless of {@code mine} — that param only
+     * matters for admin-tier roles filtering to their own caseload.
      */
     @Transactional(readOnly = true)
     public PagedResponse<PatientResponse> listForOrg(String search, boolean mine, String status, boolean compact,
@@ -143,7 +144,7 @@ public class PatientService {
         String q = (search == null || search.isBlank()) ? "" : search.trim();
 
         Set<String> statuses = status == null
-                ? Set.of("ACTIVE", "NOT_INVITED")
+                ? Set.of("ACTIVE")
                 : Arrays.stream(status.split(","))
                         .map(String::trim)
                         .filter(s -> !s.isEmpty())
@@ -154,14 +155,13 @@ public class PatientService {
 
         // Fast path: no search, no caseload scoping, no status narrowing — this is a plain
         // "every patient in the org" request (the shape patientsApi.list() sends for pickers and
-        // dashboards). Skip the EXISTS-laden filtered query entirely rather than running the same
-        // parent/therapist subqueries the Cases page's status pills need but this request doesn't.
+        // dashboards). Skip the filtered query entirely rather than running the caseload subquery
+        // the Cases page's status pills need but this request doesn't.
         Page<Patient> page = (q.isEmpty() && !onlyMine && anyStatus)
                 ? patientRepository.findByOrgId(principal.getOrgId(), pageable)
                 : patientRepository.search(
                         principal.getOrgId(), q, onlyMine, principal.getId(),
                         anyStatus || statuses.contains("ACTIVE"),
-                        anyStatus || statuses.contains("NOT_INVITED"),
                         anyStatus || statuses.contains("INACTIVE"),
                         pageable);
 

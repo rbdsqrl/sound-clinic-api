@@ -23,9 +23,10 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
     Optional<Patient> findByIdAndOrgId(UUID id, UUID orgId);
 
     /**
-     * Backs the paginated Cases list. The three include* flags cover the three fixed status
-     * categories the UI filters by (a patient can only ever land in exactly one) — invite status
-     * (ACTIVE/NOT_INVITED) is derived from whether any parent is linked, not a stored column.
+     * Backs the paginated Cases list. A case is Active until discharged — Inactive means
+     * stage = DISCHARGED, nothing else. (Previously this also split out an "invite" status
+     * derived from whether a parent was linked; dropped since it didn't correspond to anything
+     * the UI should treat as a distinct case state.)
      */
     @Query("""
             SELECT p FROM Patient p WHERE p.orgId = :orgId
@@ -34,9 +35,8 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
                     SELECT 1 FROM TherapistPatient tp
                     WHERE tp.patientId = p.id AND tp.therapistId = :userId AND tp.isActive = true))
               AND (
-                    (:includeActive = true AND p.isActive = true AND EXISTS (SELECT 1 FROM PatientParent pp WHERE pp.id.patientId = p.id))
-                 OR (:includeNotInvited = true AND p.isActive = true AND NOT EXISTS (SELECT 1 FROM PatientParent pp WHERE pp.id.patientId = p.id))
-                 OR (:includeInactive = true AND p.isActive = false)
+                    (:includeActive = true AND p.stage <> com.simplehearing.patient.enums.PatientStage.DISCHARGED)
+                 OR (:includeInactive = true AND p.stage = com.simplehearing.patient.enums.PatientStage.DISCHARGED)
                   )
             """)
     Page<Patient> search(@Param("orgId") UUID orgId,
@@ -44,7 +44,6 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
                           @Param("onlyMine") boolean onlyMine,
                           @Param("userId") UUID userId,
                           @Param("includeActive") boolean includeActive,
-                          @Param("includeNotInvited") boolean includeNotInvited,
                           @Param("includeInactive") boolean includeInactive,
                           Pageable pageable);
 }

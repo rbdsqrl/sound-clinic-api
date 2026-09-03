@@ -262,7 +262,7 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | POST     | `/api/v1/clinics`                       | BUSINESS_OWNER, CLINIC_HEAD                                   | Create clinic                       |
 | GET      | `/api/v1/clinics/{id}`                  | All authenticated                                       | Clinic detail                       |
 | PATCH    | `/api/v1/clinics/{id}`                  | BUSINESS_OWNER, CLINIC_HEAD                                   | Update clinic                       |
-| GET      | `/api/v1/patients`                      | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST | Paginated patients list — 20/page, sorted `createdAt` desc by default; `search`, `mine`, `status` (comma-separated ACTIVE/NOT_INVITED/INACTIVE) filters |
+| GET      | `/api/v1/patients`                      | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST | Paginated patients list — 20/page, sorted `createdAt` desc by default; `search`, `mine`, `status` (comma-separated ACTIVE/INACTIVE — Active = not discharged, Inactive = stage DISCHARGED), `compact` (id-only parent/therapist stubs) filters |
 | POST     | `/api/v1/patients`                      | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN                     | Create patient                      |
 | GET      | `/api/v1/patients/{id}`                 | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST | Patient detail                      |
 | POST     | `/api/v1/patients/{id}/conditions`      | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST                        | Add condition to patient            |
