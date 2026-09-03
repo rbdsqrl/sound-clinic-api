@@ -48,7 +48,11 @@ public class PatientController {
         description = "Defaults to 20 per page, sorted by createdAt (year joined) descending. " +
                       "`status` is a comma-separated subset of ACTIVE,NOT_INVITED,INACTIVE — omitted defaults " +
                       "to ACTIVE,NOT_INVITED; an explicitly empty value returns every status. `mine` scopes to " +
-                      "patients assigned to the caller (always on for THERAPIST, regardless of this param)."
+                      "patients assigned to the caller (always on for THERAPIST, regardless of this param). " +
+                      "`compact=true` returns parents/therapists as id-only stubs (blank name/email) — for " +
+                      "callers that only read .length (e.g. the Cases page's invite-status pill and specialist " +
+                      "count), not their names; leave false for callers that display names (e.g. Dashboard's " +
+                      "Recently Joined therapist filter)."
     )
     @GetMapping
     @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'OFFICE_ADMIN')")
@@ -56,10 +60,11 @@ public class PatientController {
             @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "false") boolean mine,
             @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "false") boolean compact,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
-                patientService.listForOrg(search, mine, status, pageable, principal)));
+                patientService.listForOrg(search, mine, status, compact, pageable, principal)));
     }
 
     @Operation(summary = "Patients whose birthday falls in the next 30 days")

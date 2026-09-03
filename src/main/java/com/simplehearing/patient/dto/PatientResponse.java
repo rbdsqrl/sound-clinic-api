@@ -80,4 +80,47 @@ public record PatientResponse(
                 conditionSummaries, parentSummaries, therapistSummaries, therapies
         );
     }
+
+    /**
+     * Lighter-weight form for list views that only ever read parents.length / therapists.length
+     * (e.g. the Cases page's invite-status pill and specialist count) — never their names. Skips
+     * resolving parent/therapist ids to User rows entirely, so the arrays come back id-only (blank
+     * name/email) but still correctly sized for callers that just count them. Conditions and
+     * therapies are unchanged — both are actually displayed (as name chips) on those same views.
+     */
+    public static PatientResponse fromCompact(Patient patient,
+                                              List<PatientCondition> conditions,
+                                              List<Condition> conditionDetails,
+                                              List<com.simplehearing.patient.entity.PatientParent> parentLinks,
+                                              List<TherapistPatient> therapistAssignments,
+                                              List<TherapySummary> therapies) {
+
+        List<ConditionSummary> conditionSummaries = conditions.stream().map(pc -> {
+            Condition c = conditionDetails.stream()
+                    .filter(d -> d.getId().equals(pc.getId().getConditionId()))
+                    .findFirst().orElse(null);
+            return new ConditionSummary(
+                    pc.getId().getConditionId(),
+                    c != null ? c.getName() : "Unknown",
+                    pc.getDiagnosedAt(),
+                    pc.getNotes()
+            );
+        }).toList();
+
+        List<ParentSummary> parentSummaries = parentLinks.stream()
+                .map(pp -> new ParentSummary(pp.getId().getParentId(), "", "", ""))
+                .toList();
+
+        List<TherapistSummary> therapistSummaries = therapistAssignments.stream()
+                .map(ta -> new TherapistSummary(ta.getTherapistId(), "", "", ta.getAssignedAt()))
+                .toList();
+
+        return new PatientResponse(
+                patient.getId(), patient.getOrgId(), patient.getClinicId(),
+                patient.getFirstName(), patient.getLastName(),
+                patient.getDateOfBirth(), patient.getGender(), patient.getNotes(),
+                patient.getStage(), patient.isActive(), patient.getCreatedAt(),
+                conditionSummaries, parentSummaries, therapistSummaries, therapies
+        );
+    }
 }

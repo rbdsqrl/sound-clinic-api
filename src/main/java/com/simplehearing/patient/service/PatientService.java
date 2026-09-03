@@ -135,7 +135,7 @@ public class PatientService {
      * {@code mine} — that param only matters for admin-tier roles filtering to their own caseload.
      */
     @Transactional(readOnly = true)
-    public PagedResponse<PatientResponse> listForOrg(String search, boolean mine, String status,
+    public PagedResponse<PatientResponse> listForOrg(String search, boolean mine, String status, boolean compact,
                                                        Pageable pageable, UserPrincipal principal) {
         Role role = principal.getUser().getRole();
         boolean onlyMine = mine || role == Role.THERAPIST;
@@ -165,7 +165,7 @@ public class PatientService {
                         anyStatus || statuses.contains("INACTIVE"),
                         pageable);
 
-        List<PatientResponse> content = buildResponses(page.getContent());
+        List<PatientResponse> content = buildResponses(page.getContent(), compact);
         return new PagedResponse<>(content, page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
     }
 
@@ -174,7 +174,7 @@ public class PatientService {
     public List<PatientResponse> listMyChildren(UserPrincipal principal) {
         List<PatientParent> links = patientParentRepository.findById_ParentId(principal.getId());
         List<UUID> patientIds = links.stream().map(pp -> pp.getId().getPatientId()).toList();
-        return buildResponses(patientIds.isEmpty() ? List.of() : patientRepository.findAllById(patientIds));
+        return buildResponses(patientIds.isEmpty() ? List.of() : patientRepository.findAllById(patientIds), false);
     }
 
     @Transactional(readOnly = true)
@@ -392,7 +392,7 @@ public class PatientService {
     }
 
     private PatientResponse buildResponse(Patient patient) {
-        return buildResponses(List.of(patient)).get(0);
+        return buildResponses(List.of(patient), false).get(0);
     }
 
     /**
@@ -403,8 +403,13 @@ public class PatientService {
      * calls this directly. With real cross-region latency to the DB, the old per-patient version
      * turned a page of 18 patients into 90+ sequential round trips — seconds of wall-clock time for
      * what should be a handful of queries.
+     *
+     * {@code compact}: the Cases page only ever reads parents.length / therapists.length (invite
+     * status, specialist count) — never their names. When true, skips resolving parent/therapist
+     * ids to User rows entirely (one fewer batched query, smaller payload); conditions and
+     * therapies are unaffected since both are actually rendered as name chips on that same page.
      */
-    private List<PatientResponse> buildResponses(List<Patient> patients) {
+    private List<PatientResponse> buildResponses(List<Patient> patients, boolean compact) {
         if (patients.isEmpty()) return List.of();
 
         List<UUID> patientIds = patients.stream().map(Patient::getId).toList();
@@ -427,11 +432,15 @@ public class PatientService {
                 .findByPatientIdInAndIsActive(patientIds, true).stream()
                 .collect(Collectors.groupingBy(TherapistPatient::getPatientId));
 
-        Set<UUID> userIds = new HashSet<>();
-        parentsByPatient.values().forEach(list -> list.forEach(pp -> userIds.add(pp.getId().getParentId())));
-        assignmentsByPatient.values().forEach(list -> list.forEach(a -> userIds.add(a.getTherapistId())));
-        Map<UUID, User> userMap = userIds.isEmpty() ? Map.of()
-                : userRepository.findAllById(userIds).stream().collect(Collectors.toMap(User::getId, u -> u));
+        Map<UUID, User> userMap = Map.of();
+        if (!compact) {
+            Set<UUID> userIds = new HashSet<>();
+            parentsByPatient.values().forEach(list -> list.forEach(pp -> userIds.add(pp.getId().getParentId())));
+            assignmentsByPatient.values().forEach(list -> list.forEach(a -> userIds.add(a.getTherapistId())));
+            userMap = userIds.isEmpty() ? Map.of()
+                    : userRepository.findAllById(userIds).stream().collect(Collectors.toMap(User::getId, u -> u));
+        }
+        Map<UUID, User> finalUserMap = userMap;
 
         Map<UUID, List<Subscription>> subscriptionsByPatient = subscriptionRepository
                 .findByOrgIdAndPatientIdInOrderByCreatedAtDesc(orgId, patientIds).stream()
@@ -451,16 +460,7 @@ public class PatientService {
                     .toList();
 
             List<PatientParent> pps = parentsByPatient.getOrDefault(patient.getId(), List.of());
-            List<User> parents = pps.stream()
-                    .map(pp -> userMap.get(pp.getId().getParentId()))
-                    .filter(Objects::nonNull)
-                    .toList();
-
             List<TherapistPatient> assignments = assignmentsByPatient.getOrDefault(patient.getId(), List.of());
-            List<User> therapists = assignments.stream()
-                    .map(a -> userMap.get(a.getTherapistId()))
-                    .filter(Objects::nonNull)
-                    .toList();
 
             List<UUID> activeProgramIds = subscriptionsByPatient.getOrDefault(patient.getId(), List.of()).stream()
                     .filter(s -> s.getStatus() == SubscriptionStatus.ACTIVE)
@@ -471,6 +471,19 @@ public class PatientService {
                     .map(programMap::get)
                     .filter(Objects::nonNull)
                     .map(p -> new PatientResponse.TherapySummary(p.getId(), p.getName()))
+                    .toList();
+
+            if (compact) {
+                return PatientResponse.fromCompact(patient, pcs, conditionDetails, pps, assignments, therapySummaries);
+            }
+
+            List<User> parents = pps.stream()
+                    .map(pp -> finalUserMap.get(pp.getId().getParentId()))
+                    .filter(Objects::nonNull)
+                    .toList();
+            List<User> therapists = assignments.stream()
+                    .map(a -> finalUserMap.get(a.getTherapistId()))
+                    .filter(Objects::nonNull)
                     .toList();
 
             return PatientResponse.from(patient, pcs, conditionDetails, parents, assignments, therapists, therapySummaries);
