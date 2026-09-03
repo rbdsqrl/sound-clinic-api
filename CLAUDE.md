@@ -352,6 +352,8 @@ Master file: `db.changelog-master.yaml` — lists migrations in order.
 | 095-therapist-reassignments.sql     | `therapist_reassignments` (batch header) + `therapist_reassignment_cases` (one row per patient touched) |
 | 096-reassignment-marker-columns.sql | Nullable `reassignment_id` FK on `therapy_sessions`, `review_meetings`, `therapist_patients`, `iep_plans` — marks which batch currently owns a row's `therapistId`, so revert only touches rows that batch moved |
 | 097-review-meeting-participants.sql | `review_meeting_participants` — persisted, editable attendee list for review meetings (parents + chosen Clinic Head(s)); backfilled from existing linked parents, therapist deliberately not backfilled |
+| 098-list-sort-indexes.sql           | `idx_patients_org_created` / `idx_users_org_created` — composite (org_id, created_at desc) indexes backing the paginated Cases/Members lists' default sort |
+| 099-more-list-indexes.sql           | Composite indexes on `subscriptions`, `enrollments` (had none beyond PK), `tasks`, `invitations`, `attendance` — same missing-sort/scan-index gap as 098, found via a full-repository audit |
 
 **To add a migration:** create `NNN-description.sql` with the Liquibase header, then add it to the master YAML.
 

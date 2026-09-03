@@ -15,6 +15,9 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
 
     List<Patient> findByOrgId(UUID orgId);
 
+    /** Cheap paginated fallback for requests with no search/status/caseload narrowing — a plain indexed org_id + created_at scan, no EXISTS subqueries. */
+    Page<Patient> findByOrgId(UUID orgId, Pageable pageable);
+
     List<Patient> findByClinicId(UUID clinicId);
 
     Optional<Patient> findByIdAndOrgId(UUID id, UUID orgId);

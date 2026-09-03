@@ -93,8 +93,11 @@ public class UserController {
 
         String q = (search == null || search.isBlank()) ? "" : search.trim();
 
-        Page<User> page = userRepository.search(
-                principal.getOrgId(), STAFF_ROLES, q, role, clinicId, active, pageable);
+        // Fast path: no search/role/clinic narrowing — the shape usersApi.listMembers() sends for
+        // pickers and dashboards. Skip the LIKE/CONCAT-laden filtered query for a plain indexed scan.
+        Page<User> page = (q.isEmpty() && role == null && clinicId == null)
+                ? userRepository.findByOrgIdAndRoleInAndIsActive(principal.getOrgId(), STAFF_ROLES, active, pageable)
+                : userRepository.search(principal.getOrgId(), STAFF_ROLES, q, role, clinicId, active, pageable);
 
         List<UUID> pageUserIds = page.getContent().stream().map(User::getId).toList();
         Map<UUID, Long> caseCountByTherapist = therapistPatientRepository

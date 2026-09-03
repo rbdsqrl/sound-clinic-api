@@ -149,12 +149,18 @@ public class PatientService {
         // An explicit but empty selection (every pill toggled off) shows everything, not nothing.
         boolean anyStatus = statuses.isEmpty();
 
-        Page<Patient> page = patientRepository.search(
-                principal.getOrgId(), q, onlyMine, principal.getId(),
-                anyStatus || statuses.contains("ACTIVE"),
-                anyStatus || statuses.contains("NOT_INVITED"),
-                anyStatus || statuses.contains("INACTIVE"),
-                pageable);
+        // Fast path: no search, no caseload scoping, no status narrowing — this is a plain
+        // "every patient in the org" request (the shape patientsApi.list() sends for pickers and
+        // dashboards). Skip the EXISTS-laden filtered query entirely rather than running the same
+        // parent/therapist subqueries the Cases page's status pills need but this request doesn't.
+        Page<Patient> page = (q.isEmpty() && !onlyMine && anyStatus)
+                ? patientRepository.findByOrgId(principal.getOrgId(), pageable)
+                : patientRepository.search(
+                        principal.getOrgId(), q, onlyMine, principal.getId(),
+                        anyStatus || statuses.contains("ACTIVE"),
+                        anyStatus || statuses.contains("NOT_INVITED"),
+                        anyStatus || statuses.contains("INACTIVE"),
+                        pageable);
 
         return PagedResponse.from(page, this::buildResponse);
     }

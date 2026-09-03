@@ -290,3 +290,9 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/097-review-meeting-participants.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/098-list-sort-indexes.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/099-more-list-indexes.sql
+      relativeToChangelogFile: false

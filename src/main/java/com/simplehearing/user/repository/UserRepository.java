@@ -51,6 +51,9 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     /** Same as above, scoped to a single clinic. */
     List<User> findByOrgIdAndClinicIdAndRoleIn(UUID orgId, UUID clinicId, Collection<Role> roles);
 
+    /** Cheap paginated fallback for requests with no search/role/clinic narrowing — a plain indexed scan, no LIKE/CONCAT. */
+    Page<User> findByOrgIdAndRoleInAndIsActive(UUID orgId, Collection<Role> roles, boolean isActive, Pageable pageable);
+
     /** Backs the paginated Members list. {@code roles} is the fixed staff-role scope; {@code role} further narrows to one role when the caller picks a role filter. */
     @Query("SELECT u FROM User u WHERE u.orgId = :orgId AND u.role IN :roles AND u.isActive = :active " +
            "AND (:search = '' OR LOWER(CONCAT(u.firstName, ' ', u.lastName, ' ', u.email)) LIKE LOWER(CONCAT('%', :search, '%'))) " +
