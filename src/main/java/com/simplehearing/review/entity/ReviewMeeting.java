@@ -8,6 +8,8 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -104,6 +106,20 @@ public class ReviewMeeting {
     @Column(name = "created_by")
     private UUID createdBy;
 
+    /** Set while a bulk therapist reassignment owns this row's therapistId; cleared on revert. */
+    @Column(name = "reassignment_id")
+    private UUID reassignmentId;
+
+    /**
+     * Who is invited: the patient's linked parents plus the Clinic Head(s) chosen at
+     * scheduling time. The assigned therapist is deliberately not a participant — {@code
+     * therapistId} above is kept purely for clinical/analytics attribution.
+     */
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "review_meeting_participants", joinColumns = @JoinColumn(name = "review_meeting_id"))
+    @Column(name = "user_id", nullable = false)
+    private Set<UUID> participantIds = new LinkedHashSet<>();
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -184,6 +200,12 @@ public class ReviewMeeting {
 
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
+
+    public UUID getReassignmentId() { return reassignmentId; }
+    public void setReassignmentId(UUID reassignmentId) { this.reassignmentId = reassignmentId; }
+
+    public Set<UUID> getParticipantIds() { return participantIds; }
+    public void setParticipantIds(Set<UUID> participantIds) { this.participantIds = participantIds; }
 
     /** True once the parent has submitted their side. */
     public boolean hasParentFeedback() { return parentFeedbackAt != null; }

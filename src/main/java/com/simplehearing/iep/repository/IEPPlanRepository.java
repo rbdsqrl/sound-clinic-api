@@ -24,5 +24,8 @@ public interface IEPPlanRepository extends JpaRepository<IEPPlan, UUID> {
     /** Plans belonging to a specific program — used for goal-mastery-per-enrollment. */
     List<IEPPlan> findByEnrollmentId(UUID enrollmentId);
 
+    /** Plans currently owned by a specific bulk therapist reassignment — the revert scan. */
+    List<IEPPlan> findByReassignmentId(UUID reassignmentId);
+
     void deleteByPatientId(UUID patientId);
 }

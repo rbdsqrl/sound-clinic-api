@@ -68,6 +68,9 @@ public interface TherapySessionRepository extends JpaRepository<TherapySession, 
 
     List<TherapySession> findByPatientId(UUID patientId);
 
+    /** Sessions currently owned by a specific bulk therapist reassignment — the revert scan. */
+    List<TherapySession> findByReassignmentId(UUID reassignmentId);
+
     /** Readable alias used by the analytics module — same query as the derived name above. */
     @Query("SELECT s FROM TherapySession s WHERE s.orgId = :orgId AND s.patientId = :patientId "
          + "AND s.sessionDate BETWEEN :from AND :to ORDER BY s.sessionDate ASC, s.startTime ASC")

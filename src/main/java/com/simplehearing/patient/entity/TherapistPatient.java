@@ -28,6 +28,12 @@ public class TherapistPatient {
     @Column(nullable = false)
     private boolean isActive = true;
 
+    /** Set only when a bulk therapist reassignment is what flipped this link active/created it;
+     *  left NULL when the covering therapist was already independently linked to the patient, so
+     *  reverting never yanks a caseload entry earned some other way. */
+    @Column(name = "reassignment_id")
+    private UUID reassignmentId;
+
     public TherapistPatient() {}
 
     public UUID getId() { return id; }
@@ -45,4 +51,7 @@ public class TherapistPatient {
 
     public boolean isActive() { return isActive; }
     public void setActive(boolean active) { isActive = active; }
+
+    public UUID getReassignmentId() { return reassignmentId; }
+    public void setReassignmentId(UUID reassignmentId) { this.reassignmentId = reassignmentId; }
 }

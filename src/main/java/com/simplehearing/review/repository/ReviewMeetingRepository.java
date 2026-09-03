@@ -34,4 +34,7 @@ public interface ReviewMeetingRepository extends JpaRepository<ReviewMeeting, UU
     List<ReviewMeeting> findForParent(@Param("orgId") UUID orgId, @Param("parentId") UUID parentId);
 
     long countByEnrollmentId(UUID enrollmentId);
+
+    /** Meetings currently owned by a specific bulk therapist reassignment — the revert scan. */
+    List<ReviewMeeting> findByReassignmentId(UUID reassignmentId);
 }

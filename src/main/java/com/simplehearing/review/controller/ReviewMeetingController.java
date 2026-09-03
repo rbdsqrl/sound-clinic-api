@@ -27,10 +27,11 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -111,7 +112,9 @@ public class ReviewMeetingController {
 
     // ── Schedule ─────────────────────────────────────────────────────────────
 
-    @Operation(summary = "Add a review meeting to an existing therapy plan")
+    @Operation(summary = "Add a review meeting to an existing therapy plan",
+               description = "Invites the patient's linked parents plus the given Clinic Head(s) — "
+                           + "the therapist is not a participant under this model.")
     @PostMapping
     @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<ReviewMeetingResponse>> create(
@@ -125,16 +128,19 @@ public class ReviewMeetingController {
             throw new ApiException(HttpStatus.FORBIDDEN, "Access denied");
         }
 
+        Set<UUID> clinicHeadIds = requireClinicHeads(request.participantIds(), principal);
+
         ReviewMeeting saved = meetingService.createSingle(
                 enrollment, request.meetingDate(), request.startTime(),
-                request.durationMinutes(), principal.getId());
+                request.durationMinutes(), clinicHeadIds, principal.getId());
 
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(enrich(List.of(saved), principal).get(0)));
     }
 
     @Operation(summary = "Generate a recurring review schedule for an existing plan",
-               description = "Meetings repeat on the given interval until the end date, skipping public holidays.")
+               description = "Meetings repeat on the given interval until the end date, skipping public "
+                           + "holidays. Invites the patient's linked parents plus the given Clinic Head(s).")
     @PostMapping("/schedule/{enrollmentId}")
     @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<List<ReviewMeetingResponse>>> generateSchedule(
@@ -155,8 +161,10 @@ public class ReviewMeetingController {
                     "This plan already has review meetings. Cancel them first, or add a single meeting instead.");
         }
 
+        Set<UUID> clinicHeadIds = requireClinicHeads(request.participantIds(), principal);
+
         List<ReviewMeeting> created = meetingService.generateForEnrollment(
-                enrollment, request, principal.getId());
+                enrollment, request, clinicHeadIds, principal.getId());
 
         if (created.isEmpty()) {
             throw new ApiException(HttpStatus.BAD_REQUEST,
@@ -165,6 +173,57 @@ public class ReviewMeetingController {
 
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(enrich(created, principal)));
+    }
+
+    @Operation(summary = "Edit a review meeting's participants",
+               description = "Full replacement of the attendee list — Admin Roles only, not restricted "
+                           + "to Clinic Heads (unlike the picker shown at scheduling time).")
+    @PatchMapping("/{id}/participants")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
+    public ResponseEntity<ApiResponse<ReviewMeetingResponse>> updateParticipants(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateReviewParticipantsRequest request,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        ReviewMeeting meeting = findInOrg(id, principal);
+        if (meeting.getStatus() == ReviewMeetingStatus.CANCELLED) {
+            throw new ApiException(HttpStatus.CONFLICT, "This meeting was cancelled — schedule a new one instead");
+        }
+
+        Set<UUID> ids = new LinkedHashSet<>(request.participantIds());
+        List<User> users = userRepository.findAllById(ids);
+        if (users.size() != ids.size()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "One or more participants could not be found");
+        }
+        boolean foreign = users.stream().anyMatch(u -> !principal.getOrgId().equals(u.getOrgId()));
+        if (foreign) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Participants must belong to your organisation");
+        }
+
+        ReviewMeeting saved = meetingService.updateParticipants(meeting, ids);
+        return ResponseEntity.ok(ApiResponse.success(enrich(List.of(saved), principal).get(0)));
+    }
+
+    /** Validates the Clinic-Head picker used at scheduling time — required, and every id must
+     *  resolve to an active, org-matching user holding the CLINIC_HEAD role. */
+    private Set<UUID> requireClinicHeads(List<UUID> participantIds, UserPrincipal principal) {
+        if (participantIds == null || participantIds.isEmpty()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Pick at least one Clinic Head to invite");
+        }
+        Set<UUID> ids = new LinkedHashSet<>(participantIds);
+        List<User> users = userRepository.findAllById(ids);
+        if (users.size() != ids.size()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "One or more selected Clinic Heads could not be found");
+        }
+        for (User u : users) {
+            if (!principal.getOrgId().equals(u.getOrgId())) {
+                throw new ApiException(HttpStatus.FORBIDDEN, "Participants must belong to your organisation");
+            }
+            if (!u.isActive() || !u.hasRole(Role.CLINIC_HEAD)) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "Every participant must be an active Clinic Head");
+            }
+        }
+        return ids;
     }
 
     @Operation(summary = "Reschedule a review meeting",
@@ -366,25 +425,17 @@ public class ReviewMeetingController {
                 patientNames.put(p.getId(), p.getFirstName() + " " + p.getLastName()));
 
         Map<UUID, String> therapistNames = new HashMap<>();
-        Map<UUID, User> therapistsById = new HashMap<>();
-        userRepository.findAllById(therapistIds).forEach(u -> {
-            therapistNames.put(u.getId(), u.getFirstName() + " " + u.getLastName());
-            therapistsById.put(u.getId(), u);
-        });
+        userRepository.findAllById(therapistIds).forEach(u ->
+                therapistNames.put(u.getId(), u.getFirstName() + " " + u.getLastName()));
 
-        // A review meeting's attendees are implicit: the assigned therapist plus every
-        // parent linked to the patient — the same people the invite emails go to.
-        Map<UUID, List<UUID>> parentIdsByPatient = new HashMap<>();
-        for (UUID patientId : patientIds) {
-            parentIdsByPatient.put(patientId,
-                    patientParentRepository.findById_PatientId(patientId).stream()
-                            .map(pp -> pp.getId().getParentId())
-                            .toList());
-        }
-        Set<UUID> allParentIds = parentIdsByPatient.values().stream()
-                .flatMap(List::stream).collect(Collectors.toSet());
-        Map<UUID, User> parentsById = new HashMap<>();
-        userRepository.findAllById(allParentIds).forEach(u -> parentsById.put(u.getId(), u));
+        // A review meeting's attendees are now explicit — the patient's linked parents plus
+        // whichever Clinic Head(s) were chosen at scheduling time. The assigned therapist is
+        // not a participant under this model; therapistId is kept purely for attribution.
+        Set<UUID> allParticipantIds = meetings.stream()
+                .flatMap(m -> m.getParticipantIds().stream())
+                .collect(Collectors.toSet());
+        Map<UUID, User> participantsById = new HashMap<>();
+        userRepository.findAllById(allParticipantIds).forEach(u -> participantsById.put(u.getId(), u));
 
         boolean staff = isManager(principal);
         boolean clinician = isClinician(principal);
@@ -408,15 +459,11 @@ public class ReviewMeetingController {
                 seeTherapistSide = false;
             }
 
-            List<ParticipantResponse> participants = new ArrayList<>();
-            User therapist = therapistsById.get(m.getTherapistId());
-            if (therapist != null) {
-                participants.add(ParticipantResponse.from(therapist, true));
-            }
-            for (UUID parentId : parentIdsByPatient.getOrDefault(m.getPatientId(), List.of())) {
-                User parentUser = parentsById.get(parentId);
-                if (parentUser != null) participants.add(ParticipantResponse.from(parentUser, false));
-            }
+            List<ParticipantResponse> participants = m.getParticipantIds().stream()
+                    .map(participantsById::get)
+                    .filter(Objects::nonNull)
+                    .map(u -> ParticipantResponse.from(u, false))
+                    .toList();
 
             return ReviewMeetingResponse.from(
                     m,

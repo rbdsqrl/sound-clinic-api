@@ -1,6 +1,7 @@
 package com.simplehearing.enrollment.repository;
 
 import com.simplehearing.enrollment.entity.Enrollment;
+import com.simplehearing.enrollment.enums.EnrollmentStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -10,6 +11,11 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, UUID> {
 
     /** All enrollments for a patient within the org, newest first */
     List<Enrollment> findByOrgIdAndPatientIdOrderByCreatedAtDesc(UUID orgId, UUID patientId);
+
+    /** A patient's enrollments currently under a given therapist, in a given status — the
+     *  reassignment cascade's scope for one case. */
+    List<Enrollment> findByOrgIdAndPatientIdAndTherapistIdAndStatus(
+            UUID orgId, UUID patientId, UUID therapistId, EnrollmentStatus status);
 
     /** All active enrollments for a therapist within the org */
     List<Enrollment> findByOrgIdAndTherapistId(UUID orgId, UUID therapistId);

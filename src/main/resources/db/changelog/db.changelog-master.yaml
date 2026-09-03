@@ -281,3 +281,12 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/094-session-cancelled-by-completion.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/095-therapist-reassignments.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/096-reassignment-marker-columns.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/097-review-meeting-participants.sql
+      relativeToChangelogFile: false

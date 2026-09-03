@@ -286,6 +286,8 @@ public class PatientService {
                         throw new ApiException(HttpStatus.CONFLICT, "Therapist is already assigned to this patient");
                     }
                     existing.setActive(true);
+                    // A manual assign always wins over a stale reassignment marker.
+                    existing.setReassignmentId(null);
                     therapistPatientRepository.save(existing);
                 });
 
@@ -305,6 +307,8 @@ public class PatientService {
         therapistPatientRepository.findByPatientIdAndTherapistId(patientId, therapistId)
                 .ifPresent(tp -> {
                     tp.setActive(false);
+                    // A manual unassign always wins over a stale reassignment marker.
+                    tp.setReassignmentId(null);
                     therapistPatientRepository.save(tp);
                 });
     }

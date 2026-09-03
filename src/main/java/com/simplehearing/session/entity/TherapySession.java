@@ -104,6 +104,10 @@ public class TherapySession {
     @Column(name = "completed_at")
     private Instant completedAt;
 
+    /** Set while a bulk therapist reassignment owns this row's therapistId; cleared on revert. */
+    @Column(name = "reassignment_id")
+    private UUID reassignmentId;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -165,4 +169,6 @@ public class TherapySession {
     public Instant getCompletedAt() { return completedAt; }
     public void setCompletedAt(Instant completedAt) { this.completedAt = completedAt; }
     public Instant getCreatedAt() { return createdAt; }
+    public UUID getReassignmentId() { return reassignmentId; }
+    public void setReassignmentId(UUID reassignmentId) { this.reassignmentId = reassignmentId; }
 }

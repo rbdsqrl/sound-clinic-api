@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotNull;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
 import java.util.UUID;
 
 /** Adds a single ad-hoc review meeting to an existing enrollment. */
@@ -13,5 +14,7 @@ public record CreateReviewMeetingRequest(
         @NotNull UUID enrollmentId,
         @NotNull LocalDate meetingDate,
         @NotNull LocalTime startTime,
-        @Min(15) @Max(240) int durationMinutes
+        @Min(15) @Max(240) int durationMinutes,
+        /** The Clinic Head(s) to invite in place of the therapist — required, checked in the controller. */
+        List<UUID> participantIds
 ) {}

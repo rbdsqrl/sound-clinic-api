@@ -102,19 +102,26 @@ public class UserController {
     @Operation(
         summary = "List staff who can be assigned work",
         description = "Names and roles only — used to populate assignee pickers. Any staff member may read it, "
-                    + "since anyone can create a task and assign it; personal details are deliberately left out."
+                    + "since anyone can create a task and assign it; personal details are deliberately left out. "
+                    + "Pass role to scope to just that role (e.g. the review-meeting Clinic-Head picker)."
     )
     @GetMapping("/assignable")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<List<AssignableUserResponse>>> listAssignable(
             @RequestParam(defaultValue = "false") boolean includeParents,
+            @RequestParam(required = false) Role role,
             @AuthenticationPrincipal UserPrincipal principal) {
 
-        // Meeting participant pickers need parents as well as staff. Still names and
-        // roles only, so this stays safe to expose to every staff member.
-        List<Role> roles = includeParents
-                ? Stream.concat(STAFF_ROLES.stream(), Stream.of(Role.PARENT)).toList()
-                : STAFF_ROLES;
+        List<Role> roles;
+        if (role != null) {
+            roles = List.of(role);
+        } else {
+            // Meeting participant pickers need parents as well as staff. Still names and
+            // roles only, so this stays safe to expose to every staff member.
+            roles = includeParents
+                    ? Stream.concat(STAFF_ROLES.stream(), Stream.of(Role.PARENT)).toList()
+                    : STAFF_ROLES;
+        }
 
         List<AssignableUserResponse> results = userRepository
                 .findByOrgIdAndRoleIn(principal.getOrgId(), roles)

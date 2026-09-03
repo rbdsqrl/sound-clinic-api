@@ -29,6 +29,7 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -91,6 +92,18 @@ public class ReviewMeetingService {
     public List<ReviewMeeting> generateForEnrollment(Enrollment enrollment,
                                                      ReviewScheduleRequest schedule,
                                                      UUID createdBy) {
+        return generateForEnrollment(enrollment, schedule, Set.of(), createdBy);
+    }
+
+    /**
+     * @param clinicHeadIds the Clinic Head(s) chosen at scheduling time to sit in for the
+     *                      therapist, who is deliberately not a participant under this model.
+     */
+    @Transactional
+    public List<ReviewMeeting> generateForEnrollment(Enrollment enrollment,
+                                                     ReviewScheduleRequest schedule,
+                                                     Set<UUID> clinicHeadIds,
+                                                     UUID createdBy) {
 
         int intervalWeeks = schedule.intervalWeeksOrDefault();
         int durationMinutes = schedule.durationMinutesOrDefault();
@@ -123,6 +136,8 @@ public class ReviewMeetingService {
         LocalTime startTime = schedule.startTime();
         LocalTime endTime = startTime.plusMinutes(durationMinutes);
 
+        Set<UUID> participantIds = participantsFor(enrollment.getPatientId(), clinicHeadIds);
+
         List<ReviewMeeting> meetings = new ArrayList<>();
         LocalDate date = first;
         int number = 1;
@@ -146,6 +161,7 @@ public class ReviewMeetingService {
             m.setEndTime(endTime);
             m.setIcsUid(newIcsUid());
             m.setCreatedBy(createdBy);
+            m.setParticipantIds(new LinkedHashSet<>(participantIds));
             meetings.add(m);
 
             date = date.plusWeeks(intervalWeeks);
@@ -161,7 +177,7 @@ public class ReviewMeetingService {
     /** Creates one extra meeting outside the generated rhythm. */
     @Transactional
     public ReviewMeeting createSingle(Enrollment enrollment, LocalDate date, LocalTime startTime,
-                                      int durationMinutes, UUID createdBy) {
+                                      int durationMinutes, Set<UUID> clinicHeadIds, UUID createdBy) {
         ReviewMeeting m = new ReviewMeeting();
         m.setOrgId(enrollment.getOrgId());
         m.setEnrollmentId(enrollment.getId());
@@ -172,6 +188,7 @@ public class ReviewMeetingService {
         m.setEndTime(startTime.plusMinutes(durationMinutes));
         m.setIcsUid(newIcsUid());
         m.setCreatedBy(createdBy);
+        m.setParticipantIds(participantsFor(enrollment.getPatientId(), clinicHeadIds));
 
         ReviewMeeting saved = meetingRepository.save(m);
 
@@ -266,21 +283,36 @@ public class ReviewMeetingService {
         }
     }
 
-    /** Notifies the other side that feedback has landed. */
+    /**
+     * Notifies the other side that feedback has landed. Independent of who's invited to the
+     * meeting itself (participantIds) — the therapist should still hear when parent feedback
+     * arrives even though they're no longer a calendar participant under this model.
+     */
     public void notifyFeedbackSubmitted(ReviewMeeting meeting, boolean fromParent) {
-        Context ctx = contextFor(meeting);
-        if (ctx == null) return;
-
+        Optional<Patient> patient = patientRepository.findById(meeting.getPatientId());
+        if (patient.isEmpty()) {
+            log.warn("Review meeting {} has no patient — skipping notification", meeting.getId());
+            return;
+        }
+        String patientName = patient.get().getFirstName() + " " + patient.get().getLastName();
+        String orgName = organisationRepository.findById(meeting.getOrgId())
+                .map(Organisation::getName)
+                .orElse("Simple Hearing");
         String dateLabel = meeting.getMeetingDate().format(DATE_LABEL);
         String url = "/patients/" + meeting.getPatientId() + "?review=" + meeting.getId();
 
         List<Recipient> targets = fromParent
-                ? ctx.recipients().stream().filter(r -> r.isTherapist).toList()
-                : ctx.recipients().stream().filter(r -> !r.isTherapist).toList();
+                ? userRepository.findById(meeting.getTherapistId())
+                        .filter(User::isActive)
+                        .filter(u -> u.getEmail() != null && !u.getEmail().isBlank())
+                        .map(u -> new Recipient(u.getFirstName() + " " + u.getLastName(), u.getEmail(), true))
+                        .map(List::of)
+                        .orElse(List.of())
+                : parentRecipients(meeting.getPatientId());
 
         for (Recipient r : targets) {
             emailService.sendReviewFeedbackNotification(
-                    r.email(), r.name(), ctx.patientName(), dateLabel, ctx.orgName(), url);
+                    r.email(), r.name(), patientName, dateLabel, orgName, url);
         }
     }
 
@@ -291,7 +323,13 @@ public class ReviewMeetingService {
         return UUID.randomUUID() + "@simplehearing.in";
     }
 
-    /** Everyone and everything needed to build an invite. Null when the patient has vanished. */
+    /**
+     * Everyone and everything needed to build an invite. Recipients come from the meeting's
+     * persisted {@code participantIds} — the patient's linked parents plus whichever Clinic
+     * Head(s) were chosen. The assigned therapist is looked up only for the message text
+     * (name/location); they are deliberately not a recipient under this model.
+     * Null when the patient has vanished.
+     */
     private Context contextFor(ReviewMeeting meeting) {
         Optional<Patient> patient = patientRepository.findById(meeting.getPatientId());
         if (patient.isEmpty()) {
@@ -314,27 +352,49 @@ public class ReviewMeetingService {
                 ? clinicRepository.findById(therapist.getClinicId()).map(c -> c.getName()).orElse("")
                 : "";
 
-        List<Recipient> recipients = new ArrayList<>();
-        if (therapist != null && therapist.getEmail() != null && therapist.isActive()) {
-            recipients.add(new Recipient(therapistName, therapist.getEmail(), true));
-        }
-
-        List<UUID> parentIds = patientParentRepository.findById_PatientId(meeting.getPatientId())
-                .stream()
-                .map(pp -> pp.getId().getParentId())
-                .toList();
-
-        userRepository.findAllById(parentIds).stream()
+        List<Recipient> recipients = userRepository.findAllById(meeting.getParticipantIds()).stream()
                 .filter(User::isActive)
                 .filter(u -> u.getEmail() != null && !u.getEmail().isBlank())
-                .forEach(u -> recipients.add(
-                        new Recipient(u.getFirstName() + " " + u.getLastName(), u.getEmail(), false)));
+                .map(u -> new Recipient(u.getFirstName() + " " + u.getLastName(), u.getEmail(), false))
+                .collect(Collectors.toCollection(ArrayList::new));
 
         List<CalendarInviteService.Attendee> attendees = recipients.stream()
                 .map(r -> new CalendarInviteService.Attendee(r.name(), r.email()))
                 .toList();
 
         return new Context(patientName, therapistName, orgName, location, recipients, attendees);
+    }
+
+    /** The patient's linked parents, active and with an email — used outside the participant model. */
+    private List<Recipient> parentRecipients(UUID patientId) {
+        List<UUID> parentIds = patientParentRepository.findById_PatientId(patientId)
+                .stream()
+                .map(pp -> pp.getId().getParentId())
+                .toList();
+
+        return userRepository.findAllById(parentIds).stream()
+                .filter(User::isActive)
+                .filter(u -> u.getEmail() != null && !u.getEmail().isBlank())
+                .map(u -> new Recipient(u.getFirstName() + " " + u.getLastName(), u.getEmail(), false))
+                .toList();
+    }
+
+    /** Union of a patient's linked parents and the given Clinic Head(s). */
+    private Set<UUID> participantsFor(UUID patientId, Set<UUID> clinicHeadIds) {
+        Set<UUID> participants = new LinkedHashSet<>(clinicHeadIds);
+        patientParentRepository.findById_PatientId(patientId)
+                .forEach(pp -> participants.add(pp.getId().getParentId()));
+        return participants;
+    }
+
+    /** Replaces the meeting's attendee list and resends invites to the new full set. */
+    @Transactional
+    public ReviewMeeting updateParticipants(ReviewMeeting meeting, Set<UUID> newParticipantIds) {
+        meeting.setParticipantIds(new LinkedHashSet<>(newParticipantIds));
+        meeting.setIcsSequence(meeting.getIcsSequence() + 1);
+        ReviewMeeting saved = meetingRepository.save(meeting);
+        sendInvites(saved, true);
+        return saved;
     }
 
     private record Recipient(String name, String email, boolean isTherapist) {}

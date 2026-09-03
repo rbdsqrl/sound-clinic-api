@@ -47,6 +47,10 @@ public class IEPPlan {
     @Column(name = "tags", columnDefinition = "TEXT")
     private String tags;
 
+    /** Set while a bulk therapist reassignment owns this row's therapistId; cleared on revert. */
+    @Column(name = "reassignment_id")
+    private UUID reassignmentId;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -88,4 +92,7 @@ public class IEPPlan {
 
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
+
+    public UUID getReassignmentId() { return reassignmentId; }
+    public void setReassignmentId(UUID reassignmentId) { this.reassignmentId = reassignmentId; }
 }

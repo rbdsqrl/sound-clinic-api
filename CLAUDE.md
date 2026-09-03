@@ -174,6 +174,15 @@ com.simplehearing
 │   ├── enums/SharedMediaDirection.java         # PARENT_TO_CLINIC, CLINIC_TO_PARENT
 │   └── repository/SharedMediaRepository.java
 │
+├── reassignment/
+│   ├── controller/TherapistReassignmentController.java  # POST/GET /api/v1/therapist-reassignments, PATCH /{id}/cancel — Admin Roles only
+│   ├── dto/                             # CreateReassignmentRequest, ReassignmentResponse, ReassignmentCaseSummary
+│   ├── entity/                          # TherapistReassignment (batch header), TherapistReassignmentCase (one row per patient)
+│   ├── enums/                           # ReassignmentType (PERMANENT/TEMPORARY), ReassignmentStatus (ACTIVE/REVERTED/CANCELLED)
+│   ├── job/ReassignmentRevertJob.java   # @Scheduled nightly — hands back expired TEMPORARY batches
+│   ├── repository/                      # TherapistReassignmentRepository, TherapistReassignmentCaseRepository
+│   └── service/TherapistReassignmentService.java  # Bulk-moves sessions/review meetings/IEP plans + caseload links; revert() shared by the job and early-cancel
+│
 └── controller/
     └── HealthController.java            # GET /, GET /health (no auth required)
 ```
@@ -212,16 +221,20 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | GET      | `/api/v1/analytics/cases`               | BUSINESS_OWNER, CLINIC_HEAD                     | One row per active patient — sessions, members/activities assigned, checklist fills, LT goals, payment status |
 | GET      | `/api/v1/analytics/members`             | BUSINESS_OWNER, CLINIC_HEAD                     | One row per therapist — cases/activities assigned, activities created, sessions cancelled, IEP plans |
 | GET      | `/api/v1/analytics/sessions`            | BUSINESS_OWNER, CLINIC_HEAD                     | Flat session log + KPI strip for the Schedule tab, optionally filtered by patientId/therapistId/programId |
-| GET      | `/api/v1/users/assignable`              | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST | Staff names + roles for assignee pickers |
+| GET      | `/api/v1/users/assignable`              | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST, OFFICE_ADMIN | Staff names + roles for assignee pickers; optional `role` param scopes to one role (e.g. the review-meeting Clinic-Head picker) |
 | GET      | `/api/v1/review-meetings`               | All staff + PARENT (own children)                       | List review meetings                |
-| POST     | `/api/v1/review-meetings`               | BUSINESS_OWNER, CLINIC_HEAD                     | Add one review meeting to a plan    |
-| POST     | `/api/v1/review-meetings/schedule/{enrollmentId}` | BUSINESS_OWNER, CLINIC_HEAD           | Generate a recurring review schedule |
+| POST     | `/api/v1/review-meetings`               | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN       | Add one review meeting to a plan — invites the patient's parents + the given Clinic Head(s); the therapist is not a participant |
+| POST     | `/api/v1/review-meetings/schedule/{enrollmentId}` | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN | Generate a recurring review schedule — same Clinic-Head-picker requirement |
+| PATCH    | `/api/v1/review-meetings/{id}/participants` | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN   | Full-replacement edit of a meeting's participant list (any active org user, not Clinic-Head-restricted); bumps the ics sequence and resends invites |
 | PATCH    | `/api/v1/review-meetings/{id}/reschedule` | BUSINESS_OWNER, CLINIC_HEAD                   | Move a meeting; resends the invite  |
 | PATCH    | `/api/v1/review-meetings/{id}/cancel`   | BUSINESS_OWNER, CLINIC_HEAD                     | Cancel; sends a CANCEL ics          |
 | PATCH    | `/api/v1/review-meetings/{id}/complete` | All staff                                               | Mark a meeting completed            |
 | PUT      | `/api/v1/review-meetings/{id}/parent-feedback`    | PARENT (linked to patient)                    | Rating + comments on the therapist  |
 | PUT      | `/api/v1/review-meetings/{id}/therapist-feedback` | THERAPIST, CLINIC_HEAD, BUSINESS_OWNER      | Summary + progress notes            |
 | PATCH    | `/api/v1/enrollments/{id}/therapist`    | BUSINESS_OWNER, CLINIC_HEAD                     | Reassign an ongoing plan's therapist |
+| POST     | `/api/v1/therapist-reassignments`       | Admin Roles                                     | Bulk-reassign selected cases from one therapist to another — permanent, or bounded to a start/end window that hands back automatically; moves scheduled sessions, upcoming review meetings, active IEP plans and the caseload link |
+| GET      | `/api/v1/therapist-reassignments`       | Admin Roles                                     | List reassignment batches a therapist appears in (either side); optional `status` filter |
+| PATCH    | `/api/v1/therapist-reassignments/{id}/cancel` | Admin Roles                               | End a TEMPORARY batch early — reverts still-`SCHEDULED`/`ACTIVE` rows; not available for PERMANENT batches |
 | PATCH    | `/api/v1/enrollments/{id}/care-status`  | THERAPIST (own, not PROGRAM_COMPLETED), CLINIC_HEAD, BUSINESS_OWNER, OFFICE_ADMIN | Set clinical-health signal; PROGRAM_COMPLETED also completes the enrollment and cancels its still-upcoming sessions (admin tier only — overrides the normal all-sessions-attended completion path), and optionally accepts `manualGoalMasteryPct`/`manualParentSatisfactionPct`/`therapistSignedOff` to fill in the discharge success criteria by hand |
 | PATCH    | `/api/v1/enrollments/{id}/reactivate`   | CLINIC_HEAD, BUSINESS_OWNER, OFFICE_ADMIN | Undo a force-complete override — back to ACTIVE/ON_TRACK, clears the manual success-criteria overrides, restores exactly the sessions that override auto-cancelled; refused if the enrollment was closed by a discharge instead |
 | POST     | `/api/v1/enrollment-concerns`           | PARENT (own child)                                      | Raise a concern about an active program |
@@ -335,6 +348,9 @@ Master file: `db.changelog-master.yaml` — lists migrations in order.
 | 092-session-notes-history.sql       | `session_notes_history` — snapshot of a session's feedback/progress report/notes/performance score right before a later edit overwrites them |
 | 093-enrollment-manual-success-criteria.sql | `enrollments.manual_goal_mastery_pct`/`manual_parent_satisfaction_pct` — admin-entered override for the two computed discharge success criteria, used only when a program is force-completed |
 | 094-session-cancelled-by-completion.sql | `therapy_sessions.cancelled_by_program_completion` — marks a session auto-cancelled by the force-complete override, so reactivating restores exactly those and no others |
+| 095-therapist-reassignments.sql     | `therapist_reassignments` (batch header) + `therapist_reassignment_cases` (one row per patient touched) |
+| 096-reassignment-marker-columns.sql | Nullable `reassignment_id` FK on `therapy_sessions`, `review_meetings`, `therapist_patients`, `iep_plans` — marks which batch currently owns a row's `therapistId`, so revert only touches rows that batch moved |
+| 097-review-meeting-participants.sql | `review_meeting_participants` — persisted, editable attendee list for review meetings (parents + chosen Clinic Head(s)); backfilled from existing linked parents, therapist deliberately not backfilled |
 
 **To add a migration:** create `NNN-description.sql` with the Liquibase header, then add it to the master YAML.
 
@@ -389,6 +405,9 @@ CREATE TABLE ... ;
 ### Multi-Tenancy
 - Every query must filter by `orgId` from `principal.getOrgId()`
 - Never expose data across organisations
+
+### Scheduled jobs
+- `@EnableScheduling` on `SimpleHearingApplication` (alongside `@EnableAsync`) — `reassignment/job/ReassignmentRevertJob.java` is the first `@Scheduled` job in the codebase; a small dedicated `@Component` delegating straight to a service method is the pattern to follow for the next one, rather than putting `@Scheduled` methods directly on a service.
 
 ---
 
