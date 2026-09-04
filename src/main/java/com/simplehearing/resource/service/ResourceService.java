@@ -294,6 +294,7 @@ public class ResourceService {
      *  passes through presign() unchanged; a file we stored gets a fresh time-limited link
      *  instead of the permanent one baked in at upload time. Matches Task/SharedMedia/Feed. */
     private ResourceResponse toResponse(Resource r) {
-        return ResourceResponse.from(r, storageService.presign(r.getUrl(), Duration.ofHours(1)));
+        boolean hosted = storageService.isHostedFile(r.getUrl());
+        return ResourceResponse.from(r, storageService.presign(r.getUrl(), Duration.ofHours(1)), hosted);
     }
 }

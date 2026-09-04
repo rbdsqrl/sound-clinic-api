@@ -12,20 +12,25 @@ public record ResourceResponse(
         String name,
         ResourceType type,
         String url,
+        boolean hosted,
         Instant createdAt
 ) {
     /** `resolvedUrl` is `r.getUrl()` passed through StorageService.presign() — a fresh, time-limited
      *  link for anything stored in our own bucket, or the stored value unchanged for a pasted
      *  external link (YouTube, Google Drive, etc.), which presign() leaves untouched. Never use
      *  r.getUrl() directly in a response — a bucket/endpoint change would silently dead-link every
-     *  resource stored before that change, since the raw stored URL is frozen at upload time. */
-    public static ResourceResponse from(Resource r, String resolvedUrl) {
+     *  resource stored before that change, since the raw stored URL is frozen at upload time.
+     *  `hosted` mirrors StorageService.isHostedFile(r.getUrl()) — the frontend uses it to decide
+     *  whether the resource can be viewed in-app (hosted file) or must open in a new tab
+     *  (external link, which can't be reliably embedded or downloaded). */
+    public static ResourceResponse from(Resource r, String resolvedUrl, boolean hosted) {
         return new ResourceResponse(
                 r.getId(),
                 r.getFolderId(),
                 r.getName(),
                 r.getType(),
                 resolvedUrl,
+                hosted,
                 r.getCreatedAt()
         );
     }

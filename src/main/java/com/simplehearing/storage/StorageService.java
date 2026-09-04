@@ -42,4 +42,12 @@ public interface StorageService {
 
     /** Deletes the file at the given URL. Best-effort — no exception if not found. */
     void delete(String fileUrl);
+
+    /**
+     * True if the given URL is a file this service stored (vs. a pasted external link, e.g.
+     * YouTube or Google Drive). Only URLs where this returns true can be safely embedded
+     * inline (video/image tags) or offered a direct download — an external link must instead
+     * open in a new tab.
+     */
+    boolean isHostedFile(String url);
 }

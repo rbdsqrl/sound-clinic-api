@@ -69,5 +69,10 @@ public class LocalStorageService implements StorageService {
         }
     }
 
+    @Override
+    public boolean isHostedFile(String url) {
+        return url != null && url.startsWith(baseUrl + "/api/v1/files/");
+    }
+
     public Path getBaseDir() { return baseDir; }
 }

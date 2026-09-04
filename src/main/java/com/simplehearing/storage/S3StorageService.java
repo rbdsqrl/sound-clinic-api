@@ -124,6 +124,11 @@ public class S3StorageService implements StorageService {
                 .url().toString();
     }
 
+    @Override
+    public boolean isHostedFile(String url) {
+        return url != null && url.startsWith(urlPrefix());
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private String buildPublicUrl(String key) {
