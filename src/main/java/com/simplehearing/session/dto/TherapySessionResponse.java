@@ -31,6 +31,10 @@ public record TherapySessionResponse(
         Integer performanceScore,
         Instant completedAt,
         RescheduleReason rescheduleReason,
+        /** Set alongside rescheduleReason=THERAPIST_LEAVE — the approved leave's date range
+         *  that caused this session to need rescheduling. Null for every other reason. */
+        LocalDate rescheduleLeaveStartDate,
+        LocalDate rescheduleLeaveEndDate,
 
         /** True once a parent has asked for this session to be moved. Never resets. */
         boolean parentRescheduleRequested,
@@ -75,6 +79,8 @@ public record TherapySessionResponse(
                 session.getPerformanceScore(),
                 session.getCompletedAt(),
                 session.getRescheduleReason(),
+                session.getRescheduleLeaveStartDate(),
+                session.getRescheduleLeaveEndDate(),
                 session.isParentRescheduleRequested(),
                 parentReschedulesRemaining,
                 session.isAdHoc(),

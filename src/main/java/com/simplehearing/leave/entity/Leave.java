@@ -24,8 +24,13 @@ public class Leave {
     @Column(name = "therapist_id", nullable = false)
     private UUID therapistId;
 
+    /** Start date of the leave range. */
     @Column(name = "leave_date", nullable = false)
     private LocalDate leaveDate;
+
+    /** End date of the leave range (inclusive) — equal to leaveDate for a single-day leave. */
+    @Column(name = "end_date", nullable = false)
+    private LocalDate endDate;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "leave_type", nullable = false)
@@ -61,6 +66,8 @@ public class Leave {
     public void setTherapistId(UUID therapistId) { this.therapistId = therapistId; }
     public LocalDate getLeaveDate() { return leaveDate; }
     public void setLeaveDate(LocalDate leaveDate) { this.leaveDate = leaveDate; }
+    public LocalDate getEndDate() { return endDate; }
+    public void setEndDate(LocalDate endDate) { this.endDate = endDate; }
     public LeaveType getLeaveType() { return leaveType; }
     public void setLeaveType(LeaveType leaveType) { this.leaveType = leaveType; }
     public String getReason() { return reason; }

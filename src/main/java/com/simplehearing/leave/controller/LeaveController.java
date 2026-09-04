@@ -9,6 +9,7 @@ import com.simplehearing.leave.dto.LeaveResponse;
 import com.simplehearing.leave.dto.ReviewLeaveRequest;
 import com.simplehearing.leave.entity.Leave;
 import com.simplehearing.leave.enums.LeaveStatus;
+import com.simplehearing.leave.enums.LeaveType;
 import com.simplehearing.leave.repository.LeaveRepository;
 import com.simplehearing.notification.EmailService;
 import com.simplehearing.organisation.repository.OrganisationRepository;
@@ -28,6 +29,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -57,18 +59,24 @@ public class LeaveController {
 
     // ── Apply for leave ──────────────────────────────────────────────────────
 
-    @Operation(summary = "Apply for a leave day")
+    @Operation(summary = "Apply for leave", description = "endDate defaults to leaveDate for a single-day leave; pass a later endDate to cover a range.")
     @PostMapping
     @PreAuthorize("hasAnyRole('THERAPIST', 'CLINIC_HEAD', 'BUSINESS_OWNER', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<LeaveResponse>> apply(
             @Valid @RequestBody CreateLeaveRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
 
+        LocalDate endDate = request.endDate() != null ? request.endDate() : request.leaveDate();
+        if (endDate.isBefore(request.leaveDate())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "End date can't be before the start date");
+        }
+
         Leave leave = new Leave();
         leave.setOrgId(principal.getOrgId());
         leave.setTherapistId(principal.getId());
         leave.setLeaveDate(request.leaveDate());
-        leave.setLeaveType(request.leaveType());
+        leave.setEndDate(endDate);
+        leave.setLeaveType(LeaveType.FULL_DAY);
         leave.setReason(request.reason());
         leave.setStatus(LeaveStatus.PENDING);
 
@@ -195,15 +203,17 @@ public class LeaveController {
 
         Leave saved = leaveRepository.save(leave);
 
-        // Flag SCHEDULED sessions on the leave date as needing reschedule
+        // Flag SCHEDULED sessions across the leave's whole date range as needing reschedule
         if (newStatus == LeaveStatus.APPROVED) {
             List<com.simplehearing.session.entity.TherapySession> affected = sessionRepository
-                    .findByOrgIdAndTherapistIdAndSessionDateAndStatus(
-                            saved.getOrgId(), saved.getTherapistId(), saved.getLeaveDate(),
+                    .findByOrgIdAndTherapistIdAndSessionDateBetweenAndStatus(
+                            saved.getOrgId(), saved.getTherapistId(), saved.getLeaveDate(), saved.getEndDate(),
                             TherapySessionStatus.SCHEDULED);
             affected.forEach(s -> {
                 s.setStatus(TherapySessionStatus.PENDING_RESCHEDULE);
                 s.setRescheduleReason(RescheduleReason.THERAPIST_LEAVE);
+                s.setRescheduleLeaveStartDate(saved.getLeaveDate());
+                s.setRescheduleLeaveEndDate(saved.getEndDate());
             });
             sessionRepository.saveAll(affected);
         }
@@ -223,10 +233,13 @@ public class LeaveController {
                     : "Administrator";
             String orgName = organisationRepository.findById(principal.getOrgId())
                     .map(o -> o.getName()).orElse("Simple Hearing");
+            String dateLabel = saved.getEndDate().equals(saved.getLeaveDate())
+                    ? saved.getLeaveDate().toString()
+                    : saved.getLeaveDate() + " to " + saved.getEndDate();
             emailService.sendLeaveStatusEmail(
                     therapist.getEmail(),
                     therapist.getFirstName() + " " + therapist.getLastName(),
-                    saved.getLeaveDate().toString(),
+                    dateLabel,
                     saved.getLeaveType().name(),
                     newStatus.name(),
                     reviewerName,

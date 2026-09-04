@@ -66,6 +66,15 @@ public class TherapySession {
     @Column(name = "reschedule_reason")
     private RescheduleReason rescheduleReason;
 
+    /** Set alongside rescheduleReason=THERAPIST_LEAVE — the approved leave's date range, so the
+     *  UI can show e.g. "Therapist leave · Sep 5 - Sep 12" instead of just the bare reason. Null
+     *  for every other reschedule reason. */
+    @Column(name = "reschedule_leave_start_date")
+    private LocalDate rescheduleLeaveStartDate;
+
+    @Column(name = "reschedule_leave_end_date")
+    private LocalDate rescheduleLeaveEndDate;
+
     @Column(name = "reschedule_requested_by")
     private UUID rescheduleRequestedBy;
 
@@ -145,6 +154,11 @@ public class TherapySession {
     public void setPerformanceScore(Integer performanceScore) { this.performanceScore = performanceScore; }
     public RescheduleReason getRescheduleReason() { return rescheduleReason; }
     public void setRescheduleReason(RescheduleReason rescheduleReason) { this.rescheduleReason = rescheduleReason; }
+
+    public LocalDate getRescheduleLeaveStartDate() { return rescheduleLeaveStartDate; }
+    public void setRescheduleLeaveStartDate(LocalDate d) { this.rescheduleLeaveStartDate = d; }
+    public LocalDate getRescheduleLeaveEndDate() { return rescheduleLeaveEndDate; }
+    public void setRescheduleLeaveEndDate(LocalDate d) { this.rescheduleLeaveEndDate = d; }
     public boolean isRequiresPayment() { return requiresPayment; }
     public void setRequiresPayment(boolean v) { this.requiresPayment = v; }
     public boolean isCancelledByProgramCompletion() { return cancelledByProgramCompletion; }

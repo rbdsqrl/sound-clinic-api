@@ -16,6 +16,10 @@ public interface TherapySessionRepository extends JpaRepository<TherapySession, 
     List<TherapySession> findByOrgIdAndSessionDateBetweenOrderBySessionDateAscStartTimeAsc(
             UUID orgId, LocalDate from, LocalDate to);
 
+    /** Sessions still flagged PENDING_RESCHEDULE whose date has already gone by unaddressed —
+     *  the daily auto-cancel sweep (see session.job.MissedRescheduleCancelJob). */
+    List<TherapySession> findByStatusAndSessionDateBefore(TherapySessionStatus status, LocalDate date);
+
     /** Therapist's own sessions in a date range */
     List<TherapySession> findByOrgIdAndTherapistIdAndSessionDateBetweenOrderBySessionDateAscStartTimeAsc(
             UUID orgId, UUID therapistId, LocalDate from, LocalDate to);
@@ -71,6 +75,15 @@ public interface TherapySessionRepository extends JpaRepository<TherapySession, 
     List<TherapySession> findByOrgIdAndTherapistIdAndSessionDateAndStatus(
             @Param("orgId") UUID orgId, @Param("therapistId") UUID therapistId,
             @Param("sessionDate") LocalDate sessionDate, @Param("status") TherapySessionStatus status);
+
+    /** Sessions for a specific therapist across a date range (inclusive) in a given status —
+     *  used to flag sessions affected by a leave request that spans multiple days. */
+    @Query("SELECT s FROM TherapySession s WHERE s.orgId = :orgId AND s.therapistId = :therapistId " +
+           "AND s.sessionDate BETWEEN :startDate AND :endDate AND s.status = :status")
+    List<TherapySession> findByOrgIdAndTherapistIdAndSessionDateBetweenAndStatus(
+            @Param("orgId") UUID orgId, @Param("therapistId") UUID therapistId,
+            @Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate,
+            @Param("status") TherapySessionStatus status);
 
     List<TherapySession> findByPatientId(UUID patientId);
 
