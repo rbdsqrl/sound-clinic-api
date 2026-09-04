@@ -26,6 +26,7 @@ import com.simplehearing.review.entity.ReviewMeeting;
 import com.simplehearing.review.enums.ReviewMeetingStatus;
 import com.simplehearing.review.repository.ReviewMeetingRepository;
 import com.simplehearing.session.entity.TherapySession;
+import com.simplehearing.session.enums.RescheduleReason;
 import com.simplehearing.session.enums.TherapySessionStatus;
 import com.simplehearing.session.repository.TherapySessionRepository;
 import com.simplehearing.user.entity.User;
@@ -164,9 +165,22 @@ public class TherapistReassignmentService {
                     boolean inWindow = !session.getSessionDate().isBefore(startDate)
                             && (request.type() == ReassignmentType.PERMANENT
                                 || !session.getSessionDate().isAfter(request.endDate()));
-                    if (session.getStatus() == TherapySessionStatus.SCHEDULED && inWindow) {
+                    // A session already flagged PENDING_RESCHEDULE because of the *old*
+                    // therapist's leave is exactly what this reassignment is meant to resolve —
+                    // the substitute keeps the original slot, so it un-flags back to SCHEDULED.
+                    // Any other reschedule reason (a public holiday, a parent's own request)
+                    // isn't fixed by a different therapist, so those stay flagged as they were.
+                    boolean isLeaveFlagged = session.getStatus() == TherapySessionStatus.PENDING_RESCHEDULE
+                            && session.getRescheduleReason() == RescheduleReason.THERAPIST_LEAVE;
+                    if ((session.getStatus() == TherapySessionStatus.SCHEDULED || isLeaveFlagged) && inWindow) {
                         session.setTherapistId(request.toTherapistId());
                         session.setReassignmentId(batch.getId());
+                        if (isLeaveFlagged) {
+                            session.setStatus(TherapySessionStatus.SCHEDULED);
+                            session.setRescheduleReason(null);
+                            session.setRescheduleLeaveStartDate(null);
+                            session.setRescheduleLeaveEndDate(null);
+                        }
                         therapySessionRepository.save(session);
                         movedSessions++;
                     }
