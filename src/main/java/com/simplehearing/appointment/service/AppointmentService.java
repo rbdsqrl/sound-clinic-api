@@ -240,7 +240,10 @@ public class AppointmentService {
     @Transactional(readOnly = true)
     public List<AppointmentResponse> listForCaller(UserPrincipal principal) {
         List<Appointment> appts;
-        Role role = principal.getUser().getRole();
+        // Active role, not the account's full set — a Therapist who is also a Parent sees their
+        // own caseload while viewing as Therapist, and only what they've booked for their child
+        // while viewing as Parent, matching whichever "hat" they've switched to in the UI.
+        Role role = principal.getActiveRole();
 
         if (role == Role.THERAPIST) {
             appts = appointmentRepository.findByTherapistIdAndOrgIdOrderByAppointmentDateAscStartTimeAsc(
@@ -261,16 +264,23 @@ public class AppointmentService {
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Appointment not found"));
 
         Role role = principal.getUser().getRole();
+        boolean isOwnBookedAppt = appt.getBookedBy().equals(principal.getId());
 
         // Therapists can confirm or cancel their own appointments
         if (role == Role.THERAPIST) {
-            if (!appt.getTherapistId().equals(principal.getId())) {
+            boolean isOwnTherapistAppt = appt.getTherapistId().equals(principal.getId());
+            // Staff can be parents too — cancelling an appointment they booked as a parent is
+            // still allowed even though it isn't their own therapist appointment (role above is
+            // the primary role only, so this branch would otherwise shadow that access).
+            boolean cancellingAsParent = principal.getUser().hasRole(Role.PARENT)
+                    && isOwnBookedAppt && req.status() == AppointmentStatus.CANCELLED;
+            if (!isOwnTherapistAppt && !cancellingAsParent) {
                 throw new ApiException(HttpStatus.FORBIDDEN, "Not your appointment");
             }
         }
         // Parents can only cancel appointments they booked
         if (role == Role.PARENT) {
-            if (!appt.getBookedBy().equals(principal.getId())) {
+            if (!isOwnBookedAppt) {
                 throw new ApiException(HttpStatus.FORBIDDEN, "Not your appointment");
             }
             if (req.status() != AppointmentStatus.CANCELLED) {

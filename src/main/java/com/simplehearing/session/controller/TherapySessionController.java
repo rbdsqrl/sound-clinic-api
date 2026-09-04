@@ -144,8 +144,11 @@ public class TherapySessionController {
         LocalDate start = from != null ? from : LocalDate.now().withDayOfMonth(1);
         LocalDate end   = to   != null ? to   : start.plusMonths(1).minusDays(1);
 
-        User caller = principal.getUser();
-        Role role   = caller.getRole();
+        // Active role, not the account's full set — a Therapist who is also a Parent sees their
+        // own caseload while viewing as Therapist, and only their child's sessions while viewing
+        // as Parent, matching whichever "hat" they've switched to in the UI. Falls back to the
+        // primary role when the caller hasn't sent one (see UserPrincipal).
+        Role role = principal.getActiveRole();
 
         List<TherapySession> sessions;
         if (role == Role.THERAPIST) {
@@ -191,11 +194,20 @@ public class TherapySessionController {
             throw new ApiException(HttpStatus.FORBIDDEN, "Access denied");
         }
 
-        // Therapists can only see sessions for enrollments assigned to them
+        // Therapists can only see sessions for enrollments assigned to them — unless they're
+        // also the patient's linked parent (staff can be parents too), in which case their
+        // standing as the parent wins and they see their own child's sessions regardless of
+        // who's treating. Checked via getUser().getRole() (primary role) rather than hasRole()
+        // deliberately: a person's *other* roles (e.g. Clinic Head) already have broader access
+        // below this block never runs for them at all — this block exists only to narrow a
+        // primarily-THERAPIST account down to their own caseload.
         Role role = principal.getUser().getRole();
         if (role == Role.THERAPIST) {
             enrollmentRepository.findById(enrollmentId).ifPresent(enrollment -> {
-                if (!enrollment.getTherapistId().equals(principal.getId())) {
+                boolean isOwnCase = enrollment.getTherapistId().equals(principal.getId());
+                boolean isLinkedParent = patientParentRepository.findById_PatientId(enrollment.getPatientId())
+                        .stream().anyMatch(pp -> pp.getId().getParentId().equals(principal.getId()));
+                if (!isOwnCase && !isLinkedParent) {
                     throw new ApiException(HttpStatus.FORBIDDEN, "Access denied");
                 }
             });

@@ -2,6 +2,7 @@ package com.simplehearing.auth.security;
 
 import com.simplehearing.common.tenant.TenantContext;
 import com.simplehearing.user.entity.User;
+import com.simplehearing.user.enums.Role;
 import com.simplehearing.user.repository.UserRepository;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
@@ -66,7 +67,16 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                     .orElse(null);
 
             if (user != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-                UserPrincipal principal = new UserPrincipal(user);
+                Role activeRole = null;
+                String activeRoleHeader = request.getHeader("X-Active-Role");
+                if (activeRoleHeader != null && !activeRoleHeader.isBlank()) {
+                    try {
+                        activeRole = Role.valueOf(activeRoleHeader.trim());
+                    } catch (IllegalArgumentException ignored) {
+                        // Unrecognised value — UserPrincipal falls back to the primary role.
+                    }
+                }
+                UserPrincipal principal = new UserPrincipal(user, activeRole);
 
                 // Build authorities from ALL roles in the token (primary + additional)
                 String rolesStr = claims.get("roles", String.class);
