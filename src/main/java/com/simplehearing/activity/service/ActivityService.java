@@ -11,6 +11,8 @@ import com.simplehearing.organisation.repository.OrganisationRepository;
 import com.simplehearing.patient.entity.Patient;
 import com.simplehearing.patient.repository.PatientRepository;
 import com.simplehearing.program.repository.ProgramRepository;
+import com.simplehearing.resource.dto.ResourceResponse;
+import com.simplehearing.resource.service.ResourceService;
 import com.simplehearing.storage.StorageService;
 import com.simplehearing.user.repository.UserRepository;
 import org.springframework.http.HttpStatus;
@@ -36,6 +38,8 @@ public class ActivityService {
     private final ActivityChecklistOptionRepository optionRepository;
     private final ActivityResourceRepository resourceRepository;
     private final ActivityLinkRepository linkRepository;
+    private final ActivityLinkedResourceRepository linkedResourceRepository;
+    private final ResourceService resourceService;
     private final ActivityAssignmentRepository assignmentRepository;
     private final ActivityAttemptLogRepository attemptLogRepository;
     private final ActivityAttemptAnswerRepository answerRepository;
@@ -56,6 +60,8 @@ public class ActivityService {
                             ActivityChecklistOptionRepository optionRepository,
                             ActivityResourceRepository resourceRepository,
                             ActivityLinkRepository linkRepository,
+                            ActivityLinkedResourceRepository linkedResourceRepository,
+                            ResourceService resourceService,
                             ActivityAssignmentRepository assignmentRepository,
                             ActivityAttemptLogRepository attemptLogRepository,
                             ActivityAttemptAnswerRepository answerRepository,
@@ -75,6 +81,8 @@ public class ActivityService {
         this.optionRepository = optionRepository;
         this.resourceRepository = resourceRepository;
         this.linkRepository = linkRepository;
+        this.linkedResourceRepository = linkedResourceRepository;
+        this.resourceService = resourceService;
         this.assignmentRepository = assignmentRepository;
         this.attemptLogRepository = attemptLogRepository;
         this.answerRepository = answerRepository;
@@ -128,6 +136,7 @@ public class ActivityService {
         replaceInstructions(saved.getId(), req.instructions());
         replaceChecklist(saved.getId(), req.checklist());
         replaceLinks(saved.getId(), req.links());
+        replaceLinkedResources(orgId, saved.getId(), req.resourceIds());
 
         return toResponse(saved, orgId);
     }
@@ -157,6 +166,7 @@ public class ActivityService {
         if (req.instructions() != null) replaceInstructions(saved.getId(), req.instructions());
         if (req.checklist() != null) replaceChecklist(saved.getId(), req.checklist());
         if (req.links() != null) replaceLinks(saved.getId(), req.links());
+        if (req.resourceIds() != null) replaceLinkedResources(orgId, saved.getId(), req.resourceIds());
 
         return toResponse(saved, orgId);
     }
@@ -270,6 +280,24 @@ public class ActivityService {
         }
     }
 
+    /** Cross-org or since-deleted resource ids are silently dropped rather than rejected —
+     *  {@link ResourceService#getByIds} is the single source of truth for that filtering. */
+    void replaceLinkedResources(UUID orgId, UUID activityId, List<UUID> resourceIds) {
+        linkedResourceRepository.deleteByActivityId(activityId);
+        if (resourceIds == null || resourceIds.isEmpty()) return;
+        Set<UUID> validIds = resourceService.getByIds(orgId, resourceIds).stream()
+                .map(ResourceResponse::id).collect(java.util.stream.Collectors.toSet());
+        int i = 0;
+        for (UUID resourceId : resourceIds) {
+            if (!validIds.contains(resourceId)) continue;
+            ActivityLinkedResource link = new ActivityLinkedResource();
+            link.setActivityId(activityId);
+            link.setResourceId(resourceId);
+            link.setOrderIndex(i++);
+            linkedResourceRepository.save(link);
+        }
+    }
+
     // ── Response assembly ──────────────────────────────────────────────────
 
     ActivityResponse toResponse(Activity a, UUID viewerOrgId) {
@@ -307,10 +335,20 @@ public class ActivityService {
         List<String> links = linkRepository.findByActivityIdOrderByOrderIndexAsc(a.getId())
                 .stream().map(ActivityLink::getUrl).toList();
 
+        List<UUID> linkedResourceIds = linkedResourceRepository.findByActivityIdOrderByOrderIndexAsc(a.getId())
+                .stream().map(ActivityLinkedResource::getResourceId).toList();
+        Map<UUID, ResourceResponse> resolvedById = resourceService.getByIds(a.getOrgId(), linkedResourceIds)
+                .stream().collect(java.util.stream.Collectors.toMap(ResourceResponse::id, r -> r));
+        // Re-sort into order_index order — getByIds doesn't guarantee it — and silently drop any
+        // id whose resource has since been deleted (the join row itself is cleaned up by the
+        // table's ON DELETE CASCADE, but a stale in-flight fetch could still race it).
+        List<ResourceResponse> linkedResources = linkedResourceIds.stream()
+                .map(resolvedById::get).filter(Objects::nonNull).toList();
+
         boolean mine = a.getOrgId().equals(viewerOrgId);
 
         return ActivityResponse.from(a, orgName, mine, programName, skills, languages,
-                instructions, checklist, props, resources, links);
+                instructions, checklist, props, resources, links, linkedResources);
     }
 
     // ── Assignments ─────────────────────────────────────────────────────────

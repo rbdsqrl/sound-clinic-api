@@ -296,3 +296,12 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/099-more-list-indexes.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/100-activity-linked-resources.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/101-review-meeting-clinic-head-remarks.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/102-leave-date-range.sql
+      relativeToChangelogFile: false

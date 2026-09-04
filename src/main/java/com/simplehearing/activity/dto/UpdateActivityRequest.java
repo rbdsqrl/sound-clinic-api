@@ -6,7 +6,8 @@ import java.util.List;
 import java.util.UUID;
 
 /** Every field is optional — only non-null fields are applied. Collection fields (instructions,
- *  checklist, skillIds, languageIds, propIds, links) fully replace the existing set when present. */
+ *  checklist, skillIds, languageIds, propIds, links, resourceIds) fully replace the existing
+ *  set when present. */
 public record UpdateActivityRequest(
         String title,
         String aboutActivity,
@@ -24,6 +25,7 @@ public record UpdateActivityRequest(
         List<UUID> propIds,
         String tipsAndSuggestions,
         List<String> links,
+        List<UUID> resourceIds,
         Boolean isShared,
         Boolean isActive
 ) {}

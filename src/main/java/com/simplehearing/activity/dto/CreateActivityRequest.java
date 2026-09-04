@@ -25,5 +25,8 @@ public record CreateActivityRequest(
         List<UUID> propIds,
         String tipsAndSuggestions,
         List<String> links,
+        /** Ids of items picked from the org-wide Resources library. Any id that doesn't exist,
+         *  or belongs to another org, is silently skipped rather than rejected. */
+        List<UUID> resourceIds,
         Boolean isShared
 ) {}

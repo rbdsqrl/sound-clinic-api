@@ -72,6 +72,20 @@ public class ResourceService {
         );
     }
 
+    /** Resolves a set of resource ids into fully-presigned responses, scoped to the org — an id
+     *  that doesn't exist, or belongs to another org, is silently dropped rather than erroring.
+     *  Used by other modules (e.g. Activities) that reference resources by id and need to
+     *  validate/display them without duplicating the presign/ownership logic here. Order is not
+     *  guaranteed to match {@code ids} — callers that care about order must re-sort by id. */
+    @Transactional(readOnly = true)
+    public List<ResourceResponse> getByIds(UUID orgId, List<UUID> ids) {
+        if (ids == null || ids.isEmpty()) return List.of();
+        return resourceRepository.findAllById(ids).stream()
+                .filter(r -> r.getOrgId().equals(orgId))
+                .map(this::toResponse)
+                .toList();
+    }
+
     public ResourceFolderResponse createFolder(UUID orgId, UUID createdBy, CreateResourceFolderRequest request) {
         if (request.parentFolderId() != null) {
             requireFolder(orgId, request.parentFolderId());
