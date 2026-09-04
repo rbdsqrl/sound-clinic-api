@@ -13,6 +13,8 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 
 import java.util.stream.Collectors;
 
@@ -66,6 +68,30 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AsyncRequestNotUsableException.class)
     public void handleClientDisconnect(AsyncRequestNotUsableException ex) {
         log.debug("Client disconnected before the response could be written", ex);
+    }
+
+    /** Spring's own limit (app.storage multipart max-file-size/max-request-size) — rejected
+     *  before the file ever reaches storage. */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMaxUploadSize(MaxUploadSizeExceededException ex) {
+        log.warn("Upload rejected — exceeds the server's upload limit: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                .body(ApiResponse.error("File is too large — please upload a smaller file"));
+    }
+
+    /** The storage provider's own limit (e.g. Supabase's per-object max) — the file passed our
+     *  own size check but was rejected once we tried to actually store it. Previously fell
+     *  through to the generic handler below as an opaque 500 "An unexpected error occurred". */
+    @ExceptionHandler(S3Exception.class)
+    public ResponseEntity<ApiResponse<Void>> handleS3Exception(S3Exception ex) {
+        if (ex.statusCode() == HttpStatus.PAYLOAD_TOO_LARGE.value()) {
+            log.warn("Upload rejected by storage — file too large: {}", ex.getMessage());
+            return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                    .body(ApiResponse.error("File is too large — please upload a smaller file"));
+        }
+        log.error("Storage service error", ex);
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                .body(ApiResponse.error("Failed to reach the storage service — please try again"));
     }
 
     @ExceptionHandler(Exception.class)
