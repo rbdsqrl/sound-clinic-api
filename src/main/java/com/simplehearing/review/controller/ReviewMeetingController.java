@@ -84,10 +84,11 @@ public class ReviewMeetingController {
             meetings = meetingRepository.findByOrgIdOrderByMeetingDateAsc(principal.getOrgId());
         } else if (isParent(principal)) {
             meetings = meetingRepository.findForParent(principal.getOrgId(), principal.getId());
-        } else if (isClinician(principal)) {
-            meetings = meetingRepository.findByOrgIdAndTherapistIdOrderByMeetingDateAsc(
-                    principal.getOrgId(), principal.getId());
         } else {
+            // Includes THERAPIST: review meetings are between the Clinic Head and the parent —
+            // the therapist is deliberately not a participant, so they get nothing here, even
+            // for their own caseload. therapistId on the entity is attribution-only (see
+            // AnalyticsService), never a visibility grant.
             meetings = List.of();
         }
 
@@ -128,7 +129,7 @@ public class ReviewMeetingController {
             throw new ApiException(HttpStatus.FORBIDDEN, "Access denied");
         }
 
-        Set<UUID> clinicHeadIds = requireClinicHeads(request.participantIds(), principal);
+        Set<UUID> clinicHeadIds = meetingService.requireClinicHeads(request.participantIds(), principal);
 
         ReviewMeeting saved = meetingService.createSingle(
                 enrollment, request.meetingDate(), request.startTime(),
@@ -161,7 +162,7 @@ public class ReviewMeetingController {
                     "This plan already has review meetings. Cancel them first, or add a single meeting instead.");
         }
 
-        Set<UUID> clinicHeadIds = requireClinicHeads(request.participantIds(), principal);
+        Set<UUID> clinicHeadIds = meetingService.requireClinicHeads(request.participantIds(), principal);
 
         List<ReviewMeeting> created = meetingService.generateForEnrollment(
                 enrollment, request, clinicHeadIds, principal.getId());
@@ -202,28 +203,6 @@ public class ReviewMeetingController {
 
         ReviewMeeting saved = meetingService.updateParticipants(meeting, ids);
         return ResponseEntity.ok(ApiResponse.success(enrich(List.of(saved), principal).get(0)));
-    }
-
-    /** Validates the Clinic-Head picker used at scheduling time — required, and every id must
-     *  resolve to an active, org-matching user holding the CLINIC_HEAD role. */
-    private Set<UUID> requireClinicHeads(List<UUID> participantIds, UserPrincipal principal) {
-        if (participantIds == null || participantIds.isEmpty()) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Pick at least one Clinic Head to invite");
-        }
-        Set<UUID> ids = new LinkedHashSet<>(participantIds);
-        List<User> users = userRepository.findAllById(ids);
-        if (users.size() != ids.size()) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "One or more selected Clinic Heads could not be found");
-        }
-        for (User u : users) {
-            if (!principal.getOrgId().equals(u.getOrgId())) {
-                throw new ApiException(HttpStatus.FORBIDDEN, "Participants must belong to your organisation");
-            }
-            if (!u.isActive() || !u.hasRole(Role.CLINIC_HEAD)) {
-                throw new ApiException(HttpStatus.BAD_REQUEST, "Every participant must be an active Clinic Head");
-            }
-        }
-        return ids;
     }
 
     @Operation(summary = "Reschedule a review meeting",
@@ -376,7 +355,7 @@ public class ReviewMeetingController {
      */
     private boolean canView(ReviewMeeting meeting, UserPrincipal principal) {
         if (isManager(principal) || isOfficeAdmin(principal)) return true;
-        if (isClinician(principal)) return meeting.getTherapistId().equals(principal.getId());
+        // THERAPIST falls through to false here too — see the comment in list() above.
         if (isParent(principal)) return isLinkedParent(meeting.getPatientId(), principal.getId());
         return false;
     }

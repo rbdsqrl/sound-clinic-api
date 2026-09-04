@@ -42,6 +42,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -290,15 +291,57 @@ public class PatientService {
         patientParentRepository.deleteById_PatientIdAndId_ParentId(patientId, parentId);
     }
 
-    /** Invites someone who doesn't have an account yet; they're auto-linked as this patient's parent on accept. */
+    /** Invites someone who doesn't have an account yet; they're auto-linked as this patient's
+     *  parent on accept. If the email already belongs to an active account in this org (e.g. a
+     *  staff Member without the Parent role), no invite is sent — the response carries that
+     *  user's summary instead, for the caller to confirm before linkExistingUserAsParent. */
     public InviteParentResponse inviteParent(UUID patientId, InviteParentRequest request, UserPrincipal principal) {
         Patient patient = findPatient(patientId, principal.getOrgId());
+
+        Optional<User> existing = userRepository.findByEmail(request.email())
+                .filter(u -> u.isActive() && u.getOrgId().equals(principal.getOrgId()));
+
+        if (existing.isPresent()) {
+            User u = existing.get();
+            return InviteParentResponse.existingUser(
+                    new InviteParentResponse.ExistingUserSummary(u.getId(), u.getFirstName(), u.getLastName(), u.getRole()));
+        }
 
         String link = invitationService.createLinkedInvitation(
                 request.email(), Role.PARENT, patient.getClinicId(), patient.getId(),
                 principal.getOrgId(), principal.getId());
 
-        return new InviteParentResponse(link);
+        return InviteParentResponse.invited(link);
+    }
+
+    /** Grants an existing org member Parent access to a patient — adds PARENT to their
+     *  additionalRoles if they don't already have it (their primary role, e.g. THERAPIST, is
+     *  untouched), then links them the same way linkParent does. Reached only after
+     *  inviteParent's existingUser response has been confirmed by the caller. */
+    public PatientResponse linkExistingUserAsParent(UUID patientId, LinkParentRequest request, UserPrincipal principal) {
+        Patient patient = findPatient(patientId, principal.getOrgId());
+
+        User user = userRepository.findById(request.parentId())
+                .filter(u -> u.getOrgId().equals(principal.getOrgId()) && u.isActive())
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "User not found in your organisation"));
+
+        boolean alreadyLinked = patientParentRepository.findById_PatientId(patientId).stream()
+                .anyMatch(pp -> pp.getId().getParentId().equals(user.getId()));
+        if (alreadyLinked) {
+            throw new ApiException(HttpStatus.CONFLICT, "This person is already linked as a parent of this case");
+        }
+
+        if (!user.hasRole(Role.PARENT)) {
+            Set<Role> roles = new HashSet<>(user.getAdditionalRoles());
+            roles.add(Role.PARENT);
+            user.setAdditionalRoles(roles);
+            userRepository.save(user);
+        }
+
+        PatientParent link = new PatientParent(patientId, user.getId());
+        patientParentRepository.save(link);
+
+        return buildResponse(patient);
     }
 
     // ── Therapist assignments ─────────────────────────────────────────────────

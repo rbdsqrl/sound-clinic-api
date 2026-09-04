@@ -29,9 +29,9 @@ public record ReviewScheduleRequest(
         /** Last date meetings may fall on. Falls back to the enrollment's end date. */
         LocalDate endDate,
 
-        /** The Clinic Head(s) to invite in place of the therapist. Required by the direct
-         *  scheduling endpoint (checked in the controller); omitted when this rides along with
-         *  enrollment creation, which generates parent-only meetings for now. */
+        /** The Clinic Head(s) to invite in place of the therapist — required whenever a review
+         *  schedule is requested, whether via the direct scheduling endpoint or riding along
+         *  with enrollment creation (validated both places by ReviewMeetingService.requireClinicHeads). */
         List<UUID> participantIds
 ) {
     public static final int DEFAULT_INTERVAL_WEEKS = 2;

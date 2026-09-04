@@ -169,7 +169,10 @@ public class PatientController {
         return ResponseEntity.noContent().build();
     }
 
-    @Operation(summary = "Invite a parent by email who doesn't have an account yet; auto-linked to this patient on accept")
+    @Operation(summary = "Invite a parent by email who doesn't have an account yet; auto-linked to this patient on accept",
+               description = "If the email already belongs to an active account in this org, no invite is sent — "
+                           + "the response's existingUser carries that account's summary instead, for the caller "
+                           + "to confirm before POSTing it to /parents/link-existing-user.")
     @PostMapping("/{id}/parents/invite")
     @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<InviteParentResponse>> inviteParent(
@@ -178,6 +181,20 @@ public class PatientController {
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(patientService.inviteParent(id, request, principal)));
+    }
+
+    @Operation(summary = "Link an existing org member as a patient's parent",
+               description = "Grants Parent access to a Member who already has an account under a different role "
+                           + "(e.g. a Therapist) — adds PARENT to their additionalRoles if they don't already have "
+                           + "it, without touching their primary role. Confirms the existingUser from POST "
+                           + "/parents/invite.")
+    @PostMapping("/{id}/parents/link-existing-user")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
+    public ResponseEntity<ApiResponse<PatientResponse>> linkExistingUserAsParent(
+            @PathVariable UUID id,
+            @Valid @RequestBody LinkParentRequest request,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(patientService.linkExistingUserAsParent(id, request, principal)));
     }
 
     // ── Therapist assignments ─────────────────────────────────────────────────

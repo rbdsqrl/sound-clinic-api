@@ -197,6 +197,12 @@ public class EnrollmentController {
             throw new ApiException(HttpStatus.FORBIDDEN, "Therapist does not belong to this organisation");
         }
 
+        // Review meetings are opt-in, but when requested they need at least one valid Clinic
+        // Head up front — fail before creating the enrollment/sessions rather than partway through.
+        Set<UUID> clinicHeadIds = request.reviewSchedule() != null
+                ? reviewMeetingService.requireClinicHeads(request.reviewSchedule().participantIds(), principal)
+                : Set.of();
+
         // Create enrollment — day_of_week derived from start date (sessions are daily)
         Enrollment enrollment = new Enrollment();
         enrollment.setOrgId(principal.getOrgId());
@@ -253,7 +259,7 @@ public class EnrollmentController {
 
         // Review meetings are opt-in — only generated when the setup flow asked for them
         if (request.reviewSchedule() != null) {
-            reviewMeetingService.generateForEnrollment(saved, request.reviewSchedule(), principal.getId());
+            reviewMeetingService.generateForEnrollment(saved, request.reviewSchedule(), clinicHeadIds, principal.getId());
         }
 
         // Build response with enriched names

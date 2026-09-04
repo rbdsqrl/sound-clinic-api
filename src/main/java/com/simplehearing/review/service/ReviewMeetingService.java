@@ -1,7 +1,9 @@
 package com.simplehearing.review.service;
 
 import java.util.Comparator;
+import com.simplehearing.auth.security.UserPrincipal;
 import com.simplehearing.clinic.repository.ClinicRepository;
+import com.simplehearing.common.exception.ApiException;
 import com.simplehearing.enrollment.entity.Enrollment;
 import com.simplehearing.holiday.repository.PublicHolidayRepository;
 import com.simplehearing.notification.CalendarInviteService;
@@ -17,9 +19,11 @@ import com.simplehearing.review.entity.ReviewMeeting;
 import com.simplehearing.review.enums.ReviewMeetingStatus;
 import com.simplehearing.review.repository.ReviewMeetingRepository;
 import com.simplehearing.user.entity.User;
+import com.simplehearing.user.enums.Role;
 import com.simplehearing.user.repository.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -86,18 +90,9 @@ public class ReviewMeetingService {
      * Creates the review meetings for a freshly-set-up therapy plan, spaced by the
      * requested interval and skipping public holidays the way therapy sessions do.
      *
-     * @return the meetings created, in date order
-     */
-    @Transactional
-    public List<ReviewMeeting> generateForEnrollment(Enrollment enrollment,
-                                                     ReviewScheduleRequest schedule,
-                                                     UUID createdBy) {
-        return generateForEnrollment(enrollment, schedule, Set.of(), createdBy);
-    }
-
-    /**
      * @param clinicHeadIds the Clinic Head(s) chosen at scheduling time to sit in for the
      *                      therapist, who is deliberately not a participant under this model.
+     * @return the meetings created, in date order
      */
     @Transactional
     public List<ReviewMeeting> generateForEnrollment(Enrollment enrollment,
@@ -377,6 +372,28 @@ public class ReviewMeetingService {
                 .filter(u -> u.getEmail() != null && !u.getEmail().isBlank())
                 .map(u -> new Recipient(u.getFirstName() + " " + u.getLastName(), u.getEmail(), false))
                 .toList();
+    }
+
+    /** Validates the Clinic-Head picker used at scheduling time — required, and every id must
+     *  resolve to an active, org-matching user holding the CLINIC_HEAD role. */
+    public Set<UUID> requireClinicHeads(List<UUID> participantIds, UserPrincipal principal) {
+        if (participantIds == null || participantIds.isEmpty()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Pick at least one Clinic Head to invite");
+        }
+        Set<UUID> ids = new LinkedHashSet<>(participantIds);
+        List<User> users = userRepository.findAllById(ids);
+        if (users.size() != ids.size()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "One or more selected Clinic Heads could not be found");
+        }
+        for (User u : users) {
+            if (!principal.getOrgId().equals(u.getOrgId())) {
+                throw new ApiException(HttpStatus.FORBIDDEN, "Participants must belong to your organisation");
+            }
+            if (!u.isActive() || !u.hasRole(Role.CLINIC_HEAD)) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "Every participant must be an active Clinic Head");
+            }
+        }
+        return ids;
     }
 
     /** Union of a patient's linked parents and the given Clinic Head(s). */
