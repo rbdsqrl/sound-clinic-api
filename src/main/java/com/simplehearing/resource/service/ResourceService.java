@@ -92,10 +92,24 @@ public class ResourceService {
         return toResponse(folderRepository.save(folder));
     }
 
-    /** Deleting a folder cascades to its subfolders and resources (DB-level ON DELETE CASCADE). */
+    /** Deleting a folder cascades to its subfolders and resources (DB-level ON DELETE CASCADE) —
+     *  but the cascade only removes DB rows, so any hosted files in the subtree must be deleted
+     *  from storage first or they'd be orphaned in the bucket. */
     public void deleteFolder(UUID orgId, UUID id) {
         ResourceFolder folder = requireFolder(orgId, id);
+        deleteHostedFilesInFolderTree(orgId, id);
         folderRepository.delete(folder);
+    }
+
+    private void deleteHostedFilesInFolderTree(UUID orgId, UUID folderId) {
+        for (Resource r : resourceRepository.findByOrgIdAndFolderIdOrderByNameAsc(orgId, folderId)) {
+            if (storageService.isHostedFile(r.getUrl())) {
+                storageService.delete(r.getUrl());
+            }
+        }
+        for (ResourceFolder sub : folderRepository.findByOrgIdAndParentFolderId(orgId, folderId)) {
+            deleteHostedFilesInFolderTree(orgId, sub.getId());
+        }
     }
 
     public ResourceResponse createResource(UUID orgId, UUID createdBy, CreateResourceRequest request) {
@@ -122,8 +136,14 @@ public class ResourceService {
         return toResponse(resourceRepository.save(resource));
     }
 
+    /** Also deletes the underlying file from storage when the resource is one we hosted —
+     *  a pasted external link (YouTube, Google Drive, etc.) has nothing to clean up. */
     public void deleteResource(UUID orgId, UUID id) {
-        resourceRepository.delete(requireResource(orgId, id));
+        Resource resource = requireResource(orgId, id);
+        if (storageService.isHostedFile(resource.getUrl())) {
+            storageService.delete(resource.getUrl());
+        }
+        resourceRepository.delete(resource);
     }
 
     /** Stores an uploaded file and returns its URL — used to fill a resource's `url` field
