@@ -24,6 +24,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 
@@ -158,7 +159,8 @@ public class ActivityController {
         resource.setFileSizeBytes(file.getSize());
 
         ActivityResource saved = resourceRepository.save(resource);
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(ActivityResourceResponse.from(saved)));
+        String presignedUrl = storageService.presign(saved.getFileUrl(), Duration.ofHours(1));
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(ActivityResourceResponse.from(saved, presignedUrl)));
     }
 
     @Operation(summary = "Delete an activity resource")

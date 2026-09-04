@@ -18,6 +18,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.*;
 
 @Service
@@ -67,7 +68,7 @@ public class ResourceService {
                 folder != null ? toResponse(folder) : null,
                 breadcrumb,
                 subfolders.stream().map(this::toResponse).toList(),
-                resources.stream().map(ResourceResponse::from).toList()
+                resources.stream().map(this::toResponse).toList()
         );
     }
 
@@ -110,7 +111,7 @@ public class ResourceService {
         resource.setUrl(request.url().trim());
         resource.setCreatedBy(createdBy);
 
-        return ResourceResponse.from(resourceRepository.save(resource));
+        return toResponse(resourceRepository.save(resource));
     }
 
     public ResourceResponse updateResource(UUID orgId, UUID id, UpdateResourceRequest request) {
@@ -118,7 +119,7 @@ public class ResourceService {
         resource.setName(request.name().trim());
         resource.setType(request.type());
         resource.setUrl(request.url().trim());
-        return ResourceResponse.from(resourceRepository.save(resource));
+        return toResponse(resourceRepository.save(resource));
     }
 
     public void deleteResource(UUID orgId, UUID id) {
@@ -287,5 +288,12 @@ public class ResourceService {
         long subCount = folderRepository.countByOrgIdAndParentFolderId(f.getOrgId(), f.getId());
         long resCount = resourceRepository.countByOrgIdAndFolderId(f.getOrgId(), f.getId());
         return ResourceFolderResponse.from(f, subCount, resCount);
+    }
+
+    /** Re-signs the stored URL on every read — a pasted external link (YouTube, Google Drive)
+     *  passes through presign() unchanged; a file we stored gets a fresh time-limited link
+     *  instead of the permanent one baked in at upload time. Matches Task/SharedMedia/Feed. */
+    private ResourceResponse toResponse(Resource r) {
+        return ResourceResponse.from(r, storageService.presign(r.getUrl(), Duration.ofHours(1)));
     }
 }

@@ -11,11 +11,13 @@ import com.simplehearing.organisation.repository.OrganisationRepository;
 import com.simplehearing.patient.entity.Patient;
 import com.simplehearing.patient.repository.PatientRepository;
 import com.simplehearing.program.repository.ProgramRepository;
+import com.simplehearing.storage.StorageService;
 import com.simplehearing.user.repository.UserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.*;
 
@@ -42,6 +44,7 @@ public class ActivityService {
     private final PatientRepository patientRepository;
     private final UserRepository userRepository;
     private final OrganisationRepository organisationRepository;
+    private final StorageService storageService;
 
     public ActivityService(ActivityRepository activityRepository, SkillRepository skillRepository,
                             LanguageRepository languageRepository, PropRepository propRepository,
@@ -58,7 +61,8 @@ public class ActivityService {
                             ActivityAttemptAnswerRepository answerRepository,
                             ActivityAttemptAnswerOptionRepository answerOptionRepository,
                             ProgramRepository programRepository, PatientRepository patientRepository,
-                            UserRepository userRepository, OrganisationRepository organisationRepository) {
+                            UserRepository userRepository, OrganisationRepository organisationRepository,
+                            StorageService storageService) {
         this.activityRepository = activityRepository;
         this.skillRepository = skillRepository;
         this.languageRepository = languageRepository;
@@ -79,6 +83,7 @@ public class ActivityService {
         this.patientRepository = patientRepository;
         this.userRepository = userRepository;
         this.organisationRepository = organisationRepository;
+        this.storageService = storageService;
     }
 
     // ── List / Get ──────────────────────────────────────────────────────────
@@ -295,7 +300,9 @@ public class ActivityService {
                 .toList();
 
         List<ActivityResourceResponse> resources = resourceRepository.findByActivityIdOrderByCreatedAtAsc(a.getId())
-                .stream().map(ActivityResourceResponse::from).toList();
+                .stream()
+                .map(r -> ActivityResourceResponse.from(r, storageService.presign(r.getFileUrl(), Duration.ofHours(1))))
+                .toList();
 
         List<String> links = linkRepository.findByActivityIdOrderByOrderIndexAsc(a.getId())
                 .stream().map(ActivityLink::getUrl).toList();
