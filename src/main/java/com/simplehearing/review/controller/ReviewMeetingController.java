@@ -298,34 +298,31 @@ public class ReviewMeetingController {
         return ResponseEntity.ok(ApiResponse.success(enrich(List.of(saved), principal).get(0)));
     }
 
-    @Operation(summary = "Therapist shares feedback on the sessions under review")
-    @PutMapping("/{id}/therapist-feedback")
-    @PreAuthorize("hasAnyRole('THERAPIST', 'CLINIC_HEAD', 'BUSINESS_OWNER')")
-    public ResponseEntity<ApiResponse<ReviewMeetingResponse>> submitTherapistFeedback(
+    @Operation(summary = "Clinic Head (or Business Owner) writes confidential remarks on the period under review",
+               description = "Admin-only note — never visible to the Therapist or Parent, even for a Clinic "
+                           + "Head/Business Owner writing about their own work as the treating therapist.")
+    @PutMapping("/{id}/clinic-head-remarks")
+    @PreAuthorize("hasAnyRole('CLINIC_HEAD', 'BUSINESS_OWNER')")
+    public ResponseEntity<ApiResponse<ReviewMeetingResponse>> updateClinicHeadRemarks(
             @PathVariable UUID id,
-            @Valid @RequestBody TherapistFeedbackRequest request,
+            @Valid @RequestBody ClinicHeadRemarksRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
 
         ReviewMeeting meeting = findInOrg(id, principal);
-
-        if (isClinician(principal) && !meeting.getTherapistId().equals(principal.getId())) {
-            throw new ApiException(HttpStatus.FORBIDDEN, "This is not your meeting");
+        if (isSelfReview(meeting, principal)) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "You can't write remarks on your own review");
         }
         if (meeting.getStatus() == ReviewMeetingStatus.CANCELLED) {
             throw new ApiException(HttpStatus.CONFLICT, "This meeting was cancelled");
         }
 
-        boolean firstTime = !meeting.hasTherapistFeedback();
-
-        meeting.setTherapistSummary(request.summary());
-        meeting.setTherapistProgressNotes(request.progressNotes());
-        meeting.setTherapistFeedbackAt(Instant.now());
+        meeting.setClinicHeadRemarks(request.remarks());
+        meeting.setClinicHeadRemarksAt(Instant.now());
+        meeting.setClinicHeadRemarksBy(principal.getId());
 
         ReviewMeeting saved = meetingRepository.save(meeting);
-        if (firstTime) {
-            meetingService.notifyFeedbackSubmitted(saved, false);
-        }
-
+        // Deliberately no notification — this is an internal admin note, and notifying the
+        // treating therapist would defeat the point of it being confidential from them.
         return ResponseEntity.ok(ApiResponse.success(enrich(List.of(saved), principal).get(0)));
     }
 
@@ -349,15 +346,34 @@ public class ReviewMeetingController {
     }
 
     /**
-     * Admins and Office Admin see everything (Office Admin schedules these meetings but
-     * never sees feedback content — that's decided separately in enrich()); therapists see
-     * their own meetings; parents their own children's.
+     * Admins and Office Admin see everything, EXCEPT a meeting reviewing their own work as
+     * the treating therapist (isSelfReview — see below); therapists see none of their own
+     * meetings either way; parents always see their own linked child's meeting.
+     *
+     * The parent check runs first and short-circuits the self-review exclusion: a staff
+     * member who is also the parent of the patient being reviewed (staff can be parents too,
+     * including of a patient they themselves treat) must still be able to see and edit their
+     * own parent feedback regardless of their other role(s) — self-review only ever blocks
+     * the *staff* side of the view (Clinic Head Remarks, and general admin visibility into a
+     * review of their own work), never a person's standing as that patient's parent.
      */
     private boolean canView(ReviewMeeting meeting, UserPrincipal principal) {
+        if (isParent(principal) && isLinkedParent(meeting.getPatientId(), principal.getId())) return true;
+        if (isSelfReview(meeting, principal)) return false;
         if (isManager(principal) || isOfficeAdmin(principal)) return true;
-        // THERAPIST falls through to false here too — see the comment in list() above.
-        if (isParent(principal)) return isLinkedParent(meeting.getPatientId(), principal.getId());
+        // THERAPIST (with no other qualifying role) falls through to false — see list() above.
         return false;
+    }
+
+    /**
+     * True when the viewer is personally the therapist this meeting is reviewing — a Clinic
+     * Head or Business Owner is otherwise treated as staff and sees everything, but must not
+     * see (or even know about) a review of their own work just because they also happen to
+     * hold an Admin role. Only ever narrows the staff/admin view (see canView) — never
+     * overrides a person's access as the patient's parent.
+     */
+    private boolean isSelfReview(ReviewMeeting meeting, UserPrincipal principal) {
+        return meeting.getTherapistId().equals(principal.getId());
     }
 
     private boolean isLinkedParent(UUID patientId, UUID parentId) {
@@ -367,7 +383,6 @@ public class ReviewMeetingController {
 
     private static boolean isManager(UserPrincipal principal) {
         return principal.getUser().hasRole(Role.BUSINESS_OWNER)
-            || principal.getUser().hasRole(Role.CLINIC_HEAD)
             || principal.getUser().hasRole(Role.CLINIC_HEAD);
     }
 
@@ -384,14 +399,14 @@ public class ReviewMeetingController {
     }
 
     /**
-     * Fills in patient and therapist names, and decides which half of the feedback the
-     * viewer is allowed to read.
+     * Fills in patient/therapist/remarks-author names, and decides what each side of
+     * confidential content the viewer is allowed to read.
      *
-     * Review feedback is confidential between the submitter and staff: a parent only ever
-     * sees their own answer (to review/edit it), never the therapist's; a therapist only
-     * ever sees their own, never the parent's. Only BUSINESS_OWNER/CLINIC_HEAD see both
-     * sides. Parent ratings are still folded into that therapist's analytics (aggregate,
-     * staff-only) so the signal isn't lost.
+     * A parent only ever sees their own feedback (to review/edit it). Clinic Head Remarks
+     * are Admin-only (BUSINESS_OWNER/CLINIC_HEAD, never OFFICE_ADMIN) and never shown to a
+     * Therapist or Parent — including an Admin viewer who is themselves the treating
+     * therapist on this meeting (isSelfReview). Parent ratings are still folded into that
+     * therapist's analytics (aggregate, staff-only) so the signal isn't lost.
      */
     private List<ReviewMeetingResponse> enrich(List<ReviewMeeting> meetings, UserPrincipal principal) {
         if (meetings.isEmpty()) return List.of();
@@ -416,27 +431,33 @@ public class ReviewMeetingController {
         Map<UUID, User> participantsById = new HashMap<>();
         userRepository.findAllById(allParticipantIds).forEach(u -> participantsById.put(u.getId(), u));
 
+        Set<UUID> remarksAuthorIds = meetings.stream()
+                .map(ReviewMeeting::getClinicHeadRemarksBy).filter(Objects::nonNull).collect(Collectors.toSet());
+        Map<UUID, String> remarksAuthorNames = new HashMap<>();
+        userRepository.findAllById(remarksAuthorIds).forEach(u ->
+                remarksAuthorNames.put(u.getId(), u.getFirstName() + " " + u.getLastName()));
+
         boolean staff = isManager(principal);
-        boolean clinician = isClinician(principal);
-        boolean parent = isParent(principal);
+        // Batched, not a per-meeting isLinkedParent() query — and deliberately checked against
+        // each meeting's actual patient rather than a bare isParent(principal) role check: an
+        // Office Admin (or any non-CLINIC_HEAD/BUSINESS_OWNER staff) who happens to be a parent
+        // of some unrelated patient must not see that OTHER patient's feedback just because they
+        // hold the PARENT role somewhere in the org.
+        Set<UUID> linkedPatientIds = isParent(principal)
+                ? patientParentRepository.findById_PatientIdIn(patientIds).stream()
+                        .filter(pp -> pp.getId().getParentId().equals(principal.getId()))
+                        .map(pp -> pp.getId().getPatientId())
+                        .collect(Collectors.toSet())
+                : Set.of();
 
         return meetings.stream().map(m -> {
-            boolean seeParentSide;
-            boolean seeTherapistSide;
-
-            if (staff) {
-                seeParentSide = true;
-                seeTherapistSide = true;
-            } else if (clinician) {
-                seeTherapistSide = true;   // their own answer, to review/edit it
-                seeParentSide = false;     // never the parent's
-            } else if (parent) {
-                seeParentSide = true;      // their own answer, to review/edit it
-                seeTherapistSide = false;  // never the therapist's
-            } else {
-                seeParentSide = false;
-                seeTherapistSide = false;
-            }
+            // Admin (Clinic Head/Business Owner) sees both sides — except never Clinic Head
+            // Remarks on their own work as the treating therapist (isSelfReview), where they're
+            // otherwise excluded from the meeting entirely upstream (list()/findViewable()) but
+            // enrich() is also called directly from create/update/reschedule/etc. on a meeting
+            // the caller isn't necessarily the therapist for, so the guard is repeated here too.
+            boolean seeParentSide = staff || linkedPatientIds.contains(m.getPatientId());
+            boolean seeClinicHeadRemarks = staff && !isSelfReview(m, principal);
 
             List<ParticipantResponse> participants = m.getParticipantIds().stream()
                     .map(participantsById::get)
@@ -444,13 +465,16 @@ public class ReviewMeetingController {
                     .map(u -> ParticipantResponse.from(u, false))
                     .toList();
 
+            String remarksByName = remarksAuthorNames.get(m.getClinicHeadRemarksBy());
+
             return ReviewMeetingResponse.from(
                     m,
                     patientNames.getOrDefault(m.getPatientId(), ""),
                     therapistNames.getOrDefault(m.getTherapistId(), ""),
+                    remarksByName,
                     participants,
                     seeParentSide,
-                    seeTherapistSide);
+                    seeClinicHeadRemarks);
         }).toList();
     }
 }

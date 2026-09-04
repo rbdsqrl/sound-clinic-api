@@ -30,12 +30,15 @@ public record ReviewMeetingResponse(
         String parentComments,
         Instant parentFeedbackAt,
 
-        String therapistSummary,
-        String therapistProgressNotes,
-        Instant therapistFeedbackAt,
+        /** Admin-only — Clinic Head (also editable by Business Owner) remarks on the period
+         *  under review. Never sent to a Therapist or Parent, even one who is themselves an
+         *  Admin but is the treating therapist on this particular meeting. */
+        String clinicHeadRemarks,
+        Instant clinicHeadRemarksAt,
+        String clinicHeadRemarksByName,
 
         String cancelledReason,
-        /** Therapist plus every parent linked to the patient. */
+        /** Every parent linked to the patient plus the Clinic Head(s) invited. */
         List<ParticipantResponse> participants,
         Instant createdAt
 ) {
@@ -43,16 +46,18 @@ public record ReviewMeetingResponse(
     /**
      * Builds the response for a given viewer.
      *
-     * A parent only ever sees their own feedback, never the therapist's; a therapist only
-     * ever sees their own, never the parent's. Only staff (BUSINESS_OWNER/CLINIC_HEAD) see
-     * both sides.
+     * A parent only ever sees their own feedback, never the Clinic Head Remarks. Only
+     * Admin roles (BUSINESS_OWNER/CLINIC_HEAD) see Clinic Head Remarks — and never for a
+     * meeting where they are themselves the treating therapist (see the self-review guard
+     * in ReviewMeetingController, which excludes such meetings before they ever reach here).
      */
     public static ReviewMeetingResponse from(ReviewMeeting m,
                                              String patientName,
                                              String therapistName,
+                                             String clinicHeadRemarksByName,
                                              List<ParticipantResponse> participants,
                                              boolean canSeeParentFeedback,
-                                             boolean canSeeTherapistFeedback) {
+                                             boolean canSeeClinicHeadRemarks) {
         return new ReviewMeetingResponse(
                 m.getId(),
                 m.getOrgId(),
@@ -72,9 +77,9 @@ public record ReviewMeetingResponse(
                 canSeeParentFeedback ? m.getParentComments() : null,
                 m.getParentFeedbackAt(),
 
-                canSeeTherapistFeedback ? m.getTherapistSummary() : null,
-                canSeeTherapistFeedback ? m.getTherapistProgressNotes() : null,
-                m.getTherapistFeedbackAt(),
+                canSeeClinicHeadRemarks ? m.getClinicHeadRemarks() : null,
+                canSeeClinicHeadRemarks ? m.getClinicHeadRemarksAt() : null,
+                canSeeClinicHeadRemarks ? clinicHeadRemarksByName : null,
 
                 m.getCancelledReason(),
                 participants,

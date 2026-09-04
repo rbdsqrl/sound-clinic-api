@@ -16,8 +16,9 @@ import java.util.UUID;
  * A scheduled feedback/review meeting between the therapist and the patient's parents,
  * sitting alongside the therapy sessions of an enrollment.
  *
- * Both sides record feedback here: the parent rates and comments on the therapist, the
- * therapist summarises the period under review.
+ * The parent rates and comments on the therapist here; separately, a Clinic Head (or
+ * Business Owner) can leave confidential remarks on the period under review — visible only
+ * to Admin roles, never the therapist or the parent.
  */
 @Entity
 @Table(name = "review_meetings")
@@ -79,16 +80,19 @@ public class ReviewMeeting {
     @Column(name = "parent_feedback_at")
     private Instant parentFeedbackAt;
 
-    // ── Therapist's feedback about the period ────────────────────────────────
+    // ── Clinic Head's confidential remarks on the therapist/period ───────────
+    // Admin-only (Clinic Head, also editable by Business Owner) — never visible to the
+    // Therapist or Parent, even a Clinic Head/Business Owner who is themselves the treating
+    // therapist on this particular meeting. See ReviewMeetingController's self-review guard.
 
-    @Column(name = "therapist_summary", columnDefinition = "TEXT")
-    private String therapistSummary;
+    @Column(name = "clinic_head_remarks", columnDefinition = "TEXT")
+    private String clinicHeadRemarks;
 
-    @Column(name = "therapist_progress_notes", columnDefinition = "TEXT")
-    private String therapistProgressNotes;
+    @Column(name = "clinic_head_remarks_at")
+    private Instant clinicHeadRemarksAt;
 
-    @Column(name = "therapist_feedback_at")
-    private Instant therapistFeedbackAt;
+    @Column(name = "clinic_head_remarks_by")
+    private UUID clinicHeadRemarksBy;
 
     // ── Calendar invite bookkeeping ──────────────────────────────────────────
 
@@ -177,14 +181,14 @@ public class ReviewMeeting {
     public Instant getParentFeedbackAt() { return parentFeedbackAt; }
     public void setParentFeedbackAt(Instant parentFeedbackAt) { this.parentFeedbackAt = parentFeedbackAt; }
 
-    public String getTherapistSummary() { return therapistSummary; }
-    public void setTherapistSummary(String therapistSummary) { this.therapistSummary = therapistSummary; }
+    public String getClinicHeadRemarks() { return clinicHeadRemarks; }
+    public void setClinicHeadRemarks(String clinicHeadRemarks) { this.clinicHeadRemarks = clinicHeadRemarks; }
 
-    public String getTherapistProgressNotes() { return therapistProgressNotes; }
-    public void setTherapistProgressNotes(String therapistProgressNotes) { this.therapistProgressNotes = therapistProgressNotes; }
+    public Instant getClinicHeadRemarksAt() { return clinicHeadRemarksAt; }
+    public void setClinicHeadRemarksAt(Instant clinicHeadRemarksAt) { this.clinicHeadRemarksAt = clinicHeadRemarksAt; }
 
-    public Instant getTherapistFeedbackAt() { return therapistFeedbackAt; }
-    public void setTherapistFeedbackAt(Instant therapistFeedbackAt) { this.therapistFeedbackAt = therapistFeedbackAt; }
+    public UUID getClinicHeadRemarksBy() { return clinicHeadRemarksBy; }
+    public void setClinicHeadRemarksBy(UUID clinicHeadRemarksBy) { this.clinicHeadRemarksBy = clinicHeadRemarksBy; }
 
     public int getIcsSequence() { return icsSequence; }
     public void setIcsSequence(int icsSequence) { this.icsSequence = icsSequence; }
@@ -210,6 +214,6 @@ public class ReviewMeeting {
     /** True once the parent has submitted their side. */
     public boolean hasParentFeedback() { return parentFeedbackAt != null; }
 
-    /** True once the therapist has submitted their side. */
-    public boolean hasTherapistFeedback() { return therapistFeedbackAt != null; }
+    /** True once a Clinic Head/Business Owner has written remarks. */
+    public boolean hasClinicHeadRemarks() { return clinicHeadRemarksAt != null; }
 }
