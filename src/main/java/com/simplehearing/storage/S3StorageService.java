@@ -26,16 +26,20 @@ import java.util.UUID;
 @ConditionalOnProperty(name = "app.storage.provider", havingValue = "s3")
 public class S3StorageService implements StorageService {
 
+    private static final String SUPABASE_S3_ENDPOINT_SUFFIX = "/storage/v1/s3";
+
     private final S3Client s3;
     private final S3Presigner presigner;
     private final String bucket;
     private final String region;
+    private final String endpoint;
     private final String publicUrlBase;
 
     public S3StorageService(StorageProperties props) {
         StorageProperties.S3Props p = props.getS3();
         this.bucket        = p.getBucket();
         this.region        = p.getRegion();
+        this.endpoint      = p.getEndpoint();
         this.publicUrlBase = p.getPublicUrlBase();
 
         StaticCredentialsProvider creds = StaticCredentialsProvider.create(
@@ -140,6 +144,25 @@ public class S3StorageService implements StorageService {
         if (publicUrlBase != null && !publicUrlBase.isBlank()) {
             return publicUrlBase.endsWith("/") ? publicUrlBase : publicUrlBase + "/";
         }
+        String supabaseBase = deriveSupabasePublicUrlBase();
+        if (supabaseBase != null) {
+            return supabaseBase;
+        }
         return "https://" + bucket + ".s3." + region + ".amazonaws.com/";
+    }
+
+    /** Supabase's S3-compatible API endpoint (".../storage/v1/s3") and its public object URL
+     *  (".../storage/v1/object/public/{bucket}") share the same project host, just a different
+     *  path suffix — so when the endpoint matches that shape, the public URL base can be derived
+     *  from it instead of requiring STORAGE_S3_PUBLIC_URL_BASE to be set separately. Explicit
+     *  config (checked above) still wins, e.g. for a custom storage domain in front of the bucket.
+     *  Returns null for anything that isn't recognizably a Supabase endpoint (native AWS, MinIO,
+     *  etc.), where this shortcut doesn't apply. */
+    private String deriveSupabasePublicUrlBase() {
+        if (endpoint == null || endpoint.isBlank() || bucket == null) return null;
+        String trimmed = endpoint.endsWith("/") ? endpoint.substring(0, endpoint.length() - 1) : endpoint;
+        if (!trimmed.endsWith(SUPABASE_S3_ENDPOINT_SUFFIX)) return null;
+        String projectHost = trimmed.substring(0, trimmed.length() - SUPABASE_S3_ENDPOINT_SUFFIX.length());
+        return projectHost + "/storage/v1/object/public/" + bucket + "/";
     }
 }

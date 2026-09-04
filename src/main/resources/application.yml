@@ -64,7 +64,7 @@ app:
       access-key-id: ${STORAGE_S3_ACCESS_KEY_ID:}
       secret-access-key: ${STORAGE_S3_SECRET_KEY:}
       force-path-style: ${STORAGE_S3_FORCE_PATH_STYLE:true}  # must be true for Supabase
-      public-url-base: ${STORAGE_S3_PUBLIC_URL_BASE:}        # https://<ref>.supabase.co/storage/v1/object/public/<bucket>
+      public-url-base: ${STORAGE_S3_PUBLIC_URL_BASE:}        # optional — auto-derived from endpoint+bucket for Supabase; set explicitly only for a non-Supabase provider or a custom storage domain
   email:
     from-address: ${EMAIL_FROM:noreply@simplehearing.com}
     from-name: ${EMAIL_FROM_NAME:Simple Hearing}

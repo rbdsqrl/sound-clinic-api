@@ -76,5 +76,5 @@ app:
       access-key-id: ${STORAGE_S3_ACCESS_KEY_ID}
       secret-access-key: ${STORAGE_S3_SECRET_KEY}
       force-path-style: ${STORAGE_S3_FORCE_PATH_STYLE:true}
-      public-url-base: ${STORAGE_S3_PUBLIC_URL_BASE}
+      public-url-base: ${STORAGE_S3_PUBLIC_URL_BASE:}  # optional — derived from the endpoint for Supabase if unset
   org-id: ${ORG_ID:}
