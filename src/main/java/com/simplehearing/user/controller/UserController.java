@@ -45,11 +45,17 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/v1/users")
 public class UserController {
 
-    /** Roles that can be added as additional (secondary) roles. */
+    /** Roles that can be added as additional (secondary) roles — self-service (POST /me/roles). */
     private static final Set<Role> GRANTABLE_ADDITIONAL_ROLES = Set.of(Role.PARENT);
 
-    /** Primary roles allowed to acquire an additional role. */
+    /** Primary roles allowed to acquire an additional role — self-service (POST /me/roles). */
     private static final Set<Role> ELIGIBLE_PRIMARY_ROLES = Set.of(Role.BUSINESS_OWNER, Role.THERAPIST);
+
+    /** Roles a BUSINESS_OWNER may grant another member as an *additional* role (POST /{id}/roles),
+     *  on top of whatever their primary role already is. Everything except PATIENT, which is tied
+     *  to a specific patient record rather than being a general access role. */
+    private static final Set<Role> ADMIN_GRANTABLE_ADDITIONAL_ROLES =
+            Set.of(Role.CLINIC_HEAD, Role.BUSINESS_OWNER, Role.OFFICE_ADMIN, Role.THERAPIST, Role.PARENT);
 
     private final UserRepository userRepository;
     private final TherapistPatientRepository therapistPatientRepository;
@@ -79,7 +85,8 @@ public class UserController {
     @Operation(
         summary = "List staff members in the organisation, paginated",
         description = "Defaults to 20 per page, sorted by createdAt (year joined) descending. " +
-                      "`active` defaults to true (the Members tab); pass false for the Archived tab."
+                      "`active` defaults to true (the Members tab); pass false for the Archived tab. " +
+                      "Pass `role=PARENT` to list Parent accounts instead of staff — the Parents tab."
     )
     @GetMapping("/members")
     @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
@@ -93,11 +100,15 @@ public class UserController {
 
         String q = (search == null || search.isBlank()) ? "" : search.trim();
 
+        // The Parents tab reuses this same paginated list, just scoped to PARENT instead of the
+        // staff roles — everything else (search, pagination, active/archived) behaves the same way.
+        List<Role> roleScope = (role == Role.PARENT) ? List.of(Role.PARENT) : STAFF_ROLES;
+
         // Fast path: no search/role/clinic narrowing — the shape usersApi.listMembers() sends for
         // pickers and dashboards. Skip the LIKE/CONCAT-laden filtered query for a plain indexed scan.
         Page<User> page = (q.isEmpty() && role == null && clinicId == null)
-                ? userRepository.findByOrgIdAndRoleInAndIsActive(principal.getOrgId(), STAFF_ROLES, active, pageable)
-                : userRepository.search(principal.getOrgId(), STAFF_ROLES, q, role, clinicId, active, pageable);
+                ? userRepository.findByOrgIdAndRoleInAndIsActive(principal.getOrgId(), roleScope, active, pageable)
+                : userRepository.search(principal.getOrgId(), roleScope, q, role, clinicId, active, pageable);
 
         List<UUID> pageUserIds = page.getContent().stream().map(User::getId).toList();
         Map<UUID, Long> caseCountByTherapist = therapistPatientRepository
@@ -391,6 +402,67 @@ public class UserController {
 
         userRepository.save(user);
         return ResponseEntity.ok(ApiResponse.success(UserResponse.from(user)));
+    }
+
+    @Operation(
+        summary = "Add an additional role to a member's account",
+        description = "BUSINESS_OWNER only. Adds a role alongside whatever the member's primary role " +
+                      "already is, rather than replacing it — e.g. granting a Parent an admin role " +
+                      "while they remain a Parent. Contrast with PATCH /{id}/profile's `role` field, " +
+                      "which swaps the primary role outright."
+    )
+    @PostMapping("/{id}/roles")
+    @PreAuthorize("hasRole('BUSINESS_OWNER')")
+    public ResponseEntity<ApiResponse<MemberProfileResponse>> addMemberRole(
+            @PathVariable UUID id,
+            @RequestBody AddRoleRequest request,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        if (id.equals(principal.getId())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "You cannot change your own roles here");
+        }
+
+        Role roleToAdd = parseRole(request.role());
+        if (!ADMIN_GRANTABLE_ADDITIONAL_ROLES.contains(roleToAdd)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST,
+                    "Role '" + roleToAdd + "' cannot be added as an additional role");
+        }
+
+        User user = loadOrgScopedMember(id, principal);
+        if (user.getRole() == roleToAdd || user.getAdditionalRoles().contains(roleToAdd)) {
+            throw new ApiException(HttpStatus.CONFLICT, "This member already has the " + roleToAdd + " role");
+        }
+
+        user.getAdditionalRoles().add(roleToAdd);
+        userRepository.save(user);
+
+        return ResponseEntity.ok(ApiResponse.success(buildMemberProfile(user)));
+    }
+
+    @Operation(summary = "Remove an additional role from a member's account — BUSINESS_OWNER only")
+    @DeleteMapping("/{id}/roles/{role}")
+    @PreAuthorize("hasRole('BUSINESS_OWNER')")
+    public ResponseEntity<ApiResponse<MemberProfileResponse>> removeMemberRole(
+            @PathVariable UUID id,
+            @PathVariable String role,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        if (id.equals(principal.getId())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "You cannot change your own roles here");
+        }
+
+        Role roleToRemove = parseRole(role);
+        User user = loadOrgScopedMember(id, principal);
+
+        if (roleToRemove == user.getRole()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "That is this member's primary role — change it from the profile instead");
+        }
+        if (!user.getAdditionalRoles().remove(roleToRemove)) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "This member does not have the " + roleToRemove + " role");
+        }
+
+        userRepository.save(user);
+        return ResponseEntity.ok(ApiResponse.success(buildMemberProfile(user)));
     }
 
     private Role parseRole(String value) {
