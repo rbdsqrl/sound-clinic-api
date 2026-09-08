@@ -63,7 +63,9 @@ logging:
 
 app:
   cors:
-    allowed-origins: https://sound-clinic-website.nanil-mines.workers.dev,http://localhost:4321
+    # https://localhost is the Capacitor Android app's WebView origin (its default androidScheme);
+    # capacitor://localhost is the iOS app's (its default iosScheme).
+    allowed-origins: https://sound-clinic-website.nanil-mines.workers.dev,http://localhost:4321,https://localhost,capacitor://localhost
   jwt:
     secret: ${JWT_SECRET}
   storage:

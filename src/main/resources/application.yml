@@ -45,7 +45,10 @@ logging:
 
 app:
   cors:
-    allowed-origins: http://localhost:4321,http://localhost:5173,https://sound-clinic-website.nanil-mines.workers.dev
+    # https://localhost is the Capacitor Android app's WebView origin (its default androidScheme);
+    # capacitor://localhost is the iOS app's (its default iosScheme) — both talk to this same
+    # local backend per NATIVE_DEV_API_BASE_URL in the frontend's api/client.ts.
+    allowed-origins: http://localhost:4321,http://localhost:5173,https://sound-clinic-website.nanil-mines.workers.dev,https://localhost,capacitor://localhost
   jwt:
     secret: ${JWT_SECRET:bXlTdXBlclNlY3JldEtleUZvckpXVEFuZEl0SXNWZXJ5TG9uZ0Vub3VnaA==}
     access-token-expiry: 900       # 15 minutes in seconds
