@@ -305,3 +305,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/102-leave-date-range.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/103-resource-assignments.sql
+      relativeToChangelogFile: false

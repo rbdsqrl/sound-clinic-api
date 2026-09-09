@@ -1,14 +1,20 @@
 package com.simplehearing.resource.service;
 
 import com.simplehearing.common.exception.ApiException;
+import com.simplehearing.common.exception.ConflictException;
 import com.simplehearing.common.exception.ResourceNotFoundException;
+import com.simplehearing.patient.entity.Patient;
+import com.simplehearing.patient.repository.PatientRepository;
 import com.simplehearing.resource.dto.*;
 import com.simplehearing.resource.entity.Resource;
+import com.simplehearing.resource.entity.ResourceAssignment;
 import com.simplehearing.resource.entity.ResourceFolder;
 import com.simplehearing.resource.enums.ResourceType;
+import com.simplehearing.resource.repository.ResourceAssignmentRepository;
 import com.simplehearing.resource.repository.ResourceFolderRepository;
 import com.simplehearing.resource.repository.ResourceRepository;
 import com.simplehearing.storage.StorageService;
+import com.simplehearing.user.repository.UserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,18 +33,33 @@ public class ResourceService {
 
     private final ResourceFolderRepository folderRepository;
     private final ResourceRepository resourceRepository;
+    private final ResourceAssignmentRepository assignmentRepository;
+    private final PatientRepository patientRepository;
+    private final UserRepository userRepository;
     private final StorageService storageService;
 
-    public ResourceService(ResourceFolderRepository folderRepository, ResourceRepository resourceRepository, StorageService storageService) {
+    public ResourceService(ResourceFolderRepository folderRepository, ResourceRepository resourceRepository,
+                            ResourceAssignmentRepository assignmentRepository, PatientRepository patientRepository,
+                            UserRepository userRepository, StorageService storageService) {
         this.storageService = storageService;
         this.folderRepository = folderRepository;
         this.resourceRepository = resourceRepository;
+        this.assignmentRepository = assignmentRepository;
+        this.patientRepository = patientRepository;
+        this.userRepository = userRepository;
     }
 
     /** Everything a folder-browsing screen needs — the folder, its breadcrumb, and its
-     *  immediate children. Pass folderId=null for the root. */
+     *  immediate children. Pass folderId=null for the root. When {@code search} is non-blank,
+     *  folderId is ignored entirely and the result is a flat, folder-less match list across the
+     *  whole org instead — folder/breadcrumb/subfolders all come back empty in that case. */
     @Transactional(readOnly = true)
-    public ResourceFolderContentsResponse getContents(UUID orgId, UUID folderId) {
+    public ResourceFolderContentsResponse getContents(UUID orgId, UUID folderId, String search) {
+        if (search != null && !search.isBlank()) {
+            List<Resource> matches = resourceRepository.findByOrgIdAndNameContainingIgnoreCaseOrderByNameAsc(orgId, search.trim());
+            return new ResourceFolderContentsResponse(null, List.of(), List.of(), matches.stream().map(this::toResponse).toList());
+        }
+
         ResourceFolder folder = null;
         List<ResourceFolderResponse> breadcrumb = new LinkedList<>();
 
@@ -70,6 +91,62 @@ public class ResourceService {
                 subfolders.stream().map(this::toResponse).toList(),
                 resources.stream().map(this::toResponse).toList()
         );
+    }
+
+    /** Assigns a Resources-library item to one patient — what makes it visible in the Parent
+     *  app, which otherwise never sees the library at all. Idempotent: assigning the same
+     *  resource to the same patient twice is a conflict, not a silent no-op, so the caller
+     *  (and the therapist clicking the button) gets clear feedback rather than a quiet duplicate. */
+    public ResourceAssignmentResponse assignToPatient(UUID orgId, UUID resourceId, UUID assignedByUserId, AssignResourceRequest request) {
+        Resource resource = requireResource(orgId, resourceId);
+        Patient patient = patientRepository.findByIdAndOrgId(request.patientId(), orgId)
+                .orElseThrow(() -> new ResourceNotFoundException("Patient", request.patientId()));
+
+        if (assignmentRepository.findByResourceIdAndPatientId(resourceId, patient.getId()).isPresent()) {
+            throw new ConflictException("Already assigned to this patient");
+        }
+
+        ResourceAssignment assignment = new ResourceAssignment();
+        assignment.setOrgId(orgId);
+        assignment.setResourceId(resourceId);
+        assignment.setPatientId(patient.getId());
+        assignment.setAssignedBy(assignedByUserId);
+
+        return toResponse(assignmentRepository.save(assignment), resource);
+    }
+
+    public void unassign(UUID orgId, UUID assignmentId) {
+        ResourceAssignment assignment = assignmentRepository.findById(assignmentId)
+                .filter(a -> a.getOrgId().equals(orgId))
+                .orElseThrow(() -> new ResourceNotFoundException("Resource assignment", assignmentId));
+        assignmentRepository.delete(assignment);
+    }
+
+    /** Every resource assigned to one patient — the Parent app's entire view of "Resources" is
+     *  this list, filtered server-side to that parent's own linked child by the controller. */
+    @Transactional(readOnly = true)
+    public List<ResourceAssignmentResponse> listForPatient(UUID orgId, UUID patientId) {
+        return assignmentRepository.findByOrgIdAndPatientIdOrderByCreatedAtDesc(orgId, patientId).stream()
+                .map(a -> {
+                    Resource resource = resourceRepository.findById(a.getResourceId()).orElse(null);
+                    if (resource == null) return null; // orphaned by a race with resource deletion — skip rather than error
+                    return toResponse(a, resource);
+                })
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    private ResourceAssignmentResponse toResponse(ResourceAssignment a, Resource resource) {
+        boolean hosted = storageService.isHostedFile(resource.getUrl());
+        String resolvedUrl = storageService.presign(resource.getUrl(), Duration.ofHours(1));
+        String assignedByName = userRepository.findById(a.getAssignedBy())
+                .map(u -> fullName(u.getFirstName(), u.getLastName()))
+                .orElse("Unknown");
+        return ResourceAssignmentResponse.from(a, resource.getName(), resource.getType(), resolvedUrl, hosted, assignedByName);
+    }
+
+    private String fullName(String first, String last) {
+        return (first == null ? "" : first) + " " + (last == null ? "" : last);
     }
 
     /** Resolves a set of resource ids into fully-presigned responses, scoped to the org — an id

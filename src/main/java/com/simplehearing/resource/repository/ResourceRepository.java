@@ -13,4 +13,6 @@ public interface ResourceRepository extends JpaRepository<Resource, UUID> {
     List<Resource> findByOrgIdAndFolderIdOrderByNameAsc(UUID orgId, UUID folderId);
 
     long countByOrgIdAndFolderId(UUID orgId, UUID folderId);
+
+    List<Resource> findByOrgIdAndNameContainingIgnoreCaseOrderByNameAsc(UUID orgId, String name);
 }
