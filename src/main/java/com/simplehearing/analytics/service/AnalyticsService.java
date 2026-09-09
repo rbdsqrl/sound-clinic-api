@@ -372,7 +372,11 @@ public class AnalyticsService {
             sessionsByDayAndStatus
                     .computeIfAbsent(s.getSessionDate(), d -> new LinkedHashMap<>())
                     .merge(s.getStatus().name(), 1, Integer::sum);
-            durations.add(java.time.Duration.between(s.getStartTime(), s.getEndTime()).toMinutes());
+            // Only sessions that actually happened contribute to duration — a scheduled slot's
+            // planned length is meaningless once it's cancelled, no-showed, or hasn't happened yet.
+            if (s.getStatus() == TherapySessionStatus.COMPLETED) {
+                durations.add(java.time.Duration.between(s.getStartTime(), s.getEndTime()).toMinutes());
+            }
         }
         List<EngagementOverviewResponse.SessionsTrendPoint> sessionsTrend = sessionsByDayAndStatus.entrySet().stream()
                 .map(e -> new EngagementOverviewResponse.SessionsTrendPoint(e.getKey(), e.getValue()))
@@ -680,7 +684,12 @@ public class AnalyticsService {
             if (s.getRescheduleCount() > 0) rescheduled++;
 
             long durationMinutes = java.time.Duration.between(s.getStartTime(), s.getEndTime()).toMinutes();
-            durations.add(durationMinutes);
+            // Total/avg duration are actual therapy time delivered — only completed sessions
+            // happened, so only they count toward it (a session's own log row still shows its
+            // planned length regardless of status, via durationMinutes below).
+            if (s.getStatus() == TherapySessionStatus.COMPLETED) {
+                durations.add(durationMinutes);
+            }
 
             Patient patient = patientMap.get(s.getPatientId());
             User therapist = therapistMap.get(s.getTherapistId());
