@@ -718,7 +718,7 @@ public class AnalyticsService {
 
         return new ScheduleResponse(
                 total,
-                pct(cancelled, total),
+                pct(cancelled, finalised),
                 pct(rescheduled, total),
                 pct(completed, finalised),
                 totalDuration,

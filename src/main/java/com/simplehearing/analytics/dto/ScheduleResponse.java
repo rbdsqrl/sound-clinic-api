@@ -12,7 +12,13 @@ import java.util.UUID;
  */
 public record ScheduleResponse(
         int totalSessions,
+        /** Share of finalised sessions (completed + no-show + cancelled) that were cancelled —
+         *  same base as {@code attendancePct}, so the two read as complementary outcomes rather
+         *  than each picking its own denominator. A still-upcoming session isn't an outcome yet. */
         Double cancelledPct,
+        /** Share of ALL sessions in the window ever moved (reschedule_count > 0) — deliberately
+         *  over the full total, not just finalised ones: a session can be rescheduled and still
+         *  be sitting in SCHEDULED status today. */
         Double rescheduledPct,
         Double attendancePct,
         int totalDurationMinutes,
