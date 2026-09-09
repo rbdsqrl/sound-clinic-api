@@ -366,14 +366,16 @@ public class AnalyticsService {
         List<TherapySession> sessions = sessionRepository
                 .findByOrgIdAndSessionDateBetweenOrderBySessionDateAscStartTimeAsc(orgId, from, to);
 
-        Map<LocalDate, Integer> sessionsByDay = new TreeMap<>();
+        Map<LocalDate, Map<String, Integer>> sessionsByDayAndStatus = new TreeMap<>();
         List<Long> durations = new ArrayList<>();
         for (TherapySession s : sessions) {
-            sessionsByDay.merge(s.getSessionDate(), 1, Integer::sum);
+            sessionsByDayAndStatus
+                    .computeIfAbsent(s.getSessionDate(), d -> new LinkedHashMap<>())
+                    .merge(s.getStatus().name(), 1, Integer::sum);
             durations.add(java.time.Duration.between(s.getStartTime(), s.getEndTime()).toMinutes());
         }
-        List<EngagementOverviewResponse.TrendPoint> sessionsTrend = sessionsByDay.entrySet().stream()
-                .map(e -> new EngagementOverviewResponse.TrendPoint(e.getKey(), e.getValue()))
+        List<EngagementOverviewResponse.SessionsTrendPoint> sessionsTrend = sessionsByDayAndStatus.entrySet().stream()
+                .map(e -> new EngagementOverviewResponse.SessionsTrendPoint(e.getKey(), e.getValue()))
                 .toList();
         Integer avgDurationMinutes = durations.isEmpty() ? null
                 : (int) Math.round(durations.stream().mapToLong(Long::longValue).average().orElse(0));

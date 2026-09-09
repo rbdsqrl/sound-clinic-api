@@ -2,6 +2,7 @@ package com.simplehearing.analytics.dto;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 /**
  * The org-wide "Overview" tab — engagement/activity figures, distinct from
@@ -14,7 +15,7 @@ public record EngagementOverviewResponse(
         Integer avgSessionDurationMinutes,
         List<NameCount> skillsBreakdown,
         List<NameCount> ageGroups,
-        List<TrendPoint> sessionsTrend,
+        List<SessionsTrendPoint> sessionsTrend,
         int totalSessions,
         List<TrendPoint> checklistFilledTrend,
         List<NameCount> mostAssignedActivities
@@ -25,4 +26,8 @@ public record EngagementOverviewResponse(
     public record NameCount(String name, int count) {}
 
     public record TrendPoint(LocalDate date, int count) {}
+
+    /** byStatus keys are TherapySessionStatus names (COMPLETED, CANCELLED, ...) — a status with
+     *  no sessions that day is simply absent from the map, not zero-filled. */
+    public record SessionsTrendPoint(LocalDate date, Map<String, Integer> byStatus) {}
 }
