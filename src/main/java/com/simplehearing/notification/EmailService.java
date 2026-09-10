@@ -167,6 +167,19 @@ public class EmailService {
                                   String organiserName, String participants, String location,
                                   String dateLabel, String timeLabel, String orgName,
                                   String meetingUrl, String ics, boolean rescheduled) {
+        sendMeetingInvite(to, recipientName, title, organiserName, participants, location,
+                dateLabel, timeLabel, orgName, meetingUrl, ics, rescheduled, null);
+    }
+
+    /** @param recurrenceLabel when non-null, a one-line description of the recurring schedule
+     *                         (e.g. "Repeats every Mon, Wed, Fri through 30 Oct 2026") — this
+     *                         single email announces the whole series, not one per occurrence. */
+    @Async
+    public void sendMeetingInvite(String to, String recipientName, String title,
+                                  String organiserName, String participants, String location,
+                                  String dateLabel, String timeLabel, String orgName,
+                                  String meetingUrl, String ics, boolean rescheduled,
+                                  String recurrenceLabel) {
         Map<String, String> vars = new java.util.HashMap<>();
         vars.put("ORG_NAME", orgName);
         vars.put("LOGO_URL", props.getBaseUrl() + "/logo.png");
@@ -179,9 +192,13 @@ public class EmailService {
         vars.put("MEETING_DATE", dateLabel);
         vars.put("MEETING_TIME", timeLabel);
         vars.put("MEETING_URL", props.getBaseUrl() + meetingUrl);
+        vars.put("RECURRENCE_LINE", recurrenceLabel != null && !recurrenceLabel.isBlank()
+                ? recurrenceLabel : "");
         vars.put("INTRO", rescheduled
                 ? "This meeting has been moved. Your calendar will update automatically."
-                : "You have been invited to a meeting.");
+                : recurrenceLabel != null
+                    ? "You have been invited to a recurring meeting."
+                    : "You have been invited to a meeting.");
         String html = fillStubs(loadTemplate("meeting-invite"), vars);
         String subject = (rescheduled ? "Updated: " : "") + title + " on " + dateLabel;
         send(to, subject, html, icsAttachment(ics, "meeting.ics"));

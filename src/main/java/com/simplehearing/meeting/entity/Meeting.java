@@ -64,6 +64,21 @@ public class Meeting {
     @Column(name = "created_by", nullable = false)
     private UUID createdBy;
 
+    /** Post-meeting write-up, per occurrence — distinct from {@code description}, the
+     *  shared pre-meeting agenda set once when the (possibly recurring) meeting is created. */
+    @Column(columnDefinition = "TEXT")
+    private String notes;
+
+    /** Shared by every occurrence a single recurring create() generated; null for a one-off. */
+    @Column(name = "series_id")
+    private UUID seriesId;
+
+    @Column(name = "occurrence_number")
+    private Integer occurrenceNumber;
+
+    @Column(name = "total_occurrences")
+    private Integer totalOccurrences;
+
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "meeting_participants",
                      joinColumns = @JoinColumn(name = "meeting_id"))
@@ -116,6 +131,18 @@ public class Meeting {
 
     public UUID getCreatedBy() { return createdBy; }
     public void setCreatedBy(UUID createdBy) { this.createdBy = createdBy; }
+
+    public String getNotes() { return notes; }
+    public void setNotes(String notes) { this.notes = notes; }
+
+    public UUID getSeriesId() { return seriesId; }
+    public void setSeriesId(UUID seriesId) { this.seriesId = seriesId; }
+
+    public Integer getOccurrenceNumber() { return occurrenceNumber; }
+    public void setOccurrenceNumber(Integer occurrenceNumber) { this.occurrenceNumber = occurrenceNumber; }
+
+    public Integer getTotalOccurrences() { return totalOccurrences; }
+    public void setTotalOccurrences(Integer totalOccurrences) { this.totalOccurrences = totalOccurrences; }
 
     public Set<UUID> getParticipantIds() { return participantIds; }
     public void setParticipantIds(Set<UUID> participantIds) { this.participantIds = participantIds; }

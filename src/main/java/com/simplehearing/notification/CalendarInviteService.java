@@ -51,6 +51,30 @@ public class CalendarInviteService {
                         String organiserName,
                         String organiserEmail,
                         List<Attendee> attendees) {
+        return build(uid, sequence, method, summary, description, location,
+                date, startTime, endTime, organiserName, organiserEmail, attendees, null);
+    }
+
+    /**
+     * @param uid      stable identifier for the event
+     * @param sequence revision number — must increase whenever the event changes
+     * @param rrule    RFC 5545 recurrence rule (e.g. {@code "FREQ=WEEKLY;BYDAY=MO,WE,FR;UNTIL=..."}),
+     *                 or null for a one-off event. {@code date}/{@code startTime}/{@code endTime}
+     *                 stay the series' first occurrence — calendar clients expand the rest.
+     */
+    public String build(String uid,
+                        int sequence,
+                        Method method,
+                        String summary,
+                        String description,
+                        String location,
+                        LocalDate date,
+                        LocalTime startTime,
+                        LocalTime endTime,
+                        String organiserName,
+                        String organiserEmail,
+                        List<Attendee> attendees,
+                        String rrule) {
 
         StringBuilder ics = new StringBuilder();
         ics.append("BEGIN:VCALENDAR\r\n")
@@ -63,8 +87,13 @@ public class CalendarInviteService {
            .append("SEQUENCE:").append(sequence).append("\r\n")
            .append("DTSTAMP:").append(utcStamp(ZonedDateTime.now(zoneId))).append("\r\n")
            .append("DTSTART:").append(utcStamp(date, startTime)).append("\r\n")
-           .append("DTEND:").append(utcStamp(date, endTime)).append("\r\n")
-           .append(fold("SUMMARY:" + escape(summary))).append("\r\n");
+           .append("DTEND:").append(utcStamp(date, endTime)).append("\r\n");
+
+        if (rrule != null && !rrule.isBlank()) {
+            ics.append("RRULE:").append(rrule).append("\r\n");
+        }
+
+        ics.append(fold("SUMMARY:" + escape(summary))).append("\r\n");
 
         if (description != null && !description.isBlank()) {
             ics.append(fold("DESCRIPTION:" + escape(description))).append("\r\n");

@@ -83,4 +83,20 @@ public class MeetingController {
         return ResponseEntity.ok(ApiResponse.success(
                 meetingService.cancel(id, principal.getOrgId(), principal.getId(), reason)));
     }
+
+    @Operation(summary = "Add or edit this occurrence's notes",
+               description = "Per-occurrence write-up, separate from the shared pre-meeting description. "
+                           + "Restricted to the organiser, a participant, or an admin-tier role.")
+    @PatchMapping("/{id}/notes")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'OFFICE_ADMIN')")
+    public ResponseEntity<ApiResponse<MeetingResponse>> updateNotes(
+            @PathVariable UUID id,
+            @RequestBody UpdateMeetingNotesRequest request,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        boolean isAdminTier = principal.getUser().getRole() == Role.BUSINESS_OWNER
+                           || principal.getUser().getRole() == Role.CLINIC_HEAD;
+        return ResponseEntity.ok(ApiResponse.success(
+                meetingService.updateNotes(id, principal.getOrgId(), principal.getId(), isAdminTier, request.notes())));
+    }
 }

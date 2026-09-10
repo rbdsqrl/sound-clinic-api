@@ -22,7 +22,11 @@ public record MeetingResponse(
         String cancelledReason,
         UUID createdBy,
         String createdByName,
-        List<ParticipantResponse> participants
+        List<ParticipantResponse> participants,
+        String notes,
+        UUID seriesId,
+        Integer occurrenceNumber,
+        Integer totalOccurrences
 ) {
     public static MeetingResponse from(Meeting m,
                                        String createdByName,
@@ -31,6 +35,7 @@ public record MeetingResponse(
                 m.getId(), m.getOrgId(), m.getTitle(), m.getDescription(),
                 m.getMeetingDate(), m.getStartTime(), m.getEndTime(), m.getLocation(),
                 m.getStatus(), m.getCancelledReason(),
-                m.getCreatedBy(), createdByName, participants);
+                m.getCreatedBy(), createdByName, participants,
+                m.getNotes(), m.getSeriesId(), m.getOccurrenceNumber(), m.getTotalOccurrences());
     }
 }

@@ -251,9 +251,10 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | GET      | `/api/v1/patients/{patientId}/assessments/{type}/definition` | All staff + PARENT (own child) | Fixed ISAA/PRBA item/section definition |
 | GET      | `/api/v1/patients/{patientId}/assessments/{type}` | All staff + PARENT (own child)             | List a patient's ISAA/PRBA fills, oldest first |
 | POST     | `/api/v1/patients/{patientId}/assessments/{type}` | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST | Record a new ISAA/PRBA fill — score + classification computed server-side |
-| POST     | `/api/v1/meetings`                      | BUSINESS_OWNER, CLINIC_HEAD                             | Schedule a meeting + email invites  |
+| POST     | `/api/v1/meetings`                      | BUSINESS_OWNER, CLINIC_HEAD                             | Schedule a meeting + email invites — optionally recurring (`recurring`/`recurrenceDays`/`recurrenceEndDate`), generating one row per matching weekday up to `recurrenceEndDate` (holidays and the org's weekly off days skipped), all sharing a `seriesId`; exactly one invite email per participant announces the whole series (ICS carries an RRULE), not one per occurrence |
 | GET      | `/api/v1/meetings`                      | Authenticated                                           | Meetings in a date range (scoped)   |
 | GET      | `/api/v1/meetings/{id}`                 | Authenticated                                           | One meeting with participants       |
+| PATCH    | `/api/v1/meetings/{id}/notes`           | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST, OFFICE_ADMIN (organiser/participant, or admin tier) | Per-occurrence post-meeting write-up — independent per row, even within a recurring series |
 | PATCH    | `/api/v1/meetings/{id}/cancel`          | All staff (not PARENT/PATIENT)                          | Cancel + send CANCEL ics            |
 | GET      | `/api/v1/users/search`                  | BUSINESS_OWNER, CLINIC_HEAD                                   | Search users by email               |
 | GET      | `/api/v1/organisation`                  | BUSINESS_OWNER, CLINIC_HEAD                                   | Org profile                         |
@@ -354,6 +355,7 @@ Master file: `db.changelog-master.yaml` — lists migrations in order.
 | 097-review-meeting-participants.sql | `review_meeting_participants` — persisted, editable attendee list for review meetings (parents + chosen Clinic Head(s)); backfilled from existing linked parents, therapist deliberately not backfilled |
 | 098-list-sort-indexes.sql           | `idx_patients_org_created` / `idx_users_org_created` — composite (org_id, created_at desc) indexes backing the paginated Cases/Members lists' default sort |
 | 099-more-list-indexes.sql           | Composite indexes on `subscriptions`, `enrollments` (had none beyond PK), `tasks`, `invitations`, `attendance` — same missing-sort/scan-index gap as 098, found via a full-repository audit |
+| 105-meeting-recurrence-and-notes.sql | `meetings.notes` (per-occurrence write-up) + `meetings.series_id`/`occurrence_number`/`total_occurrences` (recurring series) |
 
 **To add a migration:** create `NNN-description.sql` with the Liquibase header, then add it to the master YAML.
 
