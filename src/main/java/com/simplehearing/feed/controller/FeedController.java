@@ -18,6 +18,7 @@ import com.simplehearing.feed.entity.FeedPostLike;
 import com.simplehearing.feed.entity.FeedPostLikeId;
 import com.simplehearing.feed.entity.FeedPostView;
 import com.simplehearing.feed.entity.FeedPostViewId;
+import com.simplehearing.feed.enums.FeedPostType;
 import com.simplehearing.feed.repository.FeedPostCommentRepository;
 import com.simplehearing.feed.repository.FeedPostImageRepository;
 import com.simplehearing.feed.repository.FeedPostLikeRepository;
@@ -69,6 +70,8 @@ public class FeedController {
     private final FeedPostImageRepository imageRepository;
     private final UserRepository userRepository;
     private final StorageService storageService;
+    private final com.simplehearing.notification.EmailService emailService;
+    private final com.simplehearing.organisation.repository.OrganisationRepository organisationRepository;
 
     public FeedController(
             FeedPostRepository feedPostRepository,
@@ -77,7 +80,9 @@ public class FeedController {
             FeedPostCommentRepository commentRepository,
             FeedPostImageRepository imageRepository,
             UserRepository userRepository,
-            StorageService storageService) {
+            StorageService storageService,
+            com.simplehearing.notification.EmailService emailService,
+            com.simplehearing.organisation.repository.OrganisationRepository organisationRepository) {
         this.feedPostRepository = feedPostRepository;
         this.likeRepository = likeRepository;
         this.viewRepository = viewRepository;
@@ -85,26 +90,54 @@ public class FeedController {
         this.imageRepository = imageRepository;
         this.userRepository = userRepository;
         this.storageService = storageService;
+        this.emailService = emailService;
+        this.organisationRepository = organisationRepository;
     }
 
     // ── List ─────────────────────────────────────────────────────────────────────
 
     @Operation(
         summary = "List feed posts for the org, paginated, newest first",
-        description = "Defaults to 20 per page, sorted by createdAt descending."
+        description = "Defaults to 20 per page, sorted by createdAt descending. POST-type only — " +
+                "MOM entries have their own endpoint. Only posts this viewer can see: public " +
+                "(no recipients), one they authored, one they're a named recipient of, or any " +
+                "post at all if they're a manager."
     )
     @GetMapping
     public ResponseEntity<ApiResponse<PagedResponse<FeedPostResponse>>> list(
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable,
             @AuthenticationPrincipal UserPrincipal principal) {
 
-        Page<FeedPost> page = feedPostRepository.findByOrgIdOrderByCreatedAtDesc(principal.getOrgId(), pageable);
+        boolean isManager = isManager(principal.getUser().getRole());
+        Page<FeedPost> page = feedPostRepository.findVisiblePosts(
+                principal.getOrgId(), principal.getId(), isManager, pageable);
+        PagedResponse<FeedPostResponse> paged = toPagedResponse(page, principal);
+        return ResponseEntity.ok(ApiResponse.success(paged));
+    }
+
+    @Operation(
+        summary = "List Minutes of Meeting entries — staff only, never shown in the regular feed",
+        description = "Defaults to 20 per page, sorted by createdAt descending."
+    )
+    @GetMapping("/mom")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN', 'THERAPIST')")
+    public ResponseEntity<ApiResponse<PagedResponse<FeedPostResponse>>> listMom(
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        Page<FeedPost> page = feedPostRepository.findByOrgIdAndTypeOrderByCreatedAtDesc(
+                principal.getOrgId(), FeedPostType.MOM, pageable);
+        PagedResponse<FeedPostResponse> paged = toPagedResponse(page, principal);
+        return ResponseEntity.ok(ApiResponse.success(paged));
+    }
+
+    private PagedResponse<FeedPostResponse> toPagedResponse(Page<FeedPost> page, UserPrincipal principal) {
         List<FeedPost> posts = page.getContent();
         List<UUID> postIds = posts.stream().map(FeedPost::getId).toList();
 
-        Map<UUID, User> authorsById = userRepository
-                .findAllById(posts.stream().map(FeedPost::getAuthorId).distinct().toList())
-                .stream()
+        Set<UUID> allUserIds = new java.util.HashSet<>(posts.stream().map(FeedPost::getAuthorId).toList());
+        posts.forEach(p -> { allUserIds.addAll(p.getRecipientIds()); allUserIds.addAll(p.getAttendeeIds()); });
+        Map<UUID, User> usersById = userRepository.findAllById(allUserIds).stream()
                 .collect(Collectors.toMap(User::getId, Function.identity()));
 
         Map<UUID, Long> likeCounts = toCountMap(likeRepository.countByPostIdIn(postIds),
@@ -121,18 +154,25 @@ public class FeedController {
 
         List<FeedPostResponse> result = posts.stream()
                 .map(p -> FeedPostResponse.from(
-                        p, authorsById.get(p.getAuthorId()),
+                        p, usersById.get(p.getAuthorId()),
                         likeCounts.getOrDefault(p.getId(), 0L),
                         likedByMe.contains(p.getId()),
                         viewCounts.getOrDefault(p.getId(), 0L),
                         commentCounts.getOrDefault(p.getId(), 0L),
-                        imagesByPost.getOrDefault(p.getId(), List.of())))
+                        imagesByPost.getOrDefault(p.getId(), List.of()),
+                        summariesOf(p.getRecipientIds(), usersById),
+                        summariesOf(p.getAttendeeIds(), usersById)))
                 .toList();
 
-        PagedResponse<FeedPostResponse> paged = new PagedResponse<>(
-                result, page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
+        return new PagedResponse<>(result, page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
+    }
 
-        return ResponseEntity.ok(ApiResponse.success(paged));
+    private List<FeedPostResponse.RecipientSummary> summariesOf(Set<UUID> ids, Map<UUID, User> usersById) {
+        return ids.stream()
+                .map(usersById::get)
+                .filter(java.util.Objects::nonNull)
+                .map(u -> new FeedPostResponse.RecipientSummary(u.getId(), u.getFirstName(), u.getLastName()))
+                .toList();
     }
 
     // ── Create / Update / Delete ────────────────────────────────────────────────
@@ -149,8 +189,19 @@ public class FeedController {
         post.setAuthorId(principal.getId());
         post.setTitle(request.title().trim());
         post.setBody(request.body() != null && !request.body().isBlank() ? request.body().trim() : null);
+        post.setType(request.type() != null ? request.type() : FeedPostType.POST);
+        // MOM is staff-wide by definition, not targeted at specific people — recipientIds only
+        // apply to a POST. Attendees, the other way round, only make sense for a MOM. Either
+        // field sent for the wrong type is ignored rather than rejected, so the frontend doesn't
+        // need to special-case clearing fields when the user switches tabs.
+        if (post.getType() == FeedPostType.POST) {
+            post.setRecipientIds(validRecipientIds(request.recipientIds(), principal.getOrgId()));
+        } else {
+            post.setAttendeeIds(validRecipientIds(request.attendeeIds(), principal.getOrgId()));
+        }
 
         FeedPost saved = feedPostRepository.save(post);
+        notifyOnPublish(saved, principal.getUser());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(buildResponse(saved, principal.getUser(), principal.getId())));
     }
@@ -170,6 +221,12 @@ public class FeedController {
         }
         if (request.body() != null) {
             post.setBody(request.body().isBlank() ? null : request.body().trim());
+        }
+        if (request.recipientIds() != null && post.getType() == FeedPostType.POST) {
+            post.setRecipientIds(validRecipientIds(request.recipientIds(), principal.getOrgId()));
+        }
+        if (request.attendeeIds() != null && post.getType() == FeedPostType.MOM) {
+            post.setAttendeeIds(validRecipientIds(request.attendeeIds(), principal.getOrgId()));
         }
 
         FeedPost saved = feedPostRepository.save(post);
@@ -373,11 +430,76 @@ public class FeedController {
         if (!post.getOrgId().equals(principal.getOrgId())) {
             throw new ApiException(HttpStatus.FORBIDDEN, "Access denied");
         }
+        if (!isVisibleTo(post, principal)) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Access denied");
+        }
         return post;
+    }
+
+    /** Same rule as {@code findVisiblePosts}, applied to a single post an ID could point at
+     *  directly — otherwise a non-recipient could still like/comment/view a targeted post by
+     *  guessing or reusing its id, even though it never appears in their own feed list. MOM
+     *  entries are staff-only, checked here rather than left to whatever list endpoint found
+     *  the id, since like/comment/view take a bare post id with no type context of their own. */
+    private boolean isVisibleTo(FeedPost post, UserPrincipal principal) {
+        Role role = principal.getUser().getRole();
+        if (post.getType() == FeedPostType.MOM) {
+            return isStaffRole(role);
+        }
+        return isManager(role)
+                || post.getAuthorId().equals(principal.getId())
+                || post.getRecipientIds().isEmpty()
+                || post.getRecipientIds().contains(principal.getId());
     }
 
     private static boolean isManager(Role role) {
         return role == Role.BUSINESS_OWNER || role == Role.CLINIC_HEAD;
+    }
+
+    private static boolean isStaffRole(Role role) {
+        return role == Role.BUSINESS_OWNER || role == Role.CLINIC_HEAD
+                || role == Role.OFFICE_ADMIN || role == Role.THERAPIST;
+    }
+
+    /** Silently drops any id that doesn't resolve to a user in this org — same "invalid ids are
+     *  dropped, not rejected" convention as ResourceService.getByIds. */
+    private Set<UUID> validRecipientIds(Set<UUID> requested, UUID orgId) {
+        if (requested == null || requested.isEmpty()) return new java.util.HashSet<>();
+        return userRepository.findAllById(requested).stream()
+                .filter(u -> u.getOrgId().equals(orgId))
+                .map(User::getId)
+                .collect(Collectors.toSet());
+    }
+
+    /** MOM always notifies every active staff member; a POST only notifies anyone when it has
+     *  no specific recipients — i.e. it was actually shared with everyone, not a targeted note. */
+    private void notifyOnPublish(FeedPost post, User author) {
+        String authorName = author.getFirstName() + " " + author.getLastName();
+        String orgName = organisationRepository.findById(post.getOrgId()).map(o -> o.getName()).orElse("Simple Hearing");
+
+        if (post.getType() == FeedPostType.MOM) {
+            List<String> staffEmails = userRepository.findByOrgId(post.getOrgId()).stream()
+                    .filter(User::isActive)
+                    .filter(u -> isStaffRole(u.getRole()))
+                    .map(User::getEmail)
+                    .toList();
+            if (!staffEmails.isEmpty()) {
+                emailService.sendMomNotification(staffEmails, authorName, post.getTitle(), orgName);
+            }
+            return;
+        }
+
+        if (post.getRecipientIds().isEmpty()) {
+            List<String> everyone = userRepository.findByOrgId(post.getOrgId()).stream()
+                    .filter(User::isActive)
+                    .map(User::getEmail)
+                    .toList();
+            if (!everyone.isEmpty()) {
+                String snippet = post.getBody() != null ? post.getBody().replaceAll("<[^>]*>", " ").trim() : null;
+                if (snippet != null && snippet.length() > 200) snippet = snippet.substring(0, 200) + "…";
+                emailService.sendFeedPostNotification(everyone, authorName, post.getTitle(), snippet, orgName);
+            }
+        }
     }
 
     private FeedPostImageResponse presignImage(FeedPostImage img) {
@@ -395,7 +517,12 @@ public class FeedController {
                 .sorted(Comparator.comparingInt(FeedPostImage::getOrderIndex))
                 .map(this::presignImage)
                 .toList();
-        return FeedPostResponse.from(post, author, likeCount, likedByMe, viewCount, commentCount, images);
+        Set<UUID> namedIds = new java.util.HashSet<>(post.getRecipientIds());
+        namedIds.addAll(post.getAttendeeIds());
+        Map<UUID, User> namedUsers = userRepository.findAllById(namedIds).stream()
+                .collect(Collectors.toMap(User::getId, Function.identity()));
+        return FeedPostResponse.from(post, author, likeCount, likedByMe, viewCount, commentCount, images,
+                summariesOf(post.getRecipientIds(), namedUsers), summariesOf(post.getAttendeeIds(), namedUsers));
     }
 
     private <T> Map<UUID, Long> toCountMap(List<T> rows, Function<T, UUID> keyFn, Function<T, Long> valFn) {

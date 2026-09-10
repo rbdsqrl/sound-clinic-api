@@ -31,6 +31,8 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     @Query("SELECT COUNT(u) > 0 FROM User u WHERE lower(u.email) = lower(:email) AND u.isActive = :isActive")
     boolean existsByEmailAndIsActive(@Param("email") String email, @Param("isActive") boolean isActive);
 
+    List<User> findByOrgId(UUID orgId);
+
     List<User> findByClinicIdAndRole(UUID clinicId, Role role);
 
     List<User> findByClinicId(UUID clinicId);

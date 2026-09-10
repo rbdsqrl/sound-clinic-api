@@ -327,6 +327,44 @@ public class EmailService {
         send(to, "Leave request " + status.toLowerCase() + " — " + leaveDate, html);
     }
 
+    /** A Feed post shared org-wide (no specific recipients picked) — everyone in the org gets
+     *  notified. A targeted post never triggers this; only "everyone" does. */
+    @Async
+    public void sendFeedPostNotification(List<String> recipients, String authorName, String title,
+                                          String snippet, String orgName) {
+        Map<String, String> vars = new java.util.HashMap<>();
+        vars.put("ORG_NAME", orgName);
+        vars.put("LOGO_URL", props.getBaseUrl() + "/logo.png");
+        vars.put("AUTHOR_NAME", authorName);
+        vars.put("TITLE", title);
+        vars.put("SNIPPET_ROW", snippet != null && !snippet.isBlank()
+                ? "<p style=\"margin:0 0 24px;font-size:14px;color:#6b7280;line-height:1.6;\">" + snippet + "</p>"
+                : "");
+        vars.put("FEED_URL", props.getBaseUrl() + "/feed");
+        String html = fillStubs(loadTemplate("feed-post-published"), vars);
+        String subject = "New update — " + title;
+        for (String to : recipients) {
+            send(to, subject, html);
+        }
+    }
+
+    /** Minutes of a meeting were recorded — every staff member in the org gets notified,
+     *  whether or not they attended. */
+    @Async
+    public void sendMomNotification(List<String> recipients, String authorName, String title, String orgName) {
+        Map<String, String> vars = new java.util.HashMap<>();
+        vars.put("ORG_NAME", orgName);
+        vars.put("LOGO_URL", props.getBaseUrl() + "/logo.png");
+        vars.put("AUTHOR_NAME", authorName);
+        vars.put("TITLE", title);
+        vars.put("FEED_URL", props.getBaseUrl() + "/feed?tab=mom");
+        String html = fillStubs(loadTemplate("mom-published"), vars);
+        String subject = "Minutes of Meeting — " + title;
+        for (String to : recipients) {
+            send(to, subject, html);
+        }
+    }
+
     private String loadTemplate(String name) {
         try {
             ClassPathResource resource = new ClassPathResource("templates/email/" + name + ".html");
