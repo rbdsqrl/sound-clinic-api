@@ -287,8 +287,12 @@ public class ConcernController {
         Map<UUID, Patient> patientMap = patientRepository.findAllById(patientIds).stream()
                 .collect(Collectors.toMap(Patient::getId, p -> p));
 
-        Set<UUID> therapistIds = concerns.stream().map(EnrollmentConcern::getTherapistId).collect(Collectors.toSet());
-        Map<UUID, User> userMap = userRepository.findAllById(therapistIds).stream()
+        Set<UUID> userIds = concerns.stream().map(EnrollmentConcern::getTherapistId).collect(Collectors.toSet());
+        concerns.forEach(c -> {
+            if (c.getAcknowledgedBy() != null) userIds.add(c.getAcknowledgedBy());
+            if (c.getResolvedBy() != null) userIds.add(c.getResolvedBy());
+        });
+        Map<UUID, User> userMap = userRepository.findAllById(userIds).stream()
                 .collect(Collectors.toMap(User::getId, u -> u));
 
         Map<UUID, String> programNames = new HashMap<>();
@@ -301,13 +305,19 @@ public class ConcernController {
         return concerns.stream().map(c -> {
             Patient patient = patientMap.get(c.getPatientId());
             User therapist = userMap.get(c.getTherapistId());
+            User acknowledgedByUser = c.getAcknowledgedBy() != null ? userMap.get(c.getAcknowledgedBy()) : null;
+            User resolvedByUser = c.getResolvedBy() != null ? userMap.get(c.getResolvedBy()) : null;
             return ConcernResponse.from(
                     c,
                     programNames.getOrDefault(c.getEnrollmentId(), "Unknown Program"),
                     patient != null ? patient.getFirstName() : "",
                     patient != null ? patient.getLastName() : "",
                     therapist != null ? therapist.getFirstName() : "",
-                    therapist != null ? therapist.getLastName() : "");
+                    therapist != null ? therapist.getLastName() : "",
+                    acknowledgedByUser != null ? acknowledgedByUser.getFirstName() : null,
+                    acknowledgedByUser != null ? acknowledgedByUser.getLastName() : null,
+                    resolvedByUser != null ? resolvedByUser.getFirstName() : null,
+                    resolvedByUser != null ? resolvedByUser.getLastName() : null);
         }).toList();
     }
 }

@@ -20,8 +20,14 @@ public record ConcernResponse(
         Instant raisedAt,
         String description,
         ConcernStatus status,
+        UUID acknowledgedBy,
+        String acknowledgedByFirstName,
+        String acknowledgedByLastName,
         Instant acknowledgedAt,
         String resolutionNotes,
+        UUID resolvedBy,
+        String resolvedByFirstName,
+        String resolvedByLastName,
         Instant resolvedAt
 ) {
     public static ConcernResponse from(
@@ -30,7 +36,11 @@ public record ConcernResponse(
             String patientFirstName,
             String patientLastName,
             String therapistFirstName,
-            String therapistLastName) {
+            String therapistLastName,
+            String acknowledgedByFirstName,
+            String acknowledgedByLastName,
+            String resolvedByFirstName,
+            String resolvedByLastName) {
         return new ConcernResponse(
                 c.getId(),
                 c.getEnrollmentId(),
@@ -45,8 +55,14 @@ public record ConcernResponse(
                 c.getRaisedAt(),
                 c.getDescription(),
                 c.getStatus(),
+                c.getAcknowledgedBy(),
+                acknowledgedByFirstName,
+                acknowledgedByLastName,
                 c.getAcknowledgedAt(),
                 c.getResolutionNotes(),
+                c.getResolvedBy(),
+                resolvedByFirstName,
+                resolvedByLastName,
                 c.getResolvedAt()
         );
     }
