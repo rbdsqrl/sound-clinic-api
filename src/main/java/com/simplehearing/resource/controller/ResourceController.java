@@ -94,6 +94,18 @@ public class ResourceController {
         }
     }
 
+    @Operation(summary = "Assign every resource in a folder (subfolders included) to a patient in one call")
+    @PostMapping("/folders/{id}/assign")
+    @PreAuthorize("hasAnyRole(" + ASSIGN_ROLES + ")")
+    public ResponseEntity<ApiResponse<AssignFolderResponse>> assignFolder(
+            @PathVariable UUID id,
+            @Valid @RequestBody AssignResourceRequest request,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        AssignFolderResponse assigned = resourceService.assignFolderToPatient(principal.getOrgId(), id, principal.getId(), request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(assigned));
+    }
+
     @Operation(summary = "Create a folder — top-level if parentFolderId is omitted")
     @PostMapping("/folders")
     @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")

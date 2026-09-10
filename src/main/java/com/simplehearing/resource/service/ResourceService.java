@@ -115,6 +115,44 @@ public class ResourceService {
         return toResponse(assignmentRepository.save(assignment), resource);
     }
 
+    /** Assigns every resource in a folder's subtree (its own resources plus every subfolder's,
+     *  recursively) to one patient — the folder-level equivalent of {@link #assignToPatient}.
+     *  A resource already assigned to this patient is skipped rather than raising a conflict,
+     *  since one already-assigned item shouldn't fail a bulk operation covering the rest. */
+    public AssignFolderResponse assignFolderToPatient(UUID orgId, UUID folderId, UUID assignedByUserId, AssignResourceRequest request) {
+        requireFolder(orgId, folderId);
+        Patient patient = patientRepository.findByIdAndOrgId(request.patientId(), orgId)
+                .orElseThrow(() -> new ResourceNotFoundException("Patient", request.patientId()));
+
+        List<Resource> resources = collectResourcesInFolderTree(orgId, folderId);
+
+        int assigned = 0;
+        int alreadyAssigned = 0;
+        for (Resource resource : resources) {
+            if (assignmentRepository.findByResourceIdAndPatientId(resource.getId(), patient.getId()).isPresent()) {
+                alreadyAssigned++;
+                continue;
+            }
+            ResourceAssignment assignment = new ResourceAssignment();
+            assignment.setOrgId(orgId);
+            assignment.setResourceId(resource.getId());
+            assignment.setPatientId(patient.getId());
+            assignment.setAssignedBy(assignedByUserId);
+            assignmentRepository.save(assignment);
+            assigned++;
+        }
+
+        return new AssignFolderResponse(resources.size(), assigned, alreadyAssigned);
+    }
+
+    private List<Resource> collectResourcesInFolderTree(UUID orgId, UUID folderId) {
+        List<Resource> all = new ArrayList<>(resourceRepository.findByOrgIdAndFolderIdOrderByNameAsc(orgId, folderId));
+        for (ResourceFolder sub : folderRepository.findByOrgIdAndParentFolderId(orgId, folderId)) {
+            all.addAll(collectResourcesInFolderTree(orgId, sub.getId()));
+        }
+        return all;
+    }
+
     public void unassign(UUID orgId, UUID assignmentId) {
         ResourceAssignment assignment = assignmentRepository.findById(assignmentId)
                 .filter(a -> a.getOrgId().equals(orgId))
@@ -142,7 +180,25 @@ public class ResourceService {
         String assignedByName = userRepository.findById(a.getAssignedBy())
                 .map(u -> fullName(u.getFirstName(), u.getLastName()))
                 .orElse("Unknown");
-        return ResourceAssignmentResponse.from(a, resource.getName(), resource.getType(), resolvedUrl, hosted, assignedByName);
+        String folderPath = resolveFolderPath(resource.getFolderId());
+        return ResourceAssignmentResponse.from(a, resource.getName(), resource.getType(), resolvedUrl, hosted,
+                resource.getFolderId(), folderPath, assignedByName);
+    }
+
+    /** Walks a resource's folder up to the library root and joins the names ("Alphabet / Tracing")
+     *  so the Parent app can group assigned resources by where they live in the library — the
+     *  folder-browsing screen's breadcrumb, flattened to one string. Null for a root resource. */
+    private String resolveFolderPath(UUID folderId) {
+        if (folderId == null) return null;
+        LinkedList<String> segments = new LinkedList<>();
+        UUID current = folderId;
+        while (current != null) {
+            ResourceFolder folder = folderRepository.findById(current).orElse(null);
+            if (folder == null) break;
+            segments.addFirst(folder.getName());
+            current = folder.getParentFolderId();
+        }
+        return segments.isEmpty() ? null : String.join(" / ", segments);
     }
 
     private String fullName(String first, String last) {
