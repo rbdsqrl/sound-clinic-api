@@ -356,6 +356,7 @@ Master file: `db.changelog-master.yaml` — lists migrations in order.
 | 098-list-sort-indexes.sql           | `idx_patients_org_created` / `idx_users_org_created` — composite (org_id, created_at desc) indexes backing the paginated Cases/Members lists' default sort |
 | 099-more-list-indexes.sql           | Composite indexes on `subscriptions`, `enrollments` (had none beyond PK), `tasks`, `invitations`, `attendance` — same missing-sort/scan-index gap as 098, found via a full-repository audit |
 | 105-meeting-recurrence-and-notes.sql | `meetings.notes` (per-occurrence write-up) + `meetings.series_id`/`occurrence_number`/`total_occurrences` (recurring series) |
+| 106-session-cancelled-by-case-inactive.sql | `therapy_sessions.cancelled_by_case_inactive` — marks a session auto-cancelled by marking a case inactive (patient-level analogue of 094), so reactivating the case restores exactly those |
 
 **To add a migration:** create `NNN-description.sql` with the Liquibase header, then add it to the master YAML.
 

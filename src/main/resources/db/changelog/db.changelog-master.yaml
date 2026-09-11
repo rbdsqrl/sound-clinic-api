@@ -314,3 +314,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/105-meeting-recurrence-and-notes.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/106-session-cancelled-by-case-inactive.sql
+      relativeToChangelogFile: false

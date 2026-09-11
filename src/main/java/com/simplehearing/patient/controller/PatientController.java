@@ -46,8 +46,9 @@ public class PatientController {
     @Operation(
         summary = "List patients in your organisation, paginated",
         description = "Defaults to 20 per page, sorted by createdAt (year joined) descending. " +
-                      "`status` is a comma-separated subset of ACTIVE,INACTIVE (Active = not discharged, " +
-                      "Inactive = stage DISCHARGED) — omitted defaults to ACTIVE; an explicitly empty value " +
+                      "`status` is a comma-separated subset of ACTIVE,INACTIVE (Active = not discharged and not " +
+                      "manually marked inactive; Inactive = stage DISCHARGED or isActive=false) — omitted defaults " +
+                      "to ACTIVE; an explicitly empty value " +
                       "returns every status. `mine` scopes to " +
                       "patients assigned to the caller (always on for THERAPIST, regardless of this param). " +
                       "`compact=true` returns parents/therapists as id-only stubs (blank name/email) — for " +
@@ -111,6 +112,20 @@ public class PatientController {
             @Valid @RequestBody UpdatePatientStageRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(patientService.updateStage(id, request, principal)));
+    }
+
+    @Operation(summary = "Mark a case active/inactive",
+            description = "Independent of stage — for a case that never fully enrolled and needs pulling off the "
+                        + "active list without a full discharge (which requires at least one enrollment). Going "
+                        + "inactive cancels the patient's still-upcoming sessions; going active again restores them. "
+                        + "Refused once the case has been discharged, which already counts as inactive.")
+    @PatchMapping("/{id}/active")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
+    public ResponseEntity<ApiResponse<PatientResponse>> setActive(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdatePatientActiveRequest request,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(patientService.setActive(id, request.active(), principal)));
     }
 
     @Operation(summary = "Delete a patient and all associated records")

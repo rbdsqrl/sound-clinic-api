@@ -22,6 +22,7 @@ import com.simplehearing.user.repository.UserLanguageRepository;
 import com.simplehearing.user.repository.UserRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -341,6 +342,39 @@ public class UserController {
         }
         target.setActive(true);
         userRepository.save(target);
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    @Operation(summary = "Permanently delete an archived member",
+            description = "Unlike DELETE /{id} (which deactivates), this removes the account row entirely — only "
+                        + "allowed once the member is already archived (isActive=false), and only when nothing else "
+                        + "still references them (past sessions, cases, leave, meetings, etc.); such a member fails "
+                        + "with a 409 instead, since their history can't be silently deleted along with them.")
+    @DeleteMapping("/{id}/permanent")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
+    public ResponseEntity<ApiResponse<Void>> hardDeleteMember(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        if (id.equals(principal.getId())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "You cannot delete your own account");
+        }
+        User target = userRepository.findById(id)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "User not found"));
+        if (!target.getOrgId().equals(principal.getOrgId())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "User does not belong to this organisation");
+        }
+        if (target.isActive()) {
+            throw new ApiException(HttpStatus.CONFLICT, "Archive this member before permanently deleting them");
+        }
+
+        try {
+            userRepository.delete(target);
+        } catch (DataIntegrityViolationException e) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "This member has historical records (sessions, cases, leave, meetings, etc.) tied to their "
+                  + "account and can't be permanently deleted — they'll remain archived.");
+        }
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 

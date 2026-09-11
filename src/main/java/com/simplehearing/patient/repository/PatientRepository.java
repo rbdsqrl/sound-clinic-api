@@ -23,10 +23,10 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
     Optional<Patient> findByIdAndOrgId(UUID id, UUID orgId);
 
     /**
-     * Backs the paginated Cases list. A case is Active until discharged — Inactive means
-     * stage = DISCHARGED, nothing else. (Previously this also split out an "invite" status
-     * derived from whether a parent was linked; dropped since it didn't correspond to anything
-     * the UI should treat as a distinct case state.)
+     * Backs the paginated Cases list. A case is Active until discharged or manually marked
+     * inactive (p.isActive = false) — Inactive means either one. (Previously this also split
+     * out an "invite" status derived from whether a parent was linked; dropped since it didn't
+     * correspond to anything the UI should treat as a distinct case state.)
      */
     @Query("""
             SELECT p FROM Patient p WHERE p.orgId = :orgId
@@ -35,8 +35,8 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
                     SELECT 1 FROM TherapistPatient tp
                     WHERE tp.patientId = p.id AND tp.therapistId = :userId AND tp.isActive = true))
               AND (
-                    (:includeActive = true AND p.stage <> com.simplehearing.patient.enums.PatientStage.DISCHARGED)
-                 OR (:includeInactive = true AND p.stage = com.simplehearing.patient.enums.PatientStage.DISCHARGED)
+                    (:includeActive = true AND p.stage <> com.simplehearing.patient.enums.PatientStage.DISCHARGED AND p.isActive = true)
+                 OR (:includeInactive = true AND (p.stage = com.simplehearing.patient.enums.PatientStage.DISCHARGED OR p.isActive = false))
                   )
             """)
     Page<Patient> search(@Param("orgId") UUID orgId,

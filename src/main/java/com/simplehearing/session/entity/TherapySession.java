@@ -107,6 +107,12 @@ public class TherapySession {
     @Column(name = "cancelled_by_program_completion", nullable = false)
     private boolean cancelledByProgramCompletion = false;
 
+    /** True when this session was auto-cancelled because the patient's case was marked
+     *  inactive (see cancelled_by_program_completion above for the enrollment-level analogue).
+     *  Lets marking the case active again restore precisely these sessions and no others. */
+    @Column(name = "cancelled_by_case_inactive", nullable = false)
+    private boolean cancelledByCaseInactive = false;
+
     @Column(name = "completed_by")
     private UUID completedBy;
 
@@ -163,6 +169,8 @@ public class TherapySession {
     public void setRequiresPayment(boolean v) { this.requiresPayment = v; }
     public boolean isCancelledByProgramCompletion() { return cancelledByProgramCompletion; }
     public void setCancelledByProgramCompletion(boolean v) { this.cancelledByProgramCompletion = v; }
+    public boolean isCancelledByCaseInactive() { return cancelledByCaseInactive; }
+    public void setCancelledByCaseInactive(boolean v) { this.cancelledByCaseInactive = v; }
 
     public int getRescheduleCount() { return rescheduleCount; }
     public void setRescheduleCount(int rescheduleCount) { this.rescheduleCount = rescheduleCount; }

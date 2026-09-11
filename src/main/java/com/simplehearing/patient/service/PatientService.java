@@ -19,6 +19,8 @@ import com.simplehearing.patient.enums.PatientStage;
 import com.simplehearing.patient.repository.*;
 import com.simplehearing.program.entity.Program;
 import com.simplehearing.program.repository.ProgramRepository;
+import com.simplehearing.session.entity.TherapySession;
+import com.simplehearing.session.enums.TherapySessionStatus;
 import com.simplehearing.session.repository.SessionAttachmentRepository;
 import com.simplehearing.session.repository.TherapySessionRepository;
 import com.simplehearing.subscription.entity.Subscription;
@@ -203,6 +205,56 @@ public class PatientService {
         }
         Patient patient = findPatient(patientId, principal.getOrgId());
         patient.setStage(request.stage());
+        return buildResponse(patientRepository.save(patient));
+    }
+
+    /**
+     * Marks a case active/inactive independently of {@code stage} — for a case that never
+     * fully enrolled (still stuck earlier in the pipeline) and needs pulling off the active
+     * list without going through {@code POST /patients/{id}/discharge}, which requires at
+     * least one enrollment to exist. Discharge remains the stronger, terminal path for a case
+     * that did enroll; this toggle is for the case that didn't.
+     * Going inactive cancels every one of the patient's sessions still SCHEDULED /
+     * PENDING_RESCHEDULE / CANCELLATION_REQUESTED on or after today — mirrors the enrollment
+     * force-complete override (see EnrollmentController#updateCareStatus) at the patient level
+     * instead of the enrollment level. Going active again restores exactly those sessions.
+     */
+    public PatientResponse setActive(UUID patientId, boolean active, UserPrincipal principal) {
+        Patient patient = findPatient(patientId, principal.getOrgId());
+        if (patient.getStage() == PatientStage.DISCHARGED) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "This case is already discharged, which is already treated as inactive");
+        }
+        if (patient.isActive() == active) {
+            return buildResponse(patient);
+        }
+
+        patient.setActive(active);
+
+        if (!active) {
+            LocalDate today = LocalDate.now();
+            List<TherapySession> stillAhead = therapySessionRepository.findByPatientId(patientId).stream()
+                    .filter(s -> !s.getSessionDate().isBefore(today))
+                    .filter(s -> s.getStatus() == TherapySessionStatus.SCHEDULED
+                            || s.getStatus() == TherapySessionStatus.PENDING_RESCHEDULE
+                            || s.getStatus() == TherapySessionStatus.CANCELLATION_REQUESTED)
+                    .toList();
+            stillAhead.forEach(s -> {
+                s.setStatus(TherapySessionStatus.CANCELLED);
+                s.setCancelledByCaseInactive(true);
+            });
+            therapySessionRepository.saveAll(stillAhead);
+        } else {
+            List<TherapySession> toRestore = therapySessionRepository.findByPatientId(patientId).stream()
+                    .filter(TherapySession::isCancelledByCaseInactive)
+                    .toList();
+            toRestore.forEach(s -> {
+                s.setStatus(TherapySessionStatus.SCHEDULED);
+                s.setCancelledByCaseInactive(false);
+            });
+            therapySessionRepository.saveAll(toRestore);
+        }
+
         return buildResponse(patientRepository.save(patient));
     }
 
