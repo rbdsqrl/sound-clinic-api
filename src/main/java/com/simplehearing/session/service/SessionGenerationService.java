@@ -72,18 +72,9 @@ public class SessionGenerationService {
         List<TherapySession> sessions = new ArrayList<>(numSessions);
         LocalDate date = enrollment.getStartDate();
         for (int i = 0; i < numSessions; i++) {
-            // Skip past any public holidays, the org's weekly off days, or a weekday this
-            // plan isn't scheduled on. Bounded to just over two years out — long enough that a
-            // real schedule never hits it, but finite so a bad combination can't hang the request.
-            LocalDate searchLimit = date.plusDays(800);
-            while (holidays.contains(date) || weeklyOffDays.contains(date.getDayOfWeek())
-                    || (restrictToSessionDays && !sessionDays.contains(date.getDayOfWeek()))) {
-                date = date.plusDays(1);
-                if (date.isAfter(searchLimit)) {
-                    throw new ApiException(HttpStatus.CONFLICT,
-                            "Couldn't find enough valid session dates — check the selected days against holidays and weekly off days");
-                }
-            }
+            // Bounded to just over two years out — long enough that a real schedule never hits
+            // it, but finite so a bad combination can't hang the request.
+            date = nextValidDate(date, holidays, weeklyOffDays, sessionDays, restrictToSessionDays, date.plusDays(800));
             TherapySession s = new TherapySession();
             s.setOrgId(enrollment.getOrgId());
             s.setEnrollmentId(enrollment.getId());
@@ -98,5 +89,65 @@ public class SessionGenerationService {
         }
 
         return sessionRepository.saveAll(sessions);
+    }
+
+    /**
+     * Re-dates and re-times an already-fetched subset of a plan's still-SCHEDULED sessions
+     * (sorted by session number — the caller's chosen "still ahead of the new effective date"
+     * set), starting from {@code effectiveDate}, using the same placement rules
+     * {@link #generateSessions} uses at creation. Session numbers and total plan length never
+     * change — only which calendar dates the remaining sessions land on. The caller is expected
+     * to have already applied any new start time / session days onto {@code enrollment} (not
+     * yet saved) before calling this, since those are what get read here.
+     */
+    public List<TherapySession> rescheduleFutureSessions(
+            Enrollment enrollment, LocalDate effectiveDate, List<TherapySession> sessionsToReschedule) {
+        LocalTime startTime = enrollment.getStartTime();
+        LocalTime endTime   = startTime.plusMinutes(enrollment.getSessionDurationMinutes());
+
+        Set<LocalDate> holidays = holidayRepository
+                .findByOrgIdOrderByHolidayDateAsc(enrollment.getOrgId())
+                .stream()
+                .map(h -> h.getHolidayDate())
+                .collect(Collectors.toSet());
+
+        Set<DayOfWeek> weeklyOffDays = organisationRepository.findById(enrollment.getOrgId())
+                .map(Organisation::getWeeklyOffDays)
+                .orElse(EnumSet.noneOf(DayOfWeek.class));
+
+        Set<DayOfWeek> sessionDays = enrollment.getSessionDays();
+        boolean restrictToSessionDays = sessionDays != null && !sessionDays.isEmpty();
+
+        if (restrictToSessionDays && weeklyOffDays.containsAll(sessionDays)) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "Every selected day is a weekly off day for this organisation — choose a different day");
+        }
+
+        LocalDate date = effectiveDate;
+        for (TherapySession session : sessionsToReschedule) {
+            date = nextValidDate(date, holidays, weeklyOffDays, sessionDays, restrictToSessionDays, date.plusDays(800));
+            session.setSessionDate(date);
+            session.setStartTime(startTime);
+            session.setEndTime(endTime);
+            date = date.plusDays(1);
+        }
+
+        return sessionRepository.saveAll(sessionsToReschedule);
+    }
+
+    /** Advances {@code date} past any public holiday, the org's weekly off days, or a weekday
+     *  the plan isn't scheduled on, and returns the first date that clears all three. */
+    private LocalDate nextValidDate(
+            LocalDate date, Set<LocalDate> holidays, Set<DayOfWeek> weeklyOffDays,
+            Set<DayOfWeek> sessionDays, boolean restrictToSessionDays, LocalDate searchLimit) {
+        while (holidays.contains(date) || weeklyOffDays.contains(date.getDayOfWeek())
+                || (restrictToSessionDays && !sessionDays.contains(date.getDayOfWeek()))) {
+            date = date.plusDays(1);
+            if (date.isAfter(searchLimit)) {
+                throw new ApiException(HttpStatus.CONFLICT,
+                        "Couldn't find enough valid session dates — check the selected days against holidays and weekly off days");
+            }
+        }
+        return date;
     }
 }

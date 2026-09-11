@@ -18,6 +18,7 @@ import com.simplehearing.enrollment.dto.CreateEnrollmentRequest;
 import com.simplehearing.enrollment.dto.EnrollmentResponse;
 import com.simplehearing.enrollment.dto.TherapistSignoffRequest;
 import com.simplehearing.enrollment.dto.UpdateCareStatusRequest;
+import com.simplehearing.enrollment.dto.UpdateEnrollmentScheduleRequest;
 import com.simplehearing.enrollment.entity.Enrollment;
 import com.simplehearing.enrollment.enums.EnrollmentCareStatus;
 import com.simplehearing.enrollment.enums.EnrollmentStatus;
@@ -391,6 +392,124 @@ public class EnrollmentController {
 
         enrollment.setStatus(EnrollmentStatus.CANCELLED);
         Enrollment saved = enrollmentRepository.save(enrollment);
+
+        List<EnrollmentResponse> enriched = enrichEnrollments(List.of(saved));
+        return ResponseEntity.ok(ApiResponse.success(enriched.get(0)));
+    }
+
+    // ── Edit an ongoing plan's schedule ───────────────────────────────────────
+
+    @Operation(
+        summary = "Edit an ongoing plan's schedule",
+        description = "Changes the start time and/or which weekdays sessions land on, effective from a chosen "
+                    + "date — sessions before that date keep their existing date/time; sessions on/after it are "
+                    + "re-dated using the new day pattern (same placement rules as plan creation), keeping the "
+                    + "same session numbers and total count. Can also hand the plan to a different therapist in "
+                    + "the same call, mirroring PATCH /{id}/therapist for the sessions/review meetings still ahead."
+    )
+    @PatchMapping("/{id}/schedule")
+    @PreAuthorize("hasAnyRole('CLINIC_HEAD', 'BUSINESS_OWNER', 'OFFICE_ADMIN')")
+    public ResponseEntity<ApiResponse<EnrollmentResponse>> updateSchedule(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateEnrollmentScheduleRequest request,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        Enrollment enrollment = enrollmentRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Enrollment not found"));
+
+        if (!enrollment.getOrgId().equals(principal.getOrgId())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Access denied");
+        }
+        if (enrollment.getStatus() != EnrollmentStatus.ACTIVE) {
+            throw new ApiException(HttpStatus.CONFLICT, "Only an active plan's schedule can be edited");
+        }
+        if (request.startTime() == null && request.sessionDays() == null && request.therapistId() == null) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Provide a new time, day schedule, or therapist to change");
+        }
+        if (request.effectiveDate().isBefore(LocalDate.now())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Effective date can't be in the past");
+        }
+
+        User newTherapist = null;
+        if (request.therapistId() != null && !request.therapistId().equals(enrollment.getTherapistId())) {
+            newTherapist = userRepository.findById(request.therapistId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Therapist not found"));
+            if (!newTherapist.getOrgId().equals(principal.getOrgId())) {
+                throw new ApiException(HttpStatus.FORBIDDEN, "Therapist belongs to another organisation");
+            }
+            if (!newTherapist.isActive()) {
+                throw new ApiException(HttpStatus.CONFLICT, "That therapist is deactivated");
+            }
+            if (!newTherapist.hasRole(Role.THERAPIST)) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "That user is not a therapist");
+            }
+        }
+
+        if (request.startTime() != null) {
+            enrollment.setStartTime(request.startTime());
+        }
+        if (request.sessionDays() != null) {
+            enrollment.setSessionDays(request.sessionDays());
+        }
+        UUID previousTherapistId = enrollment.getTherapistId();
+        if (newTherapist != null) {
+            enrollment.setTherapistId(newTherapist.getId());
+        }
+
+        // Only what is still SCHEDULED on or after the effective date gets re-dated; anything
+        // earlier (including already-past-but-still-SCHEDULED sessions before today, an edge
+        // case for an overdue plan) keeps its existing date/time.
+        List<TherapySession> future = therapySessionRepository.findByEnrollmentIdOrderBySessionNumberAsc(id).stream()
+                .filter(s -> s.getStatus() == TherapySessionStatus.SCHEDULED
+                        && !s.getSessionDate().isBefore(request.effectiveDate()))
+                .collect(Collectors.toList());
+
+        if (!future.isEmpty()) {
+            if (newTherapist != null) {
+                for (TherapySession s : future) {
+                    s.setTherapistId(newTherapist.getId());
+                }
+            }
+            List<TherapySession> rescheduled =
+                    sessionGenerationService.rescheduleFutureSessions(enrollment, request.effectiveDate(), future);
+            enrollment.setEndDate(rescheduled.get(rescheduled.size() - 1).getSessionDate());
+        }
+
+        int movedMeetings = 0;
+        if (newTherapist != null) {
+            LocalDate today = LocalDate.now();
+            for (ReviewMeeting meeting : reviewMeetingRepository.findByEnrollmentIdOrderByMeetingNumberAsc(id)) {
+                if (meeting.getStatus() == ReviewMeetingStatus.SCHEDULED
+                        && !meeting.getMeetingDate().isBefore(today)) {
+                    meeting.setTherapistId(newTherapist.getId());
+                    reviewMeetingRepository.save(meeting);
+                    movedMeetings++;
+                }
+            }
+
+            final User finalNewTherapist = newTherapist;
+            therapistPatientRepository
+                    .findByPatientIdAndTherapistId(enrollment.getPatientId(), finalNewTherapist.getId())
+                    .ifPresentOrElse(existing -> {
+                        if (!existing.isActive()) {
+                            existing.setActive(true);
+                            therapistPatientRepository.save(existing);
+                        }
+                    }, () -> {
+                        TherapistPatient link = new TherapistPatient();
+                        link.setPatientId(enrollment.getPatientId());
+                        link.setTherapistId(finalNewTherapist.getId());
+                        link.setAssignedBy(principal.getId());
+                        therapistPatientRepository.save(link);
+                    });
+        }
+
+        Enrollment saved = enrollmentRepository.save(enrollment);
+
+        log.info("Enrollment {} schedule updated effective {} — {} session(s) re-dated, "
+                        + "therapist {} -> {}, {} review meeting(s) moved",
+                id, request.effectiveDate(), future.size(), previousTherapistId,
+                newTherapist != null ? newTherapist.getId() : previousTherapistId, movedMeetings);
 
         List<EnrollmentResponse> enriched = enrichEnrollments(List.of(saved));
         return ResponseEntity.ok(ApiResponse.success(enriched.get(0)));
