@@ -192,6 +192,19 @@ public class PatientService {
         return buildResponses(patientIds.isEmpty() ? List.of() : patientRepository.findAllById(patientIds), false);
     }
 
+    /** Admin-facing equivalent of {@link #listMyChildren} — an arbitrary parent's linked
+     *  children, for the Parent view on that member's profile. */
+    @Transactional(readOnly = true)
+    public List<PatientResponse> listChildrenOfParent(UUID parentId, UserPrincipal principal) {
+        List<PatientParent> links = patientParentRepository.findById_ParentId(parentId);
+        List<UUID> patientIds = links.stream().map(pp -> pp.getId().getPatientId()).toList();
+        if (patientIds.isEmpty()) return List.of();
+        List<Patient> patients = patientRepository.findAllById(patientIds).stream()
+                .filter(p -> p.getOrgId().equals(principal.getOrgId()))
+                .toList();
+        return buildResponses(patients, false);
+    }
+
     @Transactional(readOnly = true)
     public PatientResponse get(UUID patientId, UserPrincipal principal) {
         Patient patient = findPatient(patientId, principal.getOrgId());

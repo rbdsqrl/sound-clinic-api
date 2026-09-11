@@ -266,6 +266,8 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | GET      | `/api/v1/patients`                      | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST | Paginated patients list — 20/page, sorted `createdAt` desc by default; `search`, `mine`, `status` (comma-separated ACTIVE/INACTIVE — Active = not discharged, Inactive = stage DISCHARGED), `compact` (id-only parent/therapist stubs) filters |
 | POST     | `/api/v1/patients`                      | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN                     | Create patient                      |
 | GET      | `/api/v1/patients/{id}`                 | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST | Patient detail                      |
+| GET      | `/api/v1/patients/my-children`          | PARENT                                                  | The calling parent's linked children |
+| GET      | `/api/v1/patients/by-parent/{parentId}` | BUSINESS_OWNER, CLINIC_HEAD                             | Admin-facing equivalent of `my-children` for an arbitrary parent — powers the Parent view on their Member Profile page |
 | POST     | `/api/v1/patients/{id}/conditions`      | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST                        | Add condition to patient            |
 | POST     | `/api/v1/patients/{id}/parents`         | BUSINESS_OWNER, CLINIC_HEAD                                   | Link parent to patient              |
 | POST     | `/api/v1/patients/{id}/therapists`      | BUSINESS_OWNER, CLINIC_HEAD                                   | Assign therapist to patient         |

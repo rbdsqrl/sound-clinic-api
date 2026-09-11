@@ -85,6 +85,16 @@ public class PatientController {
         return ResponseEntity.ok(ApiResponse.success(patientService.listMyChildren(principal)));
     }
 
+    @Operation(summary = "Children linked to a specific parent user",
+               description = "Admin view of a parent's linked cases — the admin-facing equivalent of GET /patients/my-children, for the Parent view on a member's profile.")
+    @GetMapping("/by-parent/{parentId}")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    public ResponseEntity<ApiResponse<List<PatientResponse>>> childrenOfParent(
+            @PathVariable UUID parentId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(patientService.listChildrenOfParent(parentId, principal)));
+    }
+
     @Operation(summary = "Get a patient by ID")
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'PARENT', 'OFFICE_ADMIN')")
