@@ -7,7 +7,6 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
-import java.util.List;
 import java.util.UUID;
 
 public class UserPrincipal implements UserDetails {
@@ -51,9 +50,16 @@ public class UserPrincipal implements UserDetails {
         return user.getClinicId();
     }
 
+    /** Every role the account holds (primary + additional) grants its authority — a
+     *  @PreAuthorize check should reflect everything the account can do, per the class
+     *  comment above. Gate on {@link #getActiveRole()} instead when an endpoint needs to
+     *  branch on which hat the caller is currently viewing as, not on whether they're allowed
+     *  in at all. */
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()));
+        return user.getAllRoles().stream()
+                .map(r -> new SimpleGrantedAuthority("ROLE_" + r.name()))
+                .toList();
     }
 
     @Override
