@@ -7,6 +7,8 @@ import com.simplehearing.common.dto.PagedResponse;
 import com.simplehearing.common.exception.ApiException;
 import com.simplehearing.condition.entity.Condition;
 import com.simplehearing.condition.repository.ConditionRepository;
+import com.simplehearing.enrollment.entity.Enrollment;
+import com.simplehearing.enrollment.enums.EnrollmentStatus;
 import com.simplehearing.enrollment.repository.EnrollmentRepository;
 import com.simplehearing.iep.repository.IEPGoalProgressRepository;
 import com.simplehearing.iep.repository.IEPGoalRepository;
@@ -19,6 +21,10 @@ import com.simplehearing.patient.enums.PatientStage;
 import com.simplehearing.patient.repository.*;
 import com.simplehearing.program.entity.Program;
 import com.simplehearing.program.repository.ProgramRepository;
+import com.simplehearing.review.entity.ReviewMeeting;
+import com.simplehearing.review.enums.ReviewMeetingStatus;
+import com.simplehearing.review.repository.ReviewMeetingRepository;
+import com.simplehearing.review.service.ReviewMeetingService;
 import com.simplehearing.session.entity.TherapySession;
 import com.simplehearing.session.enums.TherapySessionStatus;
 import com.simplehearing.session.repository.SessionAttachmentRepository;
@@ -66,6 +72,8 @@ public class PatientService {
     private final EnrollmentRepository enrollmentRepository;
     private final TherapySessionRepository therapySessionRepository;
     private final SessionAttachmentRepository sessionAttachmentRepository;
+    private final ReviewMeetingRepository reviewMeetingRepository;
+    private final ReviewMeetingService reviewMeetingService;
     private final IEPPlanRepository iepPlanRepository;
     private final IEPGoalRepository iepGoalRepository;
     private final IEPGoalProgressRepository iepGoalProgressRepository;
@@ -85,6 +93,8 @@ public class PatientService {
                           EnrollmentRepository enrollmentRepository,
                           TherapySessionRepository therapySessionRepository,
                           SessionAttachmentRepository sessionAttachmentRepository,
+                          ReviewMeetingRepository reviewMeetingRepository,
+                          ReviewMeetingService reviewMeetingService,
                           IEPPlanRepository iepPlanRepository,
                           IEPGoalRepository iepGoalRepository,
                           IEPGoalProgressRepository iepGoalProgressRepository,
@@ -103,6 +113,8 @@ public class PatientService {
         this.enrollmentRepository = enrollmentRepository;
         this.therapySessionRepository = therapySessionRepository;
         this.sessionAttachmentRepository = sessionAttachmentRepository;
+        this.reviewMeetingRepository = reviewMeetingRepository;
+        this.reviewMeetingService = reviewMeetingService;
         this.iepPlanRepository = iepPlanRepository;
         this.iepGoalRepository = iepGoalRepository;
         this.iepGoalProgressRepository = iepGoalProgressRepository;
@@ -214,10 +226,13 @@ public class PatientService {
      * list without going through {@code POST /patients/{id}/discharge}, which requires at
      * least one enrollment to exist. Discharge remains the stronger, terminal path for a case
      * that did enroll; this toggle is for the case that didn't.
-     * Going inactive cancels every one of the patient's sessions still SCHEDULED /
-     * PENDING_RESCHEDULE / CANCELLATION_REQUESTED on or after today — mirrors the enrollment
+     * Going inactive cancels every one of the patient's ACTIVE enrollments (programs), every
+     * session still SCHEDULED / PENDING_RESCHEDULE / CANCELLATION_REQUESTED on or after today,
+     * and every still-SCHEDULED review meeting on or after today — mirrors the enrollment
      * force-complete override (see EnrollmentController#updateCareStatus) at the patient level
-     * instead of the enrollment level. Going active again restores exactly those sessions.
+     * instead of the enrollment level. Going active again restores exactly those enrollments,
+     * sessions, and review meetings — except sessions/meetings whose date has since slipped
+     * into the past, which stay cancelled rather than reappearing as "scheduled" in the past.
      */
     public PatientResponse setActive(UUID patientId, boolean active, UserPrincipal principal) {
         Patient patient = findPatient(patientId, principal.getOrgId());
@@ -230,9 +245,9 @@ public class PatientService {
         }
 
         patient.setActive(active);
+        LocalDate today = LocalDate.now();
 
         if (!active) {
-            LocalDate today = LocalDate.now();
             List<TherapySession> stillAhead = therapySessionRepository.findByPatientId(patientId).stream()
                     .filter(s -> !s.getSessionDate().isBefore(today))
                     .filter(s -> s.getStatus() == TherapySessionStatus.SCHEDULED
@@ -244,15 +259,58 @@ public class PatientService {
                 s.setCancelledByCaseInactive(true);
             });
             therapySessionRepository.saveAll(stillAhead);
+
+            List<ReviewMeeting> meetingsAhead = reviewMeetingRepository
+                    .findByOrgIdAndPatientIdOrderByMeetingDateAsc(principal.getOrgId(), patientId).stream()
+                    .filter(m -> !m.getMeetingDate().isBefore(today))
+                    .filter(m -> m.getStatus() == ReviewMeetingStatus.SCHEDULED)
+                    .toList();
+            meetingsAhead.forEach(m -> {
+                m.setCancelledByCaseInactive(true);
+                reviewMeetingService.cancel(m, "Case marked inactive");
+            });
+
+            List<Enrollment> enrollmentsToCancel = enrollmentRepository
+                    .findByOrgIdAndPatientIdOrderByCreatedAtDesc(principal.getOrgId(), patientId).stream()
+                    .filter(e -> e.getStatus() == EnrollmentStatus.ACTIVE)
+                    .toList();
+            enrollmentsToCancel.forEach(e -> {
+                e.setStatus(EnrollmentStatus.CANCELLED);
+                e.setCancelledByCaseInactive(true);
+            });
+            enrollmentRepository.saveAll(enrollmentsToCancel);
         } else {
             List<TherapySession> toRestore = therapySessionRepository.findByPatientId(patientId).stream()
                     .filter(TherapySession::isCancelledByCaseInactive)
+                    .filter(s -> !s.getSessionDate().isBefore(today))
                     .toList();
             toRestore.forEach(s -> {
                 s.setStatus(TherapySessionStatus.SCHEDULED);
                 s.setCancelledByCaseInactive(false);
             });
             therapySessionRepository.saveAll(toRestore);
+
+            List<ReviewMeeting> meetingsToRestore = reviewMeetingRepository
+                    .findByOrgIdAndPatientIdOrderByMeetingDateAsc(principal.getOrgId(), patientId).stream()
+                    .filter(ReviewMeeting::isCancelledByCaseInactive)
+                    .filter(m -> !m.getMeetingDate().isBefore(today))
+                    .toList();
+            meetingsToRestore.forEach(m -> {
+                m.setStatus(ReviewMeetingStatus.SCHEDULED);
+                m.setCancelledReason(null);
+                m.setCancelledByCaseInactive(false);
+            });
+            reviewMeetingRepository.saveAll(meetingsToRestore);
+
+            List<Enrollment> enrollmentsToRestore = enrollmentRepository
+                    .findByOrgIdAndPatientIdOrderByCreatedAtDesc(principal.getOrgId(), patientId).stream()
+                    .filter(Enrollment::isCancelledByCaseInactive)
+                    .toList();
+            enrollmentsToRestore.forEach(e -> {
+                e.setStatus(EnrollmentStatus.ACTIVE);
+                e.setCancelledByCaseInactive(false);
+            });
+            enrollmentRepository.saveAll(enrollmentsToRestore);
         }
 
         return buildResponse(patientRepository.save(patient));
@@ -269,11 +327,11 @@ public class PatientService {
                     .stream().map(TherapistPatient::getPatientId).toList();
             if (patientIds.isEmpty()) return List.of();
             patients = patientRepository.findAllById(patientIds).stream()
-                    .filter(p -> p.getOrgId().equals(principal.getOrgId()) && p.getDateOfBirth() != null)
+                    .filter(p -> p.getOrgId().equals(principal.getOrgId()) && p.getDateOfBirth() != null && p.isActive())
                     .toList();
         } else {
             patients = patientRepository.findByOrgId(principal.getOrgId()).stream()
-                    .filter(p -> p.getDateOfBirth() != null)
+                    .filter(p -> p.getDateOfBirth() != null && p.isActive())
                     .toList();
         }
 

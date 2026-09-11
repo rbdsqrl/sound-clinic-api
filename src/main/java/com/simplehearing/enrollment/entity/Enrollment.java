@@ -107,6 +107,13 @@ public class Enrollment {
     @Column(name = "discharged_in_record_id")
     private UUID dischargedInRecordId;
 
+    /** True when this enrollment was auto-cancelled by marking its patient's case inactive,
+     *  as opposed to a manual cancel — lets reactivating the case restore precisely this
+     *  enrollment (back to ACTIVE) and no others. Mirrors cancelledByCaseInactive on
+     *  TherapySession / ReviewMeeting. */
+    @Column(name = "cancelled_by_case_inactive", nullable = false)
+    private boolean cancelledByCaseInactive = false;
+
     @Column(name = "created_by")
     private UUID createdBy;
 
@@ -143,6 +150,8 @@ public class Enrollment {
     public void setStartTime(LocalTime startTime) { this.startTime = startTime; }
     public EnrollmentStatus getStatus() { return status; }
     public void setStatus(EnrollmentStatus status) { this.status = status; }
+    public boolean isCancelledByCaseInactive() { return cancelledByCaseInactive; }
+    public void setCancelledByCaseInactive(boolean cancelledByCaseInactive) { this.cancelledByCaseInactive = cancelledByCaseInactive; }
     public EnrollmentCareStatus getCareStatus() { return careStatus; }
     public void setCareStatus(EnrollmentCareStatus careStatus) { this.careStatus = careStatus; }
     public String getCareStatusNote() { return careStatusNote; }

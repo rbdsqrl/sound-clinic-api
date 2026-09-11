@@ -107,6 +107,12 @@ public class ReviewMeeting {
     @Column(name = "cancelled_reason", columnDefinition = "TEXT")
     private String cancelledReason;
 
+    /** True when this meeting was auto-cancelled by marking its patient's case inactive,
+     *  as opposed to a manual cancel — lets reactivating the case restore precisely this
+     *  meeting and no others. Mirrors {@code cancelledByCaseInactive} on TherapySession. */
+    @Column(name = "cancelled_by_case_inactive", nullable = false)
+    private boolean cancelledByCaseInactive = false;
+
     @Column(name = "created_by")
     private UUID createdBy;
 
@@ -198,6 +204,9 @@ public class ReviewMeeting {
 
     public String getCancelledReason() { return cancelledReason; }
     public void setCancelledReason(String cancelledReason) { this.cancelledReason = cancelledReason; }
+
+    public boolean isCancelledByCaseInactive() { return cancelledByCaseInactive; }
+    public void setCancelledByCaseInactive(boolean cancelledByCaseInactive) { this.cancelledByCaseInactive = cancelledByCaseInactive; }
 
     public UUID getCreatedBy() { return createdBy; }
     public void setCreatedBy(UUID createdBy) { this.createdBy = createdBy; }

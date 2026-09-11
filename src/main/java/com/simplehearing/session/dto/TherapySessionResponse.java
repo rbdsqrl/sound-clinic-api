@@ -46,7 +46,11 @@ public record TherapySessionResponse(
         /** False when it is an extra, on top of the sessions the family paid for. */
         boolean countsTowardPlan,
         /** True when an extra session still has to be paid for. */
-        boolean requiresPayment
+        boolean requiresPayment,
+        /** True when this session was auto-cancelled by marking its patient's case inactive —
+         *  the calendar hides these rather than showing a cancelled chip for every session an
+         *  inactive case would otherwise have had. */
+        boolean cancelledByCaseInactive
 ) {
     public static TherapySessionResponse from(
             TherapySession session,
@@ -85,6 +89,7 @@ public record TherapySessionResponse(
                 parentReschedulesRemaining,
                 session.isAdHoc(),
                 session.isCountsTowardPlan(),
-                session.isRequiresPayment());
+                session.isRequiresPayment(),
+                session.isCancelledByCaseInactive());
     }
 }

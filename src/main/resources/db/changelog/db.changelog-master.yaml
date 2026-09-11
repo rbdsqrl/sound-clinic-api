@@ -317,3 +317,9 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/106-session-cancelled-by-case-inactive.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/107-review-meeting-cancelled-by-case-inactive.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/108-enrollment-cancelled-by-case-inactive.sql
+      relativeToChangelogFile: false
