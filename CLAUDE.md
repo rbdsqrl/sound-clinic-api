@@ -292,6 +292,9 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | GET      | `/api/v1/patients/{patientId}/shared-media` | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST (assigned), PARENT (own child) | List videos/notes shared between the parent and the care team |
 | POST     | `/api/v1/patients/{patientId}/shared-media` | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST (assigned), PARENT (own child) | Share a video and/or a note — video is optional |
 | DELETE   | `/api/v1/patients/{patientId}/shared-media/{id}` | Uploader, or BUSINESS_OWNER/CLINIC_HEAD             | Delete a shared video/note          |
+| GET      | `/api/v1/calendar-blocks`               | All authenticated                                       | List the org's recurring calendar blocks (e.g. Lunch Break) — shown on every user's calendar, a rule the frontend expands into date-specific events, not materialized rows |
+| POST     | `/api/v1/calendar-blocks`               | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN               | Add a recurring calendar block — title, time range, days of week, start date, optional end date |
+| DELETE   | `/api/v1/calendar-blocks/{id}`          | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN               | Delete a recurring calendar block   |
 
 ---
 
@@ -360,6 +363,7 @@ Master file: `db.changelog-master.yaml` — lists migrations in order.
 | 099-more-list-indexes.sql           | Composite indexes on `subscriptions`, `enrollments` (had none beyond PK), `tasks`, `invitations`, `attendance` — same missing-sort/scan-index gap as 098, found via a full-repository audit |
 | 105-meeting-recurrence-and-notes.sql | `meetings.notes` (per-occurrence write-up) + `meetings.series_id`/`occurrence_number`/`total_occurrences` (recurring series) |
 | 106-session-cancelled-by-case-inactive.sql | `therapy_sessions.cancelled_by_case_inactive` — marks a session auto-cancelled by marking a case inactive (patient-level analogue of 094), so reactivating the case restores exactly those |
+| 109-org-calendar-blocks.sql          | `org_calendar_blocks` + `org_calendar_block_days` — org-wide recurring calendar blocks (e.g. Lunch Break), a rule not materialized rows, same approach as `organisation_weekly_off_days` |
 
 **To add a migration:** create `NNN-description.sql` with the Liquibase header, then add it to the master YAML.
 

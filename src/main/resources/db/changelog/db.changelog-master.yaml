@@ -323,3 +323,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/108-enrollment-cancelled-by-case-inactive.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/109-org-calendar-blocks.sql
+      relativeToChangelogFile: false
