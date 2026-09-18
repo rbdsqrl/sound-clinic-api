@@ -49,25 +49,55 @@ public class OrgCalendarBlockController {
             @Valid @RequestBody CreateOrgCalendarBlockRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
 
+        validateTimesAndDates(request);
+
+        OrgCalendarBlock block = new OrgCalendarBlock();
+        block.setOrgId(principal.getOrgId());
+        applyRequest(block, request);
+        block.setCreatedBy(principal.getId());
+        OrgCalendarBlock saved = blockRepository.save(block);
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(OrgCalendarBlockResponse.from(saved)));
+    }
+
+    @Operation(summary = "Edit a recurring calendar block — full replace of title/time/days/date range")
+    @PatchMapping("/{id}")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
+    public ResponseEntity<ApiResponse<OrgCalendarBlockResponse>> update(
+            @PathVariable UUID id,
+            @Valid @RequestBody CreateOrgCalendarBlockRequest request,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        validateTimesAndDates(request);
+
+        OrgCalendarBlock block = blockRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Calendar block not found"));
+        if (!block.getOrgId().equals(principal.getOrgId())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Access denied");
+        }
+
+        applyRequest(block, request);
+        OrgCalendarBlock saved = blockRepository.save(block);
+
+        return ResponseEntity.ok(ApiResponse.success(OrgCalendarBlockResponse.from(saved)));
+    }
+
+    private void validateTimesAndDates(CreateOrgCalendarBlockRequest request) {
         if (!request.endTime().isAfter(request.startTime())) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "End time must be after start time");
         }
         if (request.endDate() != null && request.endDate().isBefore(request.startDate())) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "End date must be on or after the start date");
         }
+    }
 
-        OrgCalendarBlock block = new OrgCalendarBlock();
-        block.setOrgId(principal.getOrgId());
+    private void applyRequest(OrgCalendarBlock block, CreateOrgCalendarBlockRequest request) {
         block.setTitle(request.title());
         block.setStartTime(request.startTime());
         block.setEndTime(request.endTime());
         block.setDaysOfWeek(request.daysOfWeek());
         block.setStartDate(request.startDate());
         block.setEndDate(request.endDate());
-        block.setCreatedBy(principal.getId());
-        OrgCalendarBlock saved = blockRepository.save(block);
-
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(OrgCalendarBlockResponse.from(saved)));
     }
 
     @Operation(summary = "Delete a recurring calendar block")
