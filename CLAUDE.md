@@ -42,6 +42,7 @@ Liquibase runs on startup and applies any new migrations only.
 |--------|--------------------|----------------------------------------|
 | GET    | `/`                | Root ping — `{ "status": "running" }` |
 | GET    | `/health`          | Manual health probe                    |
+| GET    | `/health/db`       | Runs `SELECT 1` against the DB — no auth, meant for an external pinger (cron/UptimeRobot) to stop the free-tier DB from auto-suspending on idle |
 | GET    | `/actuator/health` | Spring Actuator (shows DB status)      |
 
 ---
@@ -184,7 +185,7 @@ com.simplehearing
 │   └── service/TherapistReassignmentService.java  # Bulk-moves sessions/review meetings/IEP plans + caseload links; revert() shared by the job and early-cancel
 │
 └── controller/
-    └── HealthController.java            # GET /, GET /health (no auth required)
+    └── HealthController.java            # GET /, GET /health, GET /health/db (no auth required)
 ```
 
 ---
