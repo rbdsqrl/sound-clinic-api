@@ -41,7 +41,7 @@ public class InvitationService {
     private static final Logger log = LoggerFactory.getLogger(InvitationService.class);
 
     /** Roles that require a clinicId in the invitation. */
-    private static final Set<Role> CLINIC_SCOPED_ROLES = Set.of(Role.PARENT, Role.THERAPIST);
+    private static final Set<Role> CLINIC_SCOPED_ROLES = Set.of(Role.PARENT, Role.THERAPIST, Role.OFFICE_ADMIN);
 
     /** All roles a BUSINESS_OWNER / CLINIC_HEAD may invite. */
     private static final Set<Role> INVITABLE_ROLES = Set.of(
@@ -82,8 +82,8 @@ public class InvitationService {
 
     /**
      * Creates an invitation.
-     * - THERAPIST / PARENT: clinicId required and must belong to the caller's org.
-     * - BUSINESS_OWNER: clinicId not required (org-level invite).
+     * - THERAPIST / PARENT / OFFICE_ADMIN: clinicId required and must belong to the caller's org.
+     * - BUSINESS_OWNER / CLINIC_HEAD: clinicId not required (org-level invite).
      */
     public InviteResponse invite(InviteRequest request, UserPrincipal caller) {
         if (!INVITABLE_ROLES.contains(request.role())) {

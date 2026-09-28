@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.simplehearing.attendance.dto.AttendanceResponse;
 import com.simplehearing.attendance.dto.CheckInRequest;
 import com.simplehearing.attendance.dto.CheckOutRequest;
+import com.simplehearing.attendance.dto.GeoCheckResponse;
+import com.simplehearing.attendance.dto.GeoCheckResponse.GeoCheckReferenceType;
 import com.simplehearing.attendance.dto.VerifyAttendanceRequest;
 import com.simplehearing.attendance.entity.Attendance;
 import com.simplehearing.attendance.enums.AttendanceStatus;
@@ -110,7 +112,8 @@ public class AttendanceService {
         attendance.setCheckOutTime(null);
         attendance.setCheckOutLat(null);
         attendance.setCheckOutLon(null);
-        attendance.setGeoVerified(verifyGeoFence(request.latitude(), request.longitude(), clinic));
+        GeoFenceTarget geoFenceTarget = resolveGeoFenceTarget(principal, clinic);
+        attendance.setGeoVerified(verifyGeoFence(request.latitude(), request.longitude(), geoFenceTarget));
         attendance.setFaceVerified(faceVerified);
         attendance.setFaceOverride(faceOverride);
         attendance.setStatus(AttendanceStatus.CHECKED_IN);
@@ -203,7 +206,8 @@ public class AttendanceService {
         if (request.latitude() != null && request.longitude() != null) {
             attendance.setCheckInLat(request.latitude());
             attendance.setCheckInLon(request.longitude());
-            attendance.setGeoVerified(verifyGeoFence(request.latitude(), request.longitude(), clinic));
+            GeoFenceTarget geoFenceTarget = resolveGeoFenceTarget(principal, clinic);
+            attendance.setGeoVerified(verifyGeoFence(request.latitude(), request.longitude(), geoFenceTarget));
         }
         if (request.faceDescriptor() != null && !request.faceDescriptor().isEmpty()) {
             attendance.setFaceVerified(verifyFace(request.faceDescriptor(), principal.getUser()));
@@ -258,14 +262,48 @@ public class AttendanceService {
         return enrich(List.of(saved)).get(0);
     }
 
+    // ── Live geo-fence preview (before an actual check-in/verify is submitted) ───
+
+    /**
+     * Distance from the caller's current position to whatever their check-in is verified
+     * against — a clinic for most roles, the organisation's own address for BUSINESS_OWNER
+     * (who isn't tied to any single clinic). Read-only: doesn't touch the attendance record.
+     */
+    @Transactional(readOnly = true)
+    public GeoCheckResponse previewGeoCheck(UUID clinicId, double latitude, double longitude, UserPrincipal principal) {
+        Clinic clinic = clinicRepository.findByIdAndOrgId(clinicId, principal.getOrgId())
+                .orElseThrow(() -> new ResourceNotFoundException("Clinic not found"));
+        GeoFenceTarget target = resolveGeoFenceTarget(principal, clinic);
+
+        if (target.latitude() == null || target.longitude() == null) {
+            return new GeoCheckResponse(true, null, target.radiusMeters(), target.label(), target.type());
+        }
+        double distance = haversineDistance(latitude, longitude, target.latitude(), target.longitude());
+        boolean verified = distance <= target.radiusMeters();
+        return new GeoCheckResponse(verified, distance, target.radiusMeters(), target.label(), target.type());
+    }
+
     // ── Private helpers ───────────────────────────────────────────────────────
 
-    private boolean verifyGeoFence(Double lat, Double lon, Clinic clinic) {
-        if (lat == null || lon == null) return false;
-        if (clinic.getLatitude() == null || clinic.getLongitude() == null) return true;
-        double distance = haversineDistance(lat, lon, clinic.getLatitude(), clinic.getLongitude());
+    /** Where a geo-fence check is measured against — a clinic, or (for BUSINESS_OWNER) the org itself. */
+    private record GeoFenceTarget(Double latitude, Double longitude, int radiusMeters, String label, GeoCheckReferenceType type) {}
+
+    private GeoFenceTarget resolveGeoFenceTarget(UserPrincipal principal, Clinic clinic) {
+        if (principal.getUser().getRole() == Role.BUSINESS_OWNER) {
+            Organisation org = organisationRepository.findById(principal.getOrgId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Organisation not found"));
+            int radius = org.getGeoFenceRadiusMeters() != null ? org.getGeoFenceRadiusMeters() : 200;
+            return new GeoFenceTarget(org.getLatitude(), org.getLongitude(), radius, org.getName(), GeoCheckReferenceType.ORGANISATION);
+        }
         int radius = clinic.getGeoFenceRadiusMeters() != null ? clinic.getGeoFenceRadiusMeters() : 200;
-        return distance <= radius;
+        return new GeoFenceTarget(clinic.getLatitude(), clinic.getLongitude(), radius, clinic.getName(), GeoCheckReferenceType.CLINIC);
+    }
+
+    private boolean verifyGeoFence(Double lat, Double lon, GeoFenceTarget target) {
+        if (lat == null || lon == null) return false;
+        if (target.latitude() == null || target.longitude() == null) return true;
+        double distance = haversineDistance(lat, lon, target.latitude(), target.longitude());
+        return distance <= target.radiusMeters();
     }
 
     private double haversineDistance(double lat1, double lon1, double lat2, double lon2) {

@@ -365,6 +365,7 @@ Master file: `db.changelog-master.yaml` — lists migrations in order.
 | 105-meeting-recurrence-and-notes.sql | `meetings.notes` (per-occurrence write-up) + `meetings.series_id`/`occurrence_number`/`total_occurrences` (recurring series) |
 | 106-session-cancelled-by-case-inactive.sql | `therapy_sessions.cancelled_by_case_inactive` — marks a session auto-cancelled by marking a case inactive (patient-level analogue of 094), so reactivating the case restores exactly those |
 | 109-org-calendar-blocks.sql          | `org_calendar_blocks` + `org_calendar_block_days` — org-wide recurring calendar blocks (e.g. Lunch Break), a rule not materialized rows, same approach as `organisation_weekly_off_days` |
+| 110-org-geofence.sql                 | `organisations.latitude`/`longitude`/`geo_fence_radius_meters` — mirrors `clinics` (036); lets a BUSINESS_OWNER's attendance check-in be verified against the org's own address instead of a clinic |
 
 **To add a migration:** create `NNN-description.sql` with the Liquibase header, then add it to the master YAML.
 

@@ -326,3 +326,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/109-org-calendar-blocks.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/110-org-geofence.sql
+      relativeToChangelogFile: false

@@ -16,5 +16,8 @@ public record UpdateOrganisationRequest(
         /** Write-only. Omit to leave the stored key unchanged; pass an empty string to clear it. */
         String aiApiKey,
         /** Omit to leave unchanged; pass an empty set to clear all weekly off days. */
-        Set<DayOfWeek> weeklyOffDays
+        Set<DayOfWeek> weeklyOffDays,
+        Double latitude,
+        Double longitude,
+        Integer geoFenceRadiusMeters
 ) {}

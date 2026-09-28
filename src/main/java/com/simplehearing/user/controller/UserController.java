@@ -83,6 +83,9 @@ public class UserController {
     private static final List<Role> STAFF_ROLES = List.of(
             Role.CLINIC_HEAD, Role.BUSINESS_OWNER, Role.THERAPIST, Role.OFFICE_ADMIN);
 
+    /** Staff roles that must have a clinicId — mirrors InvitationService's CLINIC_SCOPED_ROLES. */
+    private static final Set<Role> CLINIC_LINKED_ROLES = Set.of(Role.THERAPIST, Role.OFFICE_ADMIN);
+
     @Operation(
         summary = "List staff members in the organisation, paginated",
         description = "Defaults to 20 per page, sorted by createdAt (year joined) descending. " +
@@ -264,6 +267,11 @@ public class UserController {
                 throw new ApiException(HttpStatus.BAD_REQUEST, "You cannot change your own role");
             }
             user.setRole(request.role());
+        }
+
+        Role effectiveRole = request.role() != null ? request.role() : user.getRole();
+        if (CLINIC_LINKED_ROLES.contains(effectiveRole) && request.clinicId() == null) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "clinicId is required for a " + effectiveRole);
         }
 
         user.setPhone(request.phone());

@@ -21,6 +21,9 @@ public record OrganisationResponse(
         AiProvider aiProvider,
         boolean aiKeyConfigured,
         Set<DayOfWeek> weeklyOffDays,
+        Double latitude,
+        Double longitude,
+        Integer geoFenceRadiusMeters,
         Instant createdAt
 ) {
     public static OrganisationResponse from(Organisation org) {
@@ -37,6 +40,9 @@ public record OrganisationResponse(
                 org.getAiProvider(),
                 org.getAiApiKey() != null && !org.getAiApiKey().isBlank(),
                 org.getWeeklyOffDays(),
+                org.getLatitude(),
+                org.getLongitude(),
+                org.getGeoFenceRadiusMeters(),
                 org.getCreatedAt()
         );
     }

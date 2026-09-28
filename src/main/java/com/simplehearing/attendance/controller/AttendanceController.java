@@ -4,6 +4,7 @@ import com.simplehearing.attendance.dto.AttendanceResponse;
 import com.simplehearing.attendance.dto.CheckInRequest;
 import com.simplehearing.attendance.dto.CheckOutRequest;
 import com.simplehearing.attendance.dto.EnrollFaceRequest;
+import com.simplehearing.attendance.dto.GeoCheckResponse;
 import com.simplehearing.attendance.dto.ReviewOverrideRequest;
 import com.simplehearing.attendance.dto.VerifyAttendanceRequest;
 import com.simplehearing.attendance.service.AttendanceService;
@@ -60,6 +61,18 @@ public class AttendanceController {
             @RequestBody VerifyAttendanceRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(attendanceService.verifyToday(request, principal)));
+    }
+
+    @Operation(summary = "Live distance/verified preview against the check-in reference (clinic, or the org's address for a Business Owner) — no attendance record is touched")
+    @GetMapping("/geo-check")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'PATIENT', 'OFFICE_ADMIN')")
+    public ResponseEntity<ApiResponse<GeoCheckResponse>> geoCheck(
+            @RequestParam UUID clinicId,
+            @RequestParam double latitude,
+            @RequestParam double longitude,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                attendanceService.previewGeoCheck(clinicId, latitude, longitude, principal)));
     }
 
     @Operation(summary = "Get today's attendance record for the caller")

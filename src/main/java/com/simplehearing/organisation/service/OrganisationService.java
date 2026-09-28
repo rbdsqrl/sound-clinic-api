@@ -57,6 +57,9 @@ public class OrganisationService {
             org.getWeeklyOffDays().clear();
             org.getWeeklyOffDays().addAll(request.weeklyOffDays());
         }
+        if (request.latitude() != null)             org.setLatitude(request.latitude());
+        if (request.longitude() != null)             org.setLongitude(request.longitude());
+        if (request.geoFenceRadiusMeters() != null)  org.setGeoFenceRadiusMeters(request.geoFenceRadiusMeters());
 
         return OrganisationResponse.from(organisationRepository.save(org));
     }
