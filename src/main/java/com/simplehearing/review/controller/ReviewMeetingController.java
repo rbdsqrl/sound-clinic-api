@@ -103,8 +103,8 @@ public class ReviewMeetingController {
     }
 
     @Operation(summary = "Review Session slot availability for one or more Clinic Heads on a date",
-               description = "The org's fixed daily grid (default 3 morning + 3 evening times, editable in "
-                           + "Organisation settings), marked available/booked for the given Clinic Head(s).")
+               description = "Each Clinic Head's own configured grid, falling back to the org-wide default — "
+                           + "when more than one is given, only a time valid for all of them is offered.")
     @GetMapping("/slots")
     @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<List<ReviewSlotResponse>>> getSlots(
@@ -114,6 +114,29 @@ public class ReviewMeetingController {
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
                 meetingService.getSlots(principal.getOrgId(), clinicHeadIds, date, excludeMeetingId)));
+    }
+
+    @Operation(summary = "A Clinic Head's own Review Session grid, or the org default if they haven't set one")
+    @GetMapping("/clinic-heads/{clinicHeadId}/slot-times")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
+    public ResponseEntity<ApiResponse<ClinicHeadSlotTimesResponse>> getClinicHeadSlotTimes(
+            @PathVariable UUID clinicHeadId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                meetingService.getClinicHeadSlotTimes(principal.getOrgId(), clinicHeadId)));
+    }
+
+    @Operation(summary = "Set a Clinic Head's own Review Session grid",
+               description = "An empty times list clears the override, reverting them to the org default.")
+    @PutMapping("/clinic-heads/{clinicHeadId}/slot-times")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
+    public ResponseEntity<ApiResponse<ClinicHeadSlotTimesResponse>> updateClinicHeadSlotTimes(
+            @PathVariable UUID clinicHeadId,
+            @RequestBody UpdateClinicHeadSlotTimesRequest request,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                meetingService.updateClinicHeadSlotTimes(principal.getOrgId(), clinicHeadId,
+                        request.times() != null ? request.times() : Set.of())));
     }
 
     @Operation(summary = "Get a single review meeting")

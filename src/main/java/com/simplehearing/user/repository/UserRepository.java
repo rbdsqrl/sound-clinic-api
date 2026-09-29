@@ -31,6 +31,9 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     @Query("SELECT COUNT(u) > 0 FROM User u WHERE lower(u.email) = lower(:email) AND u.isActive = :isActive")
     boolean existsByEmailAndIsActive(@Param("email") String email, @Param("isActive") boolean isActive);
 
+    /** Phone is stored pre-normalised (PhoneNormalizer) — an identity for phone login, same as email. */
+    Optional<User> findByPhone(String phone);
+
     List<User> findByOrgId(UUID orgId);
 
     List<User> findByClinicIdAndRole(UUID clinicId, Role role);

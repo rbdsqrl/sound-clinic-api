@@ -6,6 +6,8 @@ import com.simplehearing.auth.repository.RefreshTokenRepository;
 import com.simplehearing.auth.security.JwtProperties;
 import com.simplehearing.auth.security.TokenService;
 import com.simplehearing.common.exception.ApiException;
+import com.simplehearing.common.util.EmailNormalizer;
+import com.simplehearing.common.util.PhoneNormalizer;
 import com.simplehearing.user.dto.UserResponse;
 import com.simplehearing.user.entity.User;
 import com.simplehearing.user.repository.UserRepository;
@@ -47,11 +49,16 @@ public class AuthService {
     }
 
     public LoginResponse login(LoginRequest request) {
-        User user = userRepository.findByEmail(request.email())
-                .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "Invalid email or password"));
+        // An email always contains '@', a phone number never does — that alone tells the two
+        // apart, so the login form can offer one plain field for either.
+        User user = PhoneNormalizer.looksLikeEmail(request.identifier())
+                ? userRepository.findByEmail(EmailNormalizer.normalize(request.identifier()))
+                        .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "Invalid email/phone or password"))
+                : userRepository.findByPhone(PhoneNormalizer.normalize(request.identifier()))
+                        .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "Invalid email/phone or password"));
 
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
-            throw new ApiException(HttpStatus.UNAUTHORIZED, "Invalid email or password");
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "Invalid email/phone or password");
         }
 
         if (!user.isActive()) {

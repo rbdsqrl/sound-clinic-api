@@ -1,5 +1,6 @@
 package com.simplehearing.therapistactivity.service;
 
+import com.simplehearing.common.exception.ApiException;
 import com.simplehearing.common.exception.ResourceNotFoundException;
 import com.simplehearing.patient.entity.Patient;
 import com.simplehearing.patient.repository.PatientRepository;
@@ -16,6 +17,7 @@ import com.simplehearing.therapistactivity.dto.TherapistActivityResponse.MediaEn
 import com.simplehearing.therapistactivity.dto.TherapistActivityResponse.SessionNoteEntry;
 import com.simplehearing.user.entity.User;
 import com.simplehearing.user.repository.UserRepository;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -49,7 +51,16 @@ public class TherapistActivityService {
         this.sharedMediaRepository = sharedMediaRepository;
     }
 
-    public TherapistActivityResponse getActivity(UUID orgId, UUID therapistId, LocalDate date) {
+    private static final int MAX_RANGE_DAYS = 62;
+
+    public TherapistActivityResponse getActivity(UUID orgId, UUID therapistId, LocalDate from, LocalDate to) {
+        if (from.isAfter(to)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "from cannot be after to");
+        }
+        if (java.time.temporal.ChronoUnit.DAYS.between(from, to) > MAX_RANGE_DAYS) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Date range cannot exceed " + (MAX_RANGE_DAYS + 1) + " days");
+        }
+
         User therapist = userRepository.findById(therapistId)
                 .filter(u -> u.getOrgId().equals(orgId))
                 .orElseThrow(() -> new ResourceNotFoundException("Therapist not found"));
@@ -57,15 +68,15 @@ public class TherapistActivityService {
 
         List<TherapySession> notedSessions = therapySessionRepository
                 .findByOrgIdAndTherapistIdAndSessionDateBetweenOrderBySessionDateAscStartTimeAsc(
-                        orgId, therapistId, date, date)
+                        orgId, therapistId, from, to)
                 .stream()
                 .filter(s -> hasText(s.getNotes()) || hasText(s.getProgressReport()) || hasText(s.getFeedback()))
                 .toList();
 
-        Instant dayStart = date.atStartOfDay(ZoneOffset.UTC).toInstant();
-        Instant dayEnd = date.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+        Instant rangeStart = from.atStartOfDay(ZoneOffset.UTC).toInstant();
+        Instant rangeEnd = to.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
         List<SharedMedia> uploads = sharedMediaRepository
-                .findByOrgIdAndUploadedByAndCreatedAtBetween(orgId, therapistId, dayStart, dayEnd);
+                .findByOrgIdAndUploadedByAndCreatedAtBetween(orgId, therapistId, rangeStart, rangeEnd);
         List<SharedMedia> freeTextEntries = uploads.stream().filter(m -> hasText(m.getNote())).toList();
         List<SharedMedia> mediaEntries = uploads.stream().filter(m -> hasText(m.getFileUrl())).toList();
 
@@ -83,7 +94,7 @@ public class TherapistActivityService {
                         e.getKey(),
                         patientNames.getOrDefault(e.getKey(), ""),
                         e.getValue().stream().map(s -> new SessionNoteEntry(
-                                s.getId(), s.getStartTime(), s.getNotes(), s.getProgressReport(),
+                                s.getId(), s.getSessionDate(), s.getStartTime(), s.getNotes(), s.getProgressReport(),
                                 s.getFeedback(), s.getPerformanceScore())).toList()))
                 .toList();
 
@@ -109,7 +120,7 @@ public class TherapistActivityService {
                 .toList();
 
         return new TherapistActivityResponse(
-                therapistId, therapistName, date,
+                therapistId, therapistName, from, to,
                 notedSessions.size(), sessionGroups,
                 freeTextEntries.size(), freeTextGroups,
                 mediaEntries.size(), mediaGroups

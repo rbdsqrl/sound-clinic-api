@@ -14,6 +14,7 @@ import com.simplehearing.organisation.repository.OrganisationRepository;
 import com.simplehearing.patient.entity.Patient;
 import com.simplehearing.patient.repository.PatientParentRepository;
 import com.simplehearing.patient.repository.PatientRepository;
+import com.simplehearing.review.dto.ClinicHeadSlotTimesResponse;
 import com.simplehearing.review.dto.ReviewScheduleRequest;
 import com.simplehearing.review.dto.ReviewSlotResponse;
 import com.simplehearing.review.entity.ReviewMeeting;
@@ -35,6 +36,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -417,16 +419,23 @@ public class ReviewMeetingService {
     // ── Review Session slot grid ─────────────────────────────────────────────
 
     /**
-     * The org's fixed daily grid (default 3 morning + 3 evening times, editable in Organisation
-     * settings) for one date, marked available/booked for the given Clinic Head(s) — a slot is
-     * booked if ANY of them already has an overlapping SCHEDULED meeting spanning its start time.
+     * The Review Session grid for one date, marked available/booked for the given Clinic
+     * Head(s) — each Clinic Head can configure their own list of times (however many they
+     * want), falling back to the org-wide default when they haven't set one. When more than one
+     * Clinic Head is given, only a time valid for all of them is offered. A slot is booked if
+     * ANY of them already has an overlapping SCHEDULED meeting spanning its start time.
      */
     @Transactional(readOnly = true)
     public List<ReviewSlotResponse> getSlots(UUID orgId, List<UUID> clinicHeadIds, LocalDate date,
                                              UUID excludeMeetingId) {
-        List<LocalTime> canonicalSlots = organisationRepository.findById(orgId)
-                .map(Organisation::getReviewSlotTimes)
-                .map(times -> times.stream().sorted().toList())
+        // A time is only offered if it works for EVERY invited Clinic Head — each can have
+        // their own grid (resolveSlotTimes), falling back to the org default when unset.
+        List<LocalTime> canonicalSlots = clinicHeadIds.stream()
+                .map(id -> resolveSlotTimes(orgId, id))
+                .reduce((a, b) -> {
+                    Set<LocalTime> bSet = new HashSet<>(b);
+                    return a.stream().filter(bSet::contains).toList();
+                })
                 .orElse(List.of());
 
         List<ReviewMeeting> dayMeetings = meetingRepository
@@ -449,6 +458,49 @@ public class ReviewMeetingService {
             }
             return new ReviewSlotResponse(slot, busy.isEmpty(), busy);
         }).toList();
+    }
+
+    /** A Clinic Head's own grid if they've set one, else the org-wide default. Sorted. */
+    private List<LocalTime> resolveSlotTimes(UUID orgId, UUID clinicHeadId) {
+        Set<LocalTime> own = userRepository.findById(clinicHeadId)
+                .map(User::getReviewSlotTimes)
+                .orElse(Set.of());
+        if (!own.isEmpty()) {
+            return own.stream().sorted().toList();
+        }
+        return organisationRepository.findById(orgId)
+                .map(Organisation::getReviewSlotTimes)
+                .map(times -> times.stream().sorted().toList())
+                .orElse(List.of());
+    }
+
+    /** One Clinic Head's effective Review Session grid — their own override if set, else the org default. */
+    @Transactional(readOnly = true)
+    public ClinicHeadSlotTimesResponse getClinicHeadSlotTimes(UUID orgId, UUID clinicHeadId) {
+        User clinicHead = requireClinicHeadInOrg(orgId, clinicHeadId);
+        boolean usingOrgDefault = clinicHead.getReviewSlotTimes().isEmpty();
+        return new ClinicHeadSlotTimesResponse(clinicHeadId, resolveSlotTimes(orgId, clinicHeadId), usingOrgDefault);
+    }
+
+    /** Replaces a Clinic Head's own grid. An empty set clears the override, reverting to the org default. */
+    @Transactional
+    public ClinicHeadSlotTimesResponse updateClinicHeadSlotTimes(UUID orgId, UUID clinicHeadId, Set<LocalTime> times) {
+        User clinicHead = requireClinicHeadInOrg(orgId, clinicHeadId);
+        clinicHead.setReviewSlotTimes(new LinkedHashSet<>(times));
+        userRepository.save(clinicHead);
+        return new ClinicHeadSlotTimesResponse(clinicHeadId, resolveSlotTimes(orgId, clinicHeadId), times.isEmpty());
+    }
+
+    private User requireClinicHeadInOrg(UUID orgId, UUID clinicHeadId) {
+        User u = userRepository.findById(clinicHeadId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Clinic Head not found"));
+        if (!orgId.equals(u.getOrgId())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Clinic Head must belong to your organisation");
+        }
+        if (!u.hasRole(Role.CLINIC_HEAD)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "That user is not a Clinic Head");
+        }
+        return u;
     }
 
     /**

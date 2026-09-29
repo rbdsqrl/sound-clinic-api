@@ -1,5 +1,6 @@
 package com.simplehearing.user.dto;
 
+import com.simplehearing.common.util.PhoneNormalizer;
 import com.simplehearing.user.enums.Role;
 
 import java.util.List;
@@ -18,4 +19,9 @@ public record UpdateMemberProfileRequest(
         String specialization,
         List<UUID> languageIds,
         Role role
-) {}
+) {
+    /** Normalised before validation/uniqueness-checking — same reasoning as email. */
+    public UpdateMemberProfileRequest {
+        phone = PhoneNormalizer.normalize(phone);
+    }
+}

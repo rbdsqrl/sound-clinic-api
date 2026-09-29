@@ -198,14 +198,14 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | Method   | Path                                    | Roles allowed                                           | Description                         |
 |----------|-----------------------------------------|---------------------------------------------------------|-------------------------------------|
 | POST     | `/api/v1/auth/register`                 | Public                                                  | Register new org + business owner   |
-| POST     | `/api/v1/auth/login`                    | Public                                                  | Login → access + refresh tokens     |
+| POST     | `/api/v1/auth/login`                    | Public                                                  | Login with `identifier` (email or phone number, auto-detected) + password → access + refresh tokens |
 | POST     | `/api/v1/auth/refresh`                  | Public                                                  | Rotate refresh token                |
 | POST     | `/api/v1/auth/logout`                   | Authenticated                                           | Invalidate refresh token            |
 | GET      | `/api/v1/users/me`                      | Authenticated                                           | Caller's profile                    |
 | GET      | `/api/v1/users/therapists`              | BUSINESS_OWNER, CLINIC_HEAD                                   | All therapists in org       |
 | GET      | `/api/v1/users/members`                 | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN                     | Paginated staff list — 20/page, sorted `createdAt` desc by default; `search`, `role`, `clinicId`, `active` (default true) filters |
 | GET      | `/api/v1/users/{id}/profile`            | BUSINESS_OWNER, CLINIC_HEAD                                   | One member's profile — contact, qualification, specialization, languages, case count |
-| PATCH    | `/api/v1/users/{id}/profile`            | BUSINESS_OWNER, CLINIC_HEAD (role change: BUSINESS_OWNER only) | Update a member's phone/clinic/qualification/specialization/languages, and their role (staff roles only, not own role) |
+| PATCH    | `/api/v1/users/{id}/profile`            | BUSINESS_OWNER, CLINIC_HEAD (role change: BUSINESS_OWNER only) | Update a member's phone/clinic/qualification/specialization/languages, and their role (staff roles only, not own role) — phone is normalised and rejected with 409 if another user already has it |
 | GET      | `/api/v1/analytics/patients/{id}/progress` | BUSINESS_OWNER, CLINIC_HEAD, PARENT (own child) | Mastery series + per-domain breakdown |
 | GET      | `/api/v1/analytics/patients/{id}/activities` | BUSINESS_OWNER, CLINIC_HEAD, PARENT (own child) | Activity assignment/attempt progress |
 | GET      | `/api/v1/analytics/patients/{id}/frequency` | BUSINESS_OWNER, CLINIC_HEAD, PARENT (own child) | Sessions/week across every concurrent enrollment |
@@ -225,7 +225,9 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | GET      | `/api/v1/analytics/sessions`            | BUSINESS_OWNER, CLINIC_HEAD                     | Flat session log + KPI strip for the Schedule tab, optionally filtered by patientId/therapistId/programId |
 | GET      | `/api/v1/users/assignable`              | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST, OFFICE_ADMIN | Staff names + roles for assignee pickers; optional `role` param scopes to one role (e.g. the review-meeting Clinic-Head picker) |
 | GET      | `/api/v1/review-meetings`               | All staff + PARENT (own children)                       | List review meetings                |
-| GET      | `/api/v1/review-meetings/slots`         | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN       | The org's fixed daily Review Session grid (`clinicHeadIds`, `date`, optional `excludeMeetingId`) — available/booked per Clinic Head |
+| GET      | `/api/v1/review-meetings/slots`         | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN       | The Review Session grid (`clinicHeadIds`, `date`, optional `excludeMeetingId`) — each Clinic Head's own configured times (or the org default), available/booked |
+| GET      | `/api/v1/review-meetings/clinic-heads/{id}/slot-times` | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN | One Clinic Head's effective Review Session grid — their own override if set, else the org default |
+| PUT      | `/api/v1/review-meetings/clinic-heads/{id}/slot-times` | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN | Full-replacement of a Clinic Head's own grid — empty `times` clears the override |
 | POST     | `/api/v1/review-meetings`               | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN       | Add one review meeting to a plan — invites the patient's parents + the given Clinic Head(s); the therapist is not a participant |
 | POST     | `/api/v1/review-meetings/schedule/{enrollmentId}` | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN | Generate a recurring review schedule — same Clinic-Head-picker requirement |
 | PATCH    | `/api/v1/review-meetings/{id}/participants` | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN   | Full-replacement edit of a meeting's participant list (any active org user, not Clinic-Head-restricted); bumps the ics sequence and resends invites |
@@ -259,7 +261,7 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | POST/PATCH | `/api/v1/patients/{patientId}/baseline-report` | BUSINESS_OWNER, CLINIC_HEAD | Create/update the baseline report; THERAPIST and OFFICE_ADMIN are view-only |
 | POST     | `/api/v1/patients/{patientId}/baseline-report/domains/{domain}/progress` | BUSINESS_OWNER, CLINIC_HEAD | Log a dated "current" entry for one domain |
 | GET      | `/api/v1/patients/{patientId}/baseline-report/domains/{domain}/progress` | All staff + PARENT (own child) | List one domain's dated entries, newest first |
-| GET      | `/api/v1/therapist-activity` | BUSINESS_OWNER, CLINIC_HEAD | One therapist's session notes, free-text notes and media for one day (`therapistId`, `date` params), broken down per child |
+| GET      | `/api/v1/therapist-activity` | BUSINESS_OWNER, CLINIC_HEAD | One therapist's session notes, free-text notes and media over a date range (`therapistId`, `from`, `to` params — a single day is just from == to; capped at 63 days), broken down per child |
 | POST     | `/api/v1/meetings`                      | BUSINESS_OWNER, CLINIC_HEAD                             | Schedule a meeting + email invites — optionally recurring (`recurring`/`recurrenceDays`/`recurrenceEndDate`), generating one row per matching weekday up to `recurrenceEndDate` (holidays and the org's weekly off days skipped), all sharing a `seriesId`; exactly one invite email per participant announces the whole series (ICS carries an RRULE), not one per occurrence |
 | GET      | `/api/v1/meetings`                      | Authenticated                                           | Meetings in a date range (scoped)   |
 | GET      | `/api/v1/meetings/{id}`                 | Authenticated                                           | One meeting with participants       |
@@ -373,7 +375,9 @@ Master file: `db.changelog-master.yaml` — lists migrations in order.
 | 106-session-cancelled-by-case-inactive.sql | `therapy_sessions.cancelled_by_case_inactive` — marks a session auto-cancelled by marking a case inactive (patient-level analogue of 094), so reactivating the case restores exactly those |
 | 109-org-calendar-blocks.sql          | `org_calendar_blocks` + `org_calendar_block_days` — org-wide recurring calendar blocks (e.g. Lunch Break), a rule not materialized rows, same approach as `organisation_weekly_off_days` |
 | 110-org-geofence.sql                 | `organisations.latitude`/`longitude`/`geo_fence_radius_meters` — mirrors `clinics` (036); lets a BUSINESS_OWNER's attendance check-in be verified against the org's own address instead of a clinic |
-| 111-review-session-slots.sql         | `organisation_review_slot_times` — the fixed daily grid (default 3 morning + 3 evening times) a Review Meeting must be booked into, per Clinic Head; same collection-table pattern as `organisation_weekly_off_days` |
+| 111-review-session-slots.sql         | `organisation_review_slot_times` — the org-wide default daily grid a Review Meeting is booked into (a configurable list of times, as many as wanted); same collection-table pattern as `organisation_weekly_off_days` |
+| 112-clinic-head-review-slots.sql     | `user_review_slot_times` — a CLINIC_HEAD's own grid, overriding the org default when set (no rows = inherits the org default) |
+| 113-phone-uniqueness.sql             | Normalises existing `users.phone` values (digits + leading `+` only) and adds `uq_users_phone` — a second login identity alongside email, so it must be unique too |
 
 **To add a migration:** create `NNN-description.sql` with the Liquibase header, then add it to the master YAML.
 

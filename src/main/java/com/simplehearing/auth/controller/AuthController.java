@@ -42,8 +42,9 @@ public class AuthController {
                 .body(ApiResponse.success("Clinic registered successfully", registrationService.register(request)));
     }
 
-    @Operation(summary = "Login with email and password",
-               description = "Returns a short-lived access token and a 7-day refresh token.",
+    @Operation(summary = "Login with email or phone number, and password",
+               description = "identifier is either the account's email or phone number — detected automatically. "
+                           + "Returns a short-lived access token and a 7-day refresh token.",
                security = {})
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest request) {

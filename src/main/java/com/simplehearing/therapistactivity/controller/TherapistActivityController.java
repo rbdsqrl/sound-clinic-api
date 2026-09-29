@@ -29,14 +29,16 @@ public class TherapistActivityController {
         this.service = service;
     }
 
-    @Operation(summary = "One therapist's session notes, free-text notes and media for one day, broken down per child")
+    @Operation(summary = "One therapist's session notes, free-text notes and media over a date range, broken down per child",
+               description = "A single day is just from == to. Range capped at 63 days.")
     @GetMapping
     @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
     public ResponseEntity<ApiResponse<TherapistActivityResponse>> getActivity(
             @RequestParam UUID therapistId,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
-                service.getActivity(principal.getOrgId(), therapistId, date)));
+                service.getActivity(principal.getOrgId(), therapistId, from, to)));
     }
 }

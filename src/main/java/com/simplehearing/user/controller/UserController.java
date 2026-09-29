@@ -274,6 +274,14 @@ public class UserController {
             throw new ApiException(HttpStatus.BAD_REQUEST, "clinicId is required for a " + effectiveRole);
         }
 
+        if (request.phone() != null) {
+            userRepository.findByPhone(request.phone())
+                    .filter(u -> !u.getId().equals(id))
+                    .ifPresent(u -> {
+                        throw new ApiException(HttpStatus.CONFLICT, "This phone number is already in use by another user");
+                    });
+        }
+
         user.setPhone(request.phone());
         user.setClinicId(request.clinicId());
         user.setQualification(request.qualification());

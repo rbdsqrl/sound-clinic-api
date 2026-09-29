@@ -77,8 +77,9 @@ public class Organisation {
     @Enumerated(EnumType.STRING)
     private Set<DayOfWeek> weeklyOffDays = EnumSet.noneOf(DayOfWeek.class);
 
-    /** The fixed daily grid a Review Meeting must be booked into (see ReviewMeetingService) —
-     *  defaults to 3 morning + 3 evening times, editable the same way as weeklyOffDays. */
+    /** The org-wide default daily grid a Review Meeting is booked into (see ReviewMeetingService)
+     *  — an org-configurable list of times (as many as they want), editable the same way as
+     *  weeklyOffDays. A Clinic Head with their own grid (User.reviewSlotTimes) uses that instead. */
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "organisation_review_slot_times", joinColumns = @JoinColumn(name = "organisation_id"))
     @Column(name = "slot_time", nullable = false)

@@ -11,7 +11,9 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.EnumSet;
+import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.UUID;
 
@@ -76,6 +78,14 @@ public class User {
 
     /** Comma-separated free text, e.g. "Speech Language Pathologist, ABA Therapist". Staff only. */
     private String specialization;
+
+    /** A CLINIC_HEAD's own Review Session slot grid, overriding the org-wide default
+     *  (Organisation.reviewSlotTimes) — empty means "no override, use the org default".
+     *  See ReviewMeetingService.resolveSlotTimes. */
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "user_review_slot_times", joinColumns = @JoinColumn(name = "user_id"))
+    @Column(name = "slot_time", nullable = false)
+    private Set<LocalTime> reviewSlotTimes = new LinkedHashSet<>();
 
     @Column(nullable = false)
     private boolean isActive = true;
@@ -145,6 +155,9 @@ public class User {
 
     public String getSpecialization() { return specialization; }
     public void setSpecialization(String specialization) { this.specialization = specialization; }
+
+    public Set<LocalTime> getReviewSlotTimes() { return reviewSlotTimes; }
+    public void setReviewSlotTimes(Set<LocalTime> reviewSlotTimes) { this.reviewSlotTimes = reviewSlotTimes; }
 
     public boolean isActive() { return isActive; }
     public void setActive(boolean active) { isActive = active; }

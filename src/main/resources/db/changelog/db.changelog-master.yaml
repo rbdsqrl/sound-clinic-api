@@ -332,3 +332,9 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/111-review-session-slots.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/112-clinic-head-review-slots.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/113-phone-uniqueness.sql
+      relativeToChangelogFile: false
