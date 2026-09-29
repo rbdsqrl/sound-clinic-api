@@ -1,6 +1,7 @@
 package com.simplehearing.review.repository;
 
 import com.simplehearing.review.entity.ReviewMeeting;
+import com.simplehearing.review.enums.ReviewMeetingStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -37,4 +38,7 @@ public interface ReviewMeetingRepository extends JpaRepository<ReviewMeeting, UU
 
     /** Meetings currently owned by a specific bulk therapist reassignment — the revert scan. */
     List<ReviewMeeting> findByReassignmentId(UUID reassignmentId);
+
+    /** One day's meetings in a given status — the Review Session slot-conflict check. */
+    List<ReviewMeeting> findByOrgIdAndMeetingDateAndStatus(UUID orgId, LocalDate meetingDate, ReviewMeetingStatus status);
 }

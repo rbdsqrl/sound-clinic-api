@@ -15,6 +15,7 @@ import com.simplehearing.patient.entity.Patient;
 import com.simplehearing.patient.repository.PatientParentRepository;
 import com.simplehearing.patient.repository.PatientRepository;
 import com.simplehearing.review.dto.ReviewScheduleRequest;
+import com.simplehearing.review.dto.ReviewSlotResponse;
 import com.simplehearing.review.entity.ReviewMeeting;
 import com.simplehearing.review.enums.ReviewMeetingStatus;
 import com.simplehearing.review.repository.ReviewMeetingRepository;
@@ -33,8 +34,10 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -145,6 +148,10 @@ public class ReviewMeetingService {
             }
             if (slot.isAfter(windowEnd)) break;
 
+            // Per-occurrence conflict check — a single busy date aborts the whole batch
+            // (nothing is saved until saveAll below, so this leaves no partial series behind).
+            requireNoSlotConflict(enrollment.getOrgId(), clinicHeadIds, slot, startTime, durationMinutes, null);
+
             ReviewMeeting m = new ReviewMeeting();
             m.setOrgId(enrollment.getOrgId());
             m.setEnrollmentId(enrollment.getId());
@@ -173,6 +180,8 @@ public class ReviewMeetingService {
     @Transactional
     public ReviewMeeting createSingle(Enrollment enrollment, LocalDate date, LocalTime startTime,
                                       int durationMinutes, Set<UUID> clinicHeadIds, UUID createdBy) {
+        requireNoSlotConflict(enrollment.getOrgId(), clinicHeadIds, date, startTime, durationMinutes, null);
+
         ReviewMeeting m = new ReviewMeeting();
         m.setOrgId(enrollment.getOrgId());
         m.setEnrollmentId(enrollment.getId());
@@ -396,6 +405,82 @@ public class ReviewMeetingService {
         return ids;
     }
 
+    /** Of a participant set, just the ones currently holding CLINIC_HEAD — a meeting's
+     *  participantIds also includes the patient's parents, which slot-conflict checks ignore. */
+    private Set<UUID> clinicHeadIdsAmong(Set<UUID> participantIds) {
+        return userRepository.findAllById(participantIds).stream()
+                .filter(u -> u.hasRole(Role.CLINIC_HEAD))
+                .map(User::getId)
+                .collect(Collectors.toSet());
+    }
+
+    // ── Review Session slot grid ─────────────────────────────────────────────
+
+    /**
+     * The org's fixed daily grid (default 3 morning + 3 evening times, editable in Organisation
+     * settings) for one date, marked available/booked for the given Clinic Head(s) — a slot is
+     * booked if ANY of them already has an overlapping SCHEDULED meeting spanning its start time.
+     */
+    @Transactional(readOnly = true)
+    public List<ReviewSlotResponse> getSlots(UUID orgId, List<UUID> clinicHeadIds, LocalDate date,
+                                             UUID excludeMeetingId) {
+        List<LocalTime> canonicalSlots = organisationRepository.findById(orgId)
+                .map(Organisation::getReviewSlotTimes)
+                .map(times -> times.stream().sorted().toList())
+                .orElse(List.of());
+
+        List<ReviewMeeting> dayMeetings = meetingRepository
+                .findByOrgIdAndMeetingDateAndStatus(orgId, date, ReviewMeetingStatus.SCHEDULED)
+                .stream()
+                .filter(m -> excludeMeetingId == null || !excludeMeetingId.equals(m.getId()))
+                .toList();
+
+        Map<UUID, String> clinicHeadNames = new HashMap<>();
+        userRepository.findAllById(clinicHeadIds).forEach(u ->
+                clinicHeadNames.put(u.getId(), u.getFirstName() + " " + u.getLastName()));
+
+        return canonicalSlots.stream().map(slot -> {
+            List<String> busy = new ArrayList<>();
+            for (UUID chId : clinicHeadIds) {
+                boolean occupied = dayMeetings.stream()
+                        .filter(m -> m.getParticipantIds().contains(chId))
+                        .anyMatch(m -> !slot.isBefore(m.getStartTime()) && slot.isBefore(m.getEndTime()));
+                if (occupied) busy.add(clinicHeadNames.getOrDefault(chId, "Clinic Head"));
+            }
+            return new ReviewSlotResponse(slot, busy.isEmpty(), busy);
+        }).toList();
+    }
+
+    /**
+     * Throws 409 if any of the given Clinic Heads already has an overlapping SCHEDULED review
+     * meeting that day — the actual booking guard, using the real chosen duration (the grid
+     * shown by getSlots() is only a start-time-containment preview, since duration is variable).
+     *
+     * @param excludeMeetingId the meeting being rescheduled/edited, so it doesn't conflict with itself; null for a new meeting.
+     */
+    private void requireNoSlotConflict(UUID orgId, Set<UUID> clinicHeadIds, LocalDate date,
+                                       LocalTime startTime, int durationMinutes, UUID excludeMeetingId) {
+        LocalTime endTime = startTime.plusMinutes(durationMinutes);
+        List<ReviewMeeting> dayMeetings = meetingRepository
+                .findByOrgIdAndMeetingDateAndStatus(orgId, date, ReviewMeetingStatus.SCHEDULED);
+
+        for (ReviewMeeting m : dayMeetings) {
+            if (excludeMeetingId != null && excludeMeetingId.equals(m.getId())) continue;
+            boolean overlaps = startTime.isBefore(m.getEndTime()) && m.getStartTime().isBefore(endTime);
+            if (!overlaps) continue;
+
+            for (UUID chId : clinicHeadIds) {
+                if (m.getParticipantIds().contains(chId)) {
+                    String name = userRepository.findById(chId)
+                            .map(u -> u.getFirstName() + " " + u.getLastName())
+                            .orElse("The selected Clinic Head");
+                    throw new ApiException(HttpStatus.CONFLICT,
+                            name + " already has a review session at " + startTime + " on " + date);
+                }
+            }
+        }
+    }
+
     /** Union of a patient's linked parents and the given Clinic Head(s). */
     private Set<UUID> participantsFor(UUID patientId, Set<UUID> clinicHeadIds) {
         Set<UUID> participants = new LinkedHashSet<>(clinicHeadIds);
@@ -407,6 +492,14 @@ public class ReviewMeetingService {
     /** Replaces the meeting's attendee list and resends invites to the new full set. */
     @Transactional
     public ReviewMeeting updateParticipants(ReviewMeeting meeting, Set<UUID> newParticipantIds) {
+        // A newly-invited Clinic Head might already be busy at this meeting's existing time —
+        // reschedule() and updateParticipants() are called independently by the Calendar edit
+        // modal, so this has to re-check on its own rather than assume reschedule() already did.
+        Set<UUID> newClinicHeadIds = clinicHeadIdsAmong(newParticipantIds);
+        int minutes = (int) java.time.Duration.between(meeting.getStartTime(), meeting.getEndTime()).toMinutes();
+        requireNoSlotConflict(meeting.getOrgId(), newClinicHeadIds, meeting.getMeetingDate(),
+                meeting.getStartTime(), minutes, meeting.getId());
+
         meeting.setParticipantIds(new LinkedHashSet<>(newParticipantIds));
         meeting.setIcsSequence(meeting.getIcsSequence() + 1);
         ReviewMeeting saved = meetingRepository.save(meeting);
@@ -431,6 +524,9 @@ public class ReviewMeetingService {
         int minutes = durationMinutes != null
                 ? durationMinutes
                 : (int) java.time.Duration.between(meeting.getStartTime(), meeting.getEndTime()).toMinutes();
+
+        Set<UUID> clinicHeadIds = clinicHeadIdsAmong(meeting.getParticipantIds());
+        requireNoSlotConflict(meeting.getOrgId(), clinicHeadIds, date, startTime, minutes, meeting.getId());
 
         meeting.setMeetingDate(date);
         meeting.setStartTime(startTime);

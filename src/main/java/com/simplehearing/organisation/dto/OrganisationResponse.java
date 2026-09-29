@@ -5,6 +5,8 @@ import com.simplehearing.organisation.enums.AiProvider;
 
 import java.time.DayOfWeek;
 import java.time.Instant;
+import java.time.LocalTime;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -24,6 +26,8 @@ public record OrganisationResponse(
         Double latitude,
         Double longitude,
         Integer geoFenceRadiusMeters,
+        /** The fixed daily Review Session grid, sorted — see ReviewMeetingService. */
+        List<LocalTime> reviewSlotTimes,
         Instant createdAt
 ) {
     public static OrganisationResponse from(Organisation org) {
@@ -43,6 +47,7 @@ public record OrganisationResponse(
                 org.getLatitude(),
                 org.getLongitude(),
                 org.getGeoFenceRadiusMeters(),
+                org.getReviewSlotTimes().stream().sorted().toList(),
                 org.getCreatedAt()
         );
     }

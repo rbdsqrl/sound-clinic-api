@@ -7,7 +7,10 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.DayOfWeek;
 import java.time.Instant;
+import java.time.LocalTime;
 import java.util.EnumSet;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -74,6 +77,19 @@ public class Organisation {
     @Enumerated(EnumType.STRING)
     private Set<DayOfWeek> weeklyOffDays = EnumSet.noneOf(DayOfWeek.class);
 
+    /** The fixed daily grid a Review Meeting must be booked into (see ReviewMeetingService) —
+     *  defaults to 3 morning + 3 evening times, editable the same way as weeklyOffDays. */
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "organisation_review_slot_times", joinColumns = @JoinColumn(name = "organisation_id"))
+    @Column(name = "slot_time", nullable = false)
+    private Set<LocalTime> reviewSlotTimes = defaultReviewSlotTimes();
+
+    private static Set<LocalTime> defaultReviewSlotTimes() {
+        return new LinkedHashSet<>(List.of(
+                LocalTime.of(9, 0), LocalTime.of(10, 0), LocalTime.of(11, 0),
+                LocalTime.of(15, 0), LocalTime.of(16, 0), LocalTime.of(17, 0)));
+    }
+
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
@@ -137,6 +153,9 @@ public class Organisation {
 
     public Set<DayOfWeek> getWeeklyOffDays() { return weeklyOffDays; }
     public void setWeeklyOffDays(Set<DayOfWeek> weeklyOffDays) { this.weeklyOffDays = weeklyOffDays; }
+
+    public Set<LocalTime> getReviewSlotTimes() { return reviewSlotTimes; }
+    public void setReviewSlotTimes(Set<LocalTime> reviewSlotTimes) { this.reviewSlotTimes = reviewSlotTimes; }
 
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }

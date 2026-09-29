@@ -20,6 +20,7 @@ import com.simplehearing.user.repository.UserRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -27,6 +28,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -98,6 +100,20 @@ public class ReviewMeetingController {
                 .toList();
 
         return ResponseEntity.ok(ApiResponse.success(enrich(meetings, principal)));
+    }
+
+    @Operation(summary = "Review Session slot availability for one or more Clinic Heads on a date",
+               description = "The org's fixed daily grid (default 3 morning + 3 evening times, editable in "
+                           + "Organisation settings), marked available/booked for the given Clinic Head(s).")
+    @GetMapping("/slots")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
+    public ResponseEntity<ApiResponse<List<ReviewSlotResponse>>> getSlots(
+            @RequestParam List<UUID> clinicHeadIds,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(required = false) UUID excludeMeetingId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                meetingService.getSlots(principal.getOrgId(), clinicHeadIds, date, excludeMeetingId)));
     }
 
     @Operation(summary = "Get a single review meeting")

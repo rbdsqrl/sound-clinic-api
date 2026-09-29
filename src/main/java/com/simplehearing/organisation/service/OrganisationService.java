@@ -60,6 +60,13 @@ public class OrganisationService {
         if (request.latitude() != null)             org.setLatitude(request.latitude());
         if (request.longitude() != null)             org.setLongitude(request.longitude());
         if (request.geoFenceRadiusMeters() != null)  org.setGeoFenceRadiusMeters(request.geoFenceRadiusMeters());
+        if (request.reviewSlotTimes() != null) {
+            if (request.reviewSlotTimes().isEmpty()) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "Review Session slot grid cannot be empty");
+            }
+            org.getReviewSlotTimes().clear();
+            org.getReviewSlotTimes().addAll(request.reviewSlotTimes());
+        }
 
         return OrganisationResponse.from(organisationRepository.save(org));
     }

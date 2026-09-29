@@ -3,6 +3,7 @@ package com.simplehearing.organisation.dto;
 import com.simplehearing.organisation.enums.AiProvider;
 
 import java.time.DayOfWeek;
+import java.time.LocalTime;
 import java.util.Set;
 
 public record UpdateOrganisationRequest(
@@ -19,5 +20,7 @@ public record UpdateOrganisationRequest(
         Set<DayOfWeek> weeklyOffDays,
         Double latitude,
         Double longitude,
-        Integer geoFenceRadiusMeters
+        Integer geoFenceRadiusMeters,
+        /** Full replacement of the Review Session daily grid. Omit to leave unchanged; must not be empty. */
+        Set<LocalTime> reviewSlotTimes
 ) {}
