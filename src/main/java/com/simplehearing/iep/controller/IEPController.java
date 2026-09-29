@@ -37,7 +37,7 @@ public class IEPController {
 
     @Operation(summary = "List IEP plans — for a patient (patientId required) or all plans in org (admin only)")
     @GetMapping
-    @PreAuthorize("hasAnyRole('THERAPIST', 'BUSINESS_OWNER', 'CLINIC_HEAD', 'PARENT')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'BUSINESS_OWNER', 'CLINIC_HEAD', 'PARENT', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<List<IEPPlanResponse>>> listPlans(
             @RequestParam(required = false) UUID patientId,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -96,7 +96,7 @@ public class IEPController {
 
     @Operation(summary = "Download sample IEP import CSV")
     @GetMapping("/sample-csv")
-    @PreAuthorize("hasAnyRole('THERAPIST', 'BUSINESS_OWNER', 'CLINIC_HEAD', 'PARENT')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'BUSINESS_OWNER', 'CLINIC_HEAD', 'PARENT', 'OFFICE_ADMIN')")
     public ResponseEntity<String> sampleCsv(@AuthenticationPrincipal UserPrincipal principal) {
         String csv = iepService.sampleCsv();
         return ResponseEntity.ok()
@@ -191,7 +191,7 @@ public class IEPController {
 
     @Operation(summary = "List progress entries for an IEP goal, newest first")
     @GetMapping("/goals/{goalId}/progress")
-    @PreAuthorize("hasAnyRole('THERAPIST', 'BUSINESS_OWNER', 'CLINIC_HEAD', 'PARENT')")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'BUSINESS_OWNER', 'CLINIC_HEAD', 'PARENT', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<List<IEPGoalProgressResponse>>> listProgress(
             @PathVariable UUID goalId,
             @AuthenticationPrincipal UserPrincipal principal) {
