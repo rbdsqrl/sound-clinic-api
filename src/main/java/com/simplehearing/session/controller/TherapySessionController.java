@@ -228,6 +228,7 @@ public class TherapySessionController {
 
         TherapySession session = findOwned(id, principal);
         requireTherapistOwnership(session, principal);
+        requireNotAwaitingPayment(session);
 
         Role callerRole = principal.getUser().getRole();
         if (request.status() == TherapySessionStatus.CANCELLED
@@ -271,6 +272,7 @@ public class TherapySessionController {
 
         TherapySession session = findOwned(id, principal);
         requireTherapistOwnership(session, principal);
+        requireNotAwaitingPayment(session);
 
         boolean hadPriorContent = session.getFeedback() != null || session.getProgressReport() != null
                 || session.getNotes() != null || session.getPerformanceScore() != null;
@@ -569,6 +571,7 @@ public class TherapySessionController {
             @AuthenticationPrincipal UserPrincipal principal) {
 
         TherapySession session = findOwned(id, principal);
+        requireNotAwaitingPayment(session);
 
         if (session.getStatus() != TherapySessionStatus.SCHEDULED) {
             throw new ApiException(HttpStatus.CONFLICT, "Only SCHEDULED sessions can be requested for reschedule");
@@ -756,6 +759,15 @@ public class TherapySessionController {
         if ((caller.getRole() == Role.THERAPIST)
                 && !session.getTherapistId().equals(principal.getId())) {
             throw new ApiException(HttpStatus.FORBIDDEN, "You can only modify your own sessions");
+        }
+    }
+
+    /** Blocks the actions that assume a confirmed session — marking complete, notes, a parent's
+     *  own reschedule-request — while the plan's payment is still pending. Staff reschedule and
+     *  cancellation-request stay open, since staff still need to move/cancel a held slot freely. */
+    private void requireNotAwaitingPayment(TherapySession session) {
+        if (session.isAwaitingPayment()) {
+            throw new ApiException(HttpStatus.CONFLICT, "This session is awaiting payment and can't be marked yet");
         }
     }
 

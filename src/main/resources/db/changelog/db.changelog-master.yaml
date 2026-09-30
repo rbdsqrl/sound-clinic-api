@@ -338,3 +338,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/113-phone-uniqueness.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/114-enrollment-awaiting-payment.sql
+      relativeToChangelogFile: false

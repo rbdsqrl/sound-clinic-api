@@ -50,7 +50,11 @@ public record TherapySessionResponse(
         /** True when this session was auto-cancelled by marking its patient's case inactive —
          *  the calendar hides these rather than showing a cancelled chip for every session an
          *  inactive case would otherwise have had. */
-        boolean cancelledByCaseInactive
+        boolean cancelledByCaseInactive,
+        /** True until the plan's subscription is paid in full — session is real and scheduled,
+         *  just locked from completion/notes/reschedule-request until then. Status stays
+         *  SCHEDULED throughout; this flag alone drives the "Payment pending" badge/lock. */
+        boolean awaitingPayment
 ) {
     public static TherapySessionResponse from(
             TherapySession session,
@@ -90,6 +94,7 @@ public record TherapySessionResponse(
                 session.isAdHoc(),
                 session.isCountsTowardPlan(),
                 session.isRequiresPayment(),
-                session.isCancelledByCaseInactive());
+                session.isCancelledByCaseInactive(),
+                session.isAwaitingPayment());
     }
 }

@@ -29,5 +29,9 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, UUID> {
     /** Every enrollment closed by a specific discharge episode — for building/re-reading its report. */
     List<Enrollment> findByDischargedInRecordId(UUID dischargeRecordId);
 
+    /** Every enrollment tied to a subscription — normally one, but not assumed. Used by
+     *  EnrollmentPaymentActivationService to flip awaitingPayment once payment clears. */
+    List<Enrollment> findBySubscriptionId(UUID subscriptionId);
+
     void deleteByPatientId(UUID patientId);
 }

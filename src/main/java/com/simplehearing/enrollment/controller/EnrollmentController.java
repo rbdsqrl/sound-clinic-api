@@ -37,6 +37,7 @@ import com.simplehearing.review.service.ReviewMeetingService;
 import com.simplehearing.session.entity.TherapySession;
 import com.simplehearing.session.service.SessionGenerationService;
 import com.simplehearing.subscription.entity.Subscription;
+import com.simplehearing.subscription.enums.SubscriptionPaymentStatus;
 import com.simplehearing.subscription.repository.SubscriptionRepository;
 import com.simplehearing.user.entity.User;
 import com.simplehearing.user.enums.Role;
@@ -182,13 +183,16 @@ public class EnrollmentController {
             @Valid @RequestBody CreateEnrollmentRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
 
-        // Validate subscription belongs to org and is paid
+        // Payment is no longer a precondition for enrolling — sessions are generated and
+        // scheduled immediately below, held awaitingPayment until this subscription reaches PAID.
         Subscription sub = subscriptionRepository.findById(request.subscriptionId())
                 .orElseThrow(() -> new ResourceNotFoundException("Subscription not found"));
 
         if (!sub.getOrgId().equals(principal.getOrgId())) {
             throw new ApiException(HttpStatus.FORBIDDEN, "Access denied");
         }
+
+        boolean awaitingPayment = sub.getPaymentStatus() != SubscriptionPaymentStatus.PAID;
 
         // Validate therapist exists and belongs to org
         User therapist = userRepository.findById(request.therapistId())
@@ -217,6 +221,7 @@ public class EnrollmentController {
             enrollment.setSessionDays(new HashSet<>(request.sessionDays()));
         }
         enrollment.setStartTime(request.startTime());
+        enrollment.setAwaitingPayment(awaitingPayment);
         enrollment.setCreatedBy(principal.getId());
 
         Enrollment saved = enrollmentRepository.save(enrollment);
@@ -246,7 +251,7 @@ public class EnrollmentController {
         });
 
         // Generate individual session records
-        List<TherapySession> sessions = sessionGenerationService.generateSessions(saved, sub.getNumSessions());
+        List<TherapySession> sessions = sessionGenerationService.generateSessions(saved, sub.getNumSessions(), awaitingPayment);
 
         // The plan's end is whatever the caller gave us, else the date the last session lands on
         LocalDate endDate = request.endDate();

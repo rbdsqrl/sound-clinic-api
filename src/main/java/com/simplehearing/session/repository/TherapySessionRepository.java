@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -34,6 +35,11 @@ public interface TherapySessionRepository extends JpaRepository<TherapySession, 
 
     /** All sessions belonging to a specific enrollment (for detail view) */
     List<TherapySession> findByEnrollmentIdOrderBySessionNumberAsc(UUID enrollmentId);
+
+    /** Batched form of the above — used by EnrollmentPaymentActivationService to flip
+     *  awaitingPayment across every session of every enrollment a subscription covers, in one
+     *  round trip. */
+    List<TherapySession> findByEnrollmentIdIn(Collection<UUID> enrollmentIds);
 
     /** How many sessions of a plan the parent has already asked to move. */
     int countByEnrollmentIdAndParentRescheduleRequestedTrue(UUID enrollmentId);

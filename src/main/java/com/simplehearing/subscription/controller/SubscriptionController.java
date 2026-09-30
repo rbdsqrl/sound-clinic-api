@@ -17,6 +17,7 @@ import com.simplehearing.subscription.entity.Subscription;
 import com.simplehearing.subscription.enums.SubscriptionPaymentStatus;
 import com.simplehearing.subscription.enums.SubscriptionStatus;
 import com.simplehearing.subscription.repository.SubscriptionRepository;
+import com.simplehearing.subscription.service.EnrollmentPaymentActivationService;
 import com.simplehearing.tax.entity.Tax;
 import com.simplehearing.tax.repository.TaxRepository;
 import io.swagger.v3.oas.annotations.Operation;
@@ -42,16 +43,19 @@ public class SubscriptionController {
     private final ProgramRepository programRepository;
     private final PatientRepository patientRepository;
     private final TaxRepository taxRepository;
+    private final EnrollmentPaymentActivationService enrollmentPaymentActivationService;
 
     public SubscriptionController(
             SubscriptionRepository subscriptionRepository,
             ProgramRepository programRepository,
             PatientRepository patientRepository,
-            TaxRepository taxRepository) {
+            TaxRepository taxRepository,
+            EnrollmentPaymentActivationService enrollmentPaymentActivationService) {
         this.subscriptionRepository = subscriptionRepository;
         this.programRepository = programRepository;
         this.patientRepository = patientRepository;
         this.taxRepository = taxRepository;
+        this.enrollmentPaymentActivationService = enrollmentPaymentActivationService;
     }
 
     // ── List subscriptions for a patient ──────────────────────────────────────
@@ -149,6 +153,8 @@ public class SubscriptionController {
             throw new ApiException(HttpStatus.CONFLICT, "Cannot update payment on a cancelled subscription");
         }
 
+        SubscriptionPaymentStatus previousStatus = sub.getPaymentStatus();
+
         sub.setDiscountPercent(request.discountPercent());
         sub.setAmountPaid(request.amountPaid());
         if (request.paymentNotes() != null) {
@@ -178,6 +184,13 @@ public class SubscriptionController {
         }
 
         Subscription saved = subscriptionRepository.save(sub);
+
+        // The activation moment — sessions generated while unpaid were held awaitingPayment;
+        // this is the one edge that unlocks them, exactly once per genuine transition.
+        if (previousStatus != SubscriptionPaymentStatus.PAID && saved.getPaymentStatus() == SubscriptionPaymentStatus.PAID) {
+            enrollmentPaymentActivationService.activate(saved.getId());
+        }
+
         Program program = programRepository.findById(saved.getProgramId()).orElse(null);
         String name = program != null ? program.getName() : "Unknown Program";
 

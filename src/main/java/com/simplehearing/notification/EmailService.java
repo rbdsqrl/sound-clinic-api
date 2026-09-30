@@ -280,6 +280,22 @@ public class EmailService {
     }
 
     @Async
+    public void sendPaymentReminderEmail(String to, String parentFirstName, String childName,
+                                         String programName, java.math.BigDecimal amountDue,
+                                         String orgName, String patientId) {
+        Map<String, String> vars = new java.util.HashMap<>();
+        vars.put("ORG_NAME", orgName);
+        vars.put("LOGO_URL", props.getBaseUrl() + "/logo.png");
+        vars.put("PARENT_NAME", parentFirstName);
+        vars.put("CHILD_NAME", childName);
+        vars.put("PROGRAM_NAME", programName);
+        vars.put("AMOUNT_DUE", "₹" + amountDue.toPlainString());
+        vars.put("PAY_URL", props.getBaseUrl() + "/patients/" + patientId);
+        String html = fillStubs(loadTemplate("payment-reminder"), vars);
+        send(to, "Payment pending — " + childName + "'s " + programName, html);
+    }
+
+    @Async
     public void sendTaskAssignmentEmail(String to, String assigneeName, String assignerName,
                                         String taskTitle, String description, String dueDate,
                                         String priority, String orgName) {

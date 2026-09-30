@@ -27,6 +27,9 @@ public record EnrollmentResponse(
         Set<DayOfWeek> sessionDays,
         LocalTime startTime,
         EnrollmentStatus status,
+        /** True until the linked subscription's payment is recorded in full — sessions are real
+         *  and scheduled, just locked from completion/notes/reschedule-request until then. */
+        boolean awaitingPayment,
         EnrollmentCareStatus careStatus,
         String careStatusNote,
         boolean therapistSignedOff,
@@ -61,6 +64,7 @@ public record EnrollmentResponse(
                 enrollment.getSessionDays(),
                 enrollment.getStartTime(),
                 enrollment.getStatus(),
+                enrollment.isAwaitingPayment(),
                 enrollment.getCareStatus(),
                 enrollment.getCareStatusNote(),
                 enrollment.isTherapistSignedOff(),

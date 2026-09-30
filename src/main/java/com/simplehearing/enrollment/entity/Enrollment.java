@@ -114,6 +114,13 @@ public class Enrollment {
     @Column(name = "cancelled_by_case_inactive", nullable = false)
     private boolean cancelledByCaseInactive = false;
 
+    /** True from creation until the linked subscription's paymentStatus reaches PAID — the
+     *  enrollment's sessions are generated and scheduled as normal, just locked from
+     *  completion/notes/reschedule-request actions and badged "Payment pending" until this
+     *  flips false. Set once, by EnrollmentPaymentActivationService, never toggled back on. */
+    @Column(name = "awaiting_payment", nullable = false)
+    private boolean awaitingPayment = false;
+
     @Column(name = "created_by")
     private UUID createdBy;
 
@@ -152,6 +159,8 @@ public class Enrollment {
     public void setStatus(EnrollmentStatus status) { this.status = status; }
     public boolean isCancelledByCaseInactive() { return cancelledByCaseInactive; }
     public void setCancelledByCaseInactive(boolean cancelledByCaseInactive) { this.cancelledByCaseInactive = cancelledByCaseInactive; }
+    public boolean isAwaitingPayment() { return awaitingPayment; }
+    public void setAwaitingPayment(boolean awaitingPayment) { this.awaitingPayment = awaitingPayment; }
     public EnrollmentCareStatus getCareStatus() { return careStatus; }
     public void setCareStatus(EnrollmentCareStatus careStatus) { this.careStatus = careStatus; }
     public String getCareStatusNote() { return careStatusNote; }

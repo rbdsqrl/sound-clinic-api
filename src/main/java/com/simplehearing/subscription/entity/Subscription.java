@@ -46,6 +46,11 @@ public class Subscription {
     @Column(name = "payment_notes", columnDefinition = "TEXT")
     private String paymentNotes;
 
+    /** Last time a payment-pending reminder email went out — null until the first one fires.
+     *  Drives PaymentReminderJob's every-2-days cadence. */
+    @Column(name = "payment_reminder_sent_at")
+    private Instant paymentReminderSentAt;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private SubscriptionStatus status = SubscriptionStatus.ACTIVE;
@@ -85,6 +90,8 @@ public class Subscription {
     public void setPaymentStatus(SubscriptionPaymentStatus paymentStatus) { this.paymentStatus = paymentStatus; }
     public String getPaymentNotes() { return paymentNotes; }
     public void setPaymentNotes(String paymentNotes) { this.paymentNotes = paymentNotes; }
+    public Instant getPaymentReminderSentAt() { return paymentReminderSentAt; }
+    public void setPaymentReminderSentAt(Instant paymentReminderSentAt) { this.paymentReminderSentAt = paymentReminderSentAt; }
     public SubscriptionStatus getStatus() { return status; }
     public void setStatus(SubscriptionStatus status) { this.status = status; }
     public UUID getCreatedBy() { return createdBy; }

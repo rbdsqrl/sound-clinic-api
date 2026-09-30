@@ -40,9 +40,11 @@ public class SessionGenerationService {
      * any dates that are public holidays, the org's weekly off days, or — when the
      * enrollment restricts itself to specific weekdays — not one of those days.
      *
+     * @param awaitingPayment stamped onto every generated session (and mirrors Enrollment's own
+     *                         flag) — true when the linked subscription isn't yet PAID in full.
      * @return the saved sessions in date order — the last one's date is the plan's real end
      */
-    public List<TherapySession> generateSessions(Enrollment enrollment, int numSessions) {
+    public List<TherapySession> generateSessions(Enrollment enrollment, int numSessions, boolean awaitingPayment) {
         LocalTime startTime = enrollment.getStartTime();
         LocalTime endTime   = startTime.plusMinutes(enrollment.getSessionDurationMinutes());
 
@@ -84,6 +86,7 @@ public class SessionGenerationService {
             s.setSessionDate(date);
             s.setStartTime(startTime);
             s.setEndTime(endTime);
+            s.setAwaitingPayment(awaitingPayment);
             sessions.add(s);
             date = date.plusDays(1);
         }

@@ -113,6 +113,12 @@ public class TherapySession {
     @Column(name = "cancelled_by_case_inactive", nullable = false)
     private boolean cancelledByCaseInactive = false;
 
+    /** Mirrors Enrollment.awaitingPayment at the moment this session was generated — true until
+     *  the subscription's payment is recorded in full. Status stays SCHEDULED throughout; this
+     *  flag alone gates the "confirmed session" actions (complete, notes, parent reschedule/cancel). */
+    @Column(name = "awaiting_payment", nullable = false)
+    private boolean awaitingPayment = false;
+
     @Column(name = "completed_by")
     private UUID completedBy;
 
@@ -171,6 +177,8 @@ public class TherapySession {
     public void setCancelledByProgramCompletion(boolean v) { this.cancelledByProgramCompletion = v; }
     public boolean isCancelledByCaseInactive() { return cancelledByCaseInactive; }
     public void setCancelledByCaseInactive(boolean v) { this.cancelledByCaseInactive = v; }
+    public boolean isAwaitingPayment() { return awaitingPayment; }
+    public void setAwaitingPayment(boolean v) { this.awaitingPayment = v; }
 
     public int getRescheduleCount() { return rescheduleCount; }
     public void setRescheduleCount(int rescheduleCount) { this.rescheduleCount = rescheduleCount; }
