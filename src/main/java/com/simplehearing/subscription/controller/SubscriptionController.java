@@ -155,15 +155,19 @@ public class SubscriptionController {
             sub.setPaymentNotes(request.paymentNotes());
         }
 
-        // Derive payment status from amount paid vs total due
+        // Derive payment status from amount paid vs total due. Rounded to whole rupees —
+        // the UI only ever shows/collects whole-rupee amounts (Amount Paid has step=1, the
+        // total-due preview is formatted with no decimals), so comparing at 2-decimal
+        // precision left a payment that matched the displayed total by a few paise short,
+        // permanently stuck as PARTIAL with the total-due preview showing "Remaining: ₹0".
         BigDecimal discount = request.discountPercent()
                 .divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP);
         BigDecimal totalDue = sub.getPerSessionCost()
                 .multiply(BigDecimal.valueOf(sub.getNumSessions()))
                 .multiply(BigDecimal.ONE.subtract(discount))
-                .setScale(2, RoundingMode.HALF_UP);
+                .setScale(0, RoundingMode.HALF_UP);
 
-        BigDecimal paid = request.amountPaid().setScale(2, RoundingMode.HALF_UP);
+        BigDecimal paid = request.amountPaid().setScale(0, RoundingMode.HALF_UP);
 
         if (paid.compareTo(BigDecimal.ZERO) == 0) {
             sub.setPaymentStatus(SubscriptionPaymentStatus.PENDING);

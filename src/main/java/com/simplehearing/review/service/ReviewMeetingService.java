@@ -6,6 +6,8 @@ import com.simplehearing.clinic.repository.ClinicRepository;
 import com.simplehearing.common.exception.ApiException;
 import com.simplehearing.enrollment.entity.Enrollment;
 import com.simplehearing.holiday.repository.PublicHolidayRepository;
+import com.simplehearing.leave.enums.LeaveStatus;
+import com.simplehearing.leave.repository.LeaveRepository;
 import com.simplehearing.notification.CalendarInviteService;
 import com.simplehearing.notification.EmailProperties;
 import com.simplehearing.notification.EmailService;
@@ -63,6 +65,7 @@ public class ReviewMeetingService {
     private final UserRepository userRepository;
     private final OrganisationRepository organisationRepository;
     private final ClinicRepository clinicRepository;
+    private final LeaveRepository leaveRepository;
     private final EmailService emailService;
     private final EmailProperties emailProperties;
     private final CalendarInviteService calendarInviteService;
@@ -74,6 +77,7 @@ public class ReviewMeetingService {
                                 UserRepository userRepository,
                                 OrganisationRepository organisationRepository,
                                 ClinicRepository clinicRepository,
+                                LeaveRepository leaveRepository,
                                 EmailService emailService,
                                 EmailProperties emailProperties,
                                 CalendarInviteService calendarInviteService) {
@@ -84,6 +88,7 @@ public class ReviewMeetingService {
         this.userRepository = userRepository;
         this.organisationRepository = organisationRepository;
         this.clinicRepository = clinicRepository;
+        this.leaveRepository = leaveRepository;
         this.emailService = emailService;
         this.emailProperties = emailProperties;
         this.calendarInviteService = calendarInviteService;
@@ -423,7 +428,9 @@ public class ReviewMeetingService {
      * Head(s) — each Clinic Head can configure their own list of times (however many they
      * want), falling back to the org-wide default when they haven't set one. When more than one
      * Clinic Head is given, only a time valid for all of them is offered. A slot is booked if
-     * ANY of them already has an overlapping SCHEDULED meeting spanning its start time.
+     * ANY of them already has an overlapping SCHEDULED meeting spanning its start time, is on
+     * approved leave that day, or the date is the org's own weekly off day — the last blocks
+     * every slot outright, same as recurring-schedule generation already skips it.
      */
     @Transactional(readOnly = true)
     public List<ReviewSlotResponse> getSlots(UUID orgId, List<UUID> clinicHeadIds, LocalDate date,
@@ -438,19 +445,38 @@ public class ReviewMeetingService {
                 })
                 .orElse(List.of());
 
+        boolean weeklyOff = organisationRepository.findById(orgId)
+                .map(Organisation::getWeeklyOffDays)
+                .map(days -> days.contains(date.getDayOfWeek()))
+                .orElse(false);
+
+        Map<UUID, String> clinicHeadNames = new HashMap<>();
+        userRepository.findAllById(clinicHeadIds).forEach(u ->
+                clinicHeadNames.put(u.getId(), u.getFirstName() + " " + u.getLastName()));
+
+        Set<UUID> onLeave = weeklyOff ? Set.of() : clinicHeadIds.stream()
+                .filter(chId -> !leaveRepository
+                        .findByOrgIdAndTherapistIdAndStatusAndLeaveDateLessThanEqualAndEndDateGreaterThanEqual(
+                                orgId, chId, LeaveStatus.APPROVED, date, date)
+                        .isEmpty())
+                .collect(Collectors.toSet());
+
         List<ReviewMeeting> dayMeetings = meetingRepository
                 .findByOrgIdAndMeetingDateAndStatus(orgId, date, ReviewMeetingStatus.SCHEDULED)
                 .stream()
                 .filter(m -> excludeMeetingId == null || !excludeMeetingId.equals(m.getId()))
                 .toList();
 
-        Map<UUID, String> clinicHeadNames = new HashMap<>();
-        userRepository.findAllById(clinicHeadIds).forEach(u ->
-                clinicHeadNames.put(u.getId(), u.getFirstName() + " " + u.getLastName()));
-
         return canonicalSlots.stream().map(slot -> {
+            if (weeklyOff) {
+                return new ReviewSlotResponse(slot, false, List.of("Weekly off"));
+            }
             List<String> busy = new ArrayList<>();
             for (UUID chId : clinicHeadIds) {
+                if (onLeave.contains(chId)) {
+                    busy.add(clinicHeadNames.getOrDefault(chId, "Clinic Head") + " (on leave)");
+                    continue;
+                }
                 boolean occupied = dayMeetings.stream()
                         .filter(m -> m.getParticipantIds().contains(chId))
                         .anyMatch(m -> !slot.isBefore(m.getStartTime()) && slot.isBefore(m.getEndTime()));
@@ -504,14 +530,38 @@ public class ReviewMeetingService {
     }
 
     /**
-     * Throws 409 if any of the given Clinic Heads already has an overlapping SCHEDULED review
-     * meeting that day — the actual booking guard, using the real chosen duration (the grid
-     * shown by getSlots() is only a start-time-containment preview, since duration is variable).
+     * Throws 409 if the date is the organisation's weekly off day, any of the given Clinic
+     * Heads is on approved leave that day, or any of them already has an overlapping SCHEDULED
+     * review meeting that day — the actual booking guard, using the real chosen duration (the
+     * grid shown by getSlots() is only a start-time-containment preview, since duration is
+     * variable). {@code generateForEnrollment} already nudges past a weekly off day before
+     * calling this for each occurrence; {@code createSingle} relies on this check for it.
      *
      * @param excludeMeetingId the meeting being rescheduled/edited, so it doesn't conflict with itself; null for a new meeting.
      */
     private void requireNoSlotConflict(UUID orgId, Set<UUID> clinicHeadIds, LocalDate date,
                                        LocalTime startTime, int durationMinutes, UUID excludeMeetingId) {
+        boolean weeklyOff = organisationRepository.findById(orgId)
+                .map(Organisation::getWeeklyOffDays)
+                .map(days -> days.contains(date.getDayOfWeek()))
+                .orElse(false);
+        if (weeklyOff) {
+            throw new ApiException(HttpStatus.CONFLICT, "That date is the organisation's weekly off day");
+        }
+
+        for (UUID chId : clinicHeadIds) {
+            boolean onLeave = !leaveRepository
+                    .findByOrgIdAndTherapistIdAndStatusAndLeaveDateLessThanEqualAndEndDateGreaterThanEqual(
+                            orgId, chId, LeaveStatus.APPROVED, date, date)
+                    .isEmpty();
+            if (onLeave) {
+                String name = userRepository.findById(chId)
+                        .map(u -> u.getFirstName() + " " + u.getLastName())
+                        .orElse("The selected Clinic Head");
+                throw new ApiException(HttpStatus.CONFLICT, name + " is on leave on " + date);
+            }
+        }
+
         LocalTime endTime = startTime.plusMinutes(durationMinutes);
         List<ReviewMeeting> dayMeetings = meetingRepository
                 .findByOrgIdAndMeetingDateAndStatus(orgId, date, ReviewMeetingStatus.SCHEDULED);

@@ -20,4 +20,8 @@ public interface LeaveRepository extends JpaRepository<Leave, UUID> {
 
     /** Approved leaves on a specific date (used for therapist availability checks) */
     List<Leave> findByOrgIdAndLeaveDateAndStatus(UUID orgId, java.time.LocalDate leaveDate, LeaveStatus status);
+
+    /** Approved leaves for one staff member whose (possibly multi-day) range covers the given date. */
+    List<Leave> findByOrgIdAndTherapistIdAndStatusAndLeaveDateLessThanEqualAndEndDateGreaterThanEqual(
+            UUID orgId, UUID therapistId, LeaveStatus status, java.time.LocalDate date, java.time.LocalDate sameDate);
 }

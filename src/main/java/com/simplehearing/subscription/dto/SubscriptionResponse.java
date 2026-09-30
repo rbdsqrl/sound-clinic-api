@@ -26,13 +26,15 @@ public record SubscriptionResponse(
         Instant createdAt
 ) {
     public static SubscriptionResponse from(Subscription sub, String programName) {
-        // totalAmount = numSessions × perSessionCost × (1 - discountPercent / 100)
+        // totalAmount = numSessions × perSessionCost × (1 - discountPercent / 100), rounded to
+        // whole rupees to match the payment-status comparison in SubscriptionController and the
+        // whole-rupee amounts the UI actually shows/collects.
         BigDecimal discount = sub.getDiscountPercent()
                 .divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP);
         BigDecimal total = sub.getPerSessionCost()
                 .multiply(BigDecimal.valueOf(sub.getNumSessions()))
                 .multiply(BigDecimal.ONE.subtract(discount))
-                .setScale(2, RoundingMode.HALF_UP);
+                .setScale(0, RoundingMode.HALF_UP);
 
         return new SubscriptionResponse(
                 sub.getId(),
