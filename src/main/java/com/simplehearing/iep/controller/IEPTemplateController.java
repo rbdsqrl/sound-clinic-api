@@ -32,7 +32,7 @@ public class IEPTemplateController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN', 'THERAPIST')")
     public ResponseEntity<ApiResponse<IEPTemplateResponse>> createTemplate(
             @Valid @RequestBody CreateIEPTemplateRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -60,7 +60,7 @@ public class IEPTemplateController {
     }
 
     @PostMapping("/{templateId}/goals")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN', 'THERAPIST')")
     public ResponseEntity<ApiResponse<IEPTemplateResponse>> addGoal(
             @PathVariable UUID templateId,
             @Valid @RequestBody CreateIEPTemplateGoalRequest request,
