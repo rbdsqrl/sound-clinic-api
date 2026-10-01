@@ -29,6 +29,17 @@ public interface TherapySessionRepository extends JpaRepository<TherapySession, 
                                           @Param("from") LocalDate from,
                                           @Param("to") LocalDate to);
 
+    /** Per-therapist count of CANCELLED / CANCELLATION_REQUESTED sessions in a date range — the
+     *  Members analytics tab's "Sessions Cancelled" column, without loading the window's sessions. */
+    @Query("SELECT s.therapistId, COUNT(s) FROM TherapySession s "
+         + "WHERE s.orgId = :orgId AND s.sessionDate BETWEEN :from AND :to "
+         + "AND s.status IN (com.simplehearing.session.enums.TherapySessionStatus.CANCELLED, "
+         +                  "com.simplehearing.session.enums.TherapySessionStatus.CANCELLATION_REQUESTED) "
+         + "GROUP BY s.therapistId")
+    List<Object[]> countCancelledByTherapist(@Param("orgId") UUID orgId,
+                                             @Param("from") LocalDate from,
+                                             @Param("to") LocalDate to);
+
     /** Sessions still flagged PENDING_RESCHEDULE whose date has already gone by unaddressed —
      *  the daily auto-cancel sweep (see session.job.MissedRescheduleCancelJob). */
     List<TherapySession> findByStatusAndSessionDateBefore(TherapySessionStatus status, LocalDate date);
@@ -120,5 +131,73 @@ public interface TherapySessionRepository extends JpaRepository<TherapySession, 
          + "AND s.sessionDate BETWEEN :from AND :to ORDER BY s.sessionDate ASC, s.startTime ASC")
     List<TherapySession> findByOrgIdAndTherapistIdBetween(
             @Param("orgId") UUID orgId, @Param("therapistId") UUID therapistId,
+            @Param("from") LocalDate from, @Param("to") LocalDate to);
+
+
+    /** "Checklist filled" predicate shared by the analytics counts below: the session's checklist
+     *  note is non-blank, or it has a feedback answer with text or at least one selected option.
+     *  A feedback-answer row alone doesn't count — the frontend writes one per template question
+     *  on every save regardless of whether anything was ticked. */
+    String CHECKLIST_FILLED =
+            "((s.checklistNotes IS NOT NULL AND TRIM(s.checklistNotes) <> '') "
+          + "OR EXISTS (SELECT 1 FROM SessionFeedbackAnswer a WHERE a.sessionId = s.id "
+          +            "AND ((a.textAnswer IS NOT NULL AND TRIM(a.textAnswer) <> '') "
+          +                 "OR EXISTS (SELECT 1 FROM SessionFeedbackAnswerOption o WHERE o.id.answerId = a.id))))";
+
+    /** Per-patient, per-status session counts in a date range — the Cases tab's attended/cancelled
+     *  columns, without loading the window's sessions just to tally their status. */
+    @Query("SELECT s.patientId, s.status, COUNT(s) FROM TherapySession s "
+         + "WHERE s.orgId = :orgId AND s.sessionDate BETWEEN :from AND :to "
+         + "GROUP BY s.patientId, s.status")
+    List<Object[]> countByPatientAndStatus(@Param("orgId") UUID orgId,
+                                           @Param("from") LocalDate from,
+                                           @Param("to") LocalDate to);
+
+    /** Per-patient count of sessions in the window whose feedback checklist was engaged with. */
+    @Query("SELECT s.patientId, COUNT(s) FROM TherapySession s "
+         + "WHERE s.orgId = :orgId AND s.sessionDate BETWEEN :from AND :to AND " + CHECKLIST_FILLED + " "
+         + "GROUP BY s.patientId")
+    List<Object[]> countChecklistFilledByPatient(@Param("orgId") UUID orgId,
+                                                 @Param("from") LocalDate from,
+                                                 @Param("to") LocalDate to);
+
+    /** Per-day count of sessions in the window whose feedback checklist was engaged with. */
+    @Query("SELECT s.sessionDate, COUNT(s) FROM TherapySession s "
+         + "WHERE s.orgId = :orgId AND s.sessionDate BETWEEN :from AND :to AND " + CHECKLIST_FILLED + " "
+         + "GROUP BY s.sessionDate")
+    List<Object[]> countChecklistFilledByDate(@Param("orgId") UUID orgId,
+                                              @Param("from") LocalDate from,
+                                              @Param("to") LocalDate to);
+
+    /** Sessions per calendar day — feeds the activity heatmap without loading the sessions. */
+    @Query("SELECT s.sessionDate, COUNT(s) FROM TherapySession s "
+         + "WHERE s.orgId = :orgId AND s.sessionDate BETWEEN :from AND :to "
+         + "GROUP BY s.sessionDate ORDER BY s.sessionDate")
+    List<Object[]> countByDate(@Param("orgId") UUID orgId,
+                               @Param("from") LocalDate from,
+                               @Param("to") LocalDate to);
+
+    /** Sessions per calendar day per status — the Overview tab's sessions trend. */
+    @Query("SELECT s.sessionDate, s.status, COUNT(s) FROM TherapySession s "
+         + "WHERE s.orgId = :orgId AND s.sessionDate BETWEEN :from AND :to "
+         + "GROUP BY s.sessionDate, s.status ORDER BY s.sessionDate")
+    List<Object[]> countByDateAndStatus(@Param("orgId") UUID orgId,
+                                        @Param("from") LocalDate from,
+                                        @Param("to") LocalDate to);
+
+    /** Start/end times of COMPLETED sessions in the window — all the average-duration figure
+     *  needs, instead of every column (including four TEXT ones) of every session. */
+    @Query("SELECT s.startTime, s.endTime FROM TherapySession s "
+         + "WHERE s.orgId = :orgId AND s.sessionDate BETWEEN :from AND :to "
+         + "AND s.status = com.simplehearing.session.enums.TherapySessionStatus.COMPLETED")
+    List<Object[]> findCompletedTimes(@Param("orgId") UUID orgId,
+                                      @Param("from") LocalDate from,
+                                      @Param("to") LocalDate to);
+
+    /** Sessions in a date range that belong to any of the given enrollments (Schedule tab's program filter). */
+    @Query("SELECT s FROM TherapySession s WHERE s.orgId = :orgId AND s.enrollmentId IN :enrollmentIds "
+         + "AND s.sessionDate BETWEEN :from AND :to ORDER BY s.sessionDate ASC, s.startTime ASC")
+    List<TherapySession> findByOrgIdAndEnrollmentIdInBetween(
+            @Param("orgId") UUID orgId, @Param("enrollmentIds") Collection<UUID> enrollmentIds,
             @Param("from") LocalDate from, @Param("to") LocalDate to);
 }

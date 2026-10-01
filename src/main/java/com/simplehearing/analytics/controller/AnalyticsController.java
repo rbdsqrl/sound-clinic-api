@@ -2,6 +2,7 @@ package com.simplehearing.analytics.controller;
 
 import com.simplehearing.analytics.dto.ActivityProgressResponse;
 import com.simplehearing.analytics.dto.CaseSummaryResponse;
+import com.simplehearing.analytics.dto.CaseTrendResponse;
 import com.simplehearing.analytics.dto.CaseloadResponse;
 import com.simplehearing.analytics.dto.EngagementOverviewResponse;
 import com.simplehearing.analytics.dto.FrequencyResponse;
@@ -193,6 +194,20 @@ public class AnalyticsController {
             @AuthenticationPrincipal UserPrincipal principal) {
 
         List<CaseSummaryResponse> data = analyticsService.cases(orgId(principal), from, to);
+        return ResponseEntity.ok(ApiResponse.success(data));
+    }
+
+    @Operation(summary = "Trend buckets for every active case in one call — feeds the Cases tab's multi-case chart")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
+    @GetMapping("/cases/trends")
+    public ResponseEntity<ApiResponse<List<CaseTrendResponse>>> casesTrends(
+            @RequestParam(defaultValue = "WEEKLY") Granularity granularity,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) String domain,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        List<CaseTrendResponse> data = analyticsService.casesTrends(orgId(principal), granularity, from, to, domain);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 

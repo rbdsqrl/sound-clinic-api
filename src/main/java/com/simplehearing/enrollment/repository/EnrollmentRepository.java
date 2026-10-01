@@ -1,5 +1,7 @@
 package com.simplehearing.enrollment.repository;
 
+import org.springframework.data.repository.query.Param;
+import org.springframework.data.jpa.repository.Query;
 import com.simplehearing.enrollment.entity.Enrollment;
 import com.simplehearing.enrollment.enums.EnrollmentStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -34,4 +36,22 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, UUID> {
     List<Enrollment> findBySubscriptionId(UUID subscriptionId);
 
     void deleteByPatientId(UUID patientId);
+
+    /** (startDate, endDate) of enrollments that have ended — all the average-duration figure needs. */
+    @Query("SELECT e.startDate, e.endDate FROM Enrollment e WHERE e.orgId = :orgId AND e.endDate IS NOT NULL")
+    List<Object[]> findEndedSpans(@Param("orgId") UUID orgId);
+
+    /** (programName, distinct patients, enrollments) across the org, resolved through subscription -> program. */
+    @Query("SELECT p.name, COUNT(DISTINCT e.patientId), COUNT(e) FROM Enrollment e, Subscription s, Program p "
+         + "WHERE e.orgId = :orgId AND s.id = e.subscriptionId AND p.id = s.programId GROUP BY p.name")
+    List<Object[]> countByProgramName(@Param("orgId") UUID orgId);
+
+    /** (distinct patients, enrollments) whose subscription or program can't be resolved. */
+    @Query("SELECT COUNT(DISTINCT e.patientId), COUNT(e) FROM Enrollment e WHERE e.orgId = :orgId "
+         + "AND NOT EXISTS (SELECT 1 FROM Subscription s, Program p WHERE s.id = e.subscriptionId AND p.id = s.programId)")
+    List<Object[]> countWithoutProgram(@Param("orgId") UUID orgId);
+
+    /** Ids of enrollments running a given program (via their subscription). */
+    @Query("SELECT e.id FROM Enrollment e, Subscription s WHERE e.orgId = :orgId AND s.id = e.subscriptionId AND s.programId = :programId")
+    List<UUID> findIdsByProgram(@Param("orgId") UUID orgId, @Param("programId") UUID programId);
 }

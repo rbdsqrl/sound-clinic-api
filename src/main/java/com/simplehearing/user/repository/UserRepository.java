@@ -71,4 +71,6 @@ public interface UserRepository extends JpaRepository<User, UUID> {
                        @Param("clinicId") UUID clinicId,
                        @Param("active") boolean active,
                        Pageable pageable);
+
+    long countByOrgIdAndRoleIn(UUID orgId, Collection<Role> roles);
 }

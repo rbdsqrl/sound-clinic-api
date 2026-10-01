@@ -12,6 +12,7 @@ import com.simplehearing.activity.repository.ActivitySkillRepository;
 import com.simplehearing.activity.repository.SkillRepository;
 import com.simplehearing.analytics.dto.ActivityProgressResponse;
 import com.simplehearing.analytics.dto.CaseSummaryResponse;
+import com.simplehearing.analytics.dto.CaseTrendResponse;
 import com.simplehearing.analytics.dto.CaseloadResponse;
 import com.simplehearing.analytics.dto.EngagementOverviewResponse;
 import com.simplehearing.analytics.dto.FrequencyResponse;
@@ -25,6 +26,7 @@ import com.simplehearing.analytics.dto.TimeSeriesResponse.SubjectType;
 import com.simplehearing.analytics.dto.TimeSeriesResponse.Totals;
 import com.simplehearing.analytics.enums.Granularity;
 import com.simplehearing.common.exception.ApiException;
+import com.simplehearing.config.CacheConfig;
 import com.simplehearing.common.exception.ResourceNotFoundException;
 import com.simplehearing.enrollment.entity.Enrollment;
 import com.simplehearing.enrollment.repository.EnrollmentRepository;
@@ -45,10 +47,6 @@ import com.simplehearing.patient.enums.PatientStage;
 import com.simplehearing.patient.repository.PatientRepository;
 import com.simplehearing.patient.repository.TherapistPatientRepository;
 import com.simplehearing.program.entity.Program;
-import com.simplehearing.program.feedback.entity.SessionFeedbackAnswer;
-import com.simplehearing.program.feedback.entity.SessionFeedbackAnswerOption;
-import com.simplehearing.program.feedback.repository.SessionFeedbackAnswerOptionRepository;
-import com.simplehearing.program.feedback.repository.SessionFeedbackAnswerRepository;
 import com.simplehearing.program.repository.ProgramRepository;
 import com.simplehearing.review.entity.ReviewMeeting;
 import com.simplehearing.review.repository.ReviewMeetingRepository;
@@ -58,6 +56,8 @@ import com.simplehearing.session.repository.TherapySessionRepository;
 import com.simplehearing.subscription.entity.Subscription;
 import com.simplehearing.subscription.repository.SubscriptionRepository;
 import com.simplehearing.user.entity.User;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.domain.PageRequest;
 import com.simplehearing.user.enums.Role;
 import com.simplehearing.user.repository.UserRepository;
 import org.springframework.http.HttpStatus;
@@ -116,8 +116,6 @@ public class AnalyticsService {
     private final SkillRepository           skillRepository;
     private final ActivitySkillRepository   activitySkillRepository;
     private final TherapistPatientRepository therapistPatientRepository;
-    private final SessionFeedbackAnswerRepository sessionFeedbackAnswerRepository;
-    private final SessionFeedbackAnswerOptionRepository sessionFeedbackAnswerOptionRepository;
 
     public AnalyticsService(TherapySessionRepository sessionRepository,
                             IEPGoalProgressRepository progressRepository,
@@ -136,9 +134,7 @@ public class AnalyticsService {
                             ActivityRepository activityRepository,
                             SkillRepository skillRepository,
                             ActivitySkillRepository activitySkillRepository,
-                            TherapistPatientRepository therapistPatientRepository,
-                            SessionFeedbackAnswerRepository sessionFeedbackAnswerRepository,
-                            SessionFeedbackAnswerOptionRepository sessionFeedbackAnswerOptionRepository) {
+                            TherapistPatientRepository therapistPatientRepository) {
         this.sessionRepository       = sessionRepository;
         this.progressRepository      = progressRepository;
         this.goalRepository          = goalRepository;
@@ -157,8 +153,6 @@ public class AnalyticsService {
         this.skillRepository         = skillRepository;
         this.activitySkillRepository = activitySkillRepository;
         this.therapistPatientRepository = therapistPatientRepository;
-        this.sessionFeedbackAnswerRepository = sessionFeedbackAnswerRepository;
-        this.sessionFeedbackAnswerOptionRepository = sessionFeedbackAnswerOptionRepository;
     }
 
     /** Additive companion to {@link #patientProgress} — activity assignment/attempt counts for
@@ -276,30 +270,49 @@ public class AnalyticsService {
      * the current admission → discharge funnel. All "right now" figures, not a windowed trend,
      * so this is deliberately separate from {@link #orgOverview}.
      */
+    @Cacheable(cacheNames = CacheConfig.ANALYTICS_SNAPSHOT, key = "#orgId", sync = true)
     public OrgSnapshotResponse orgSnapshot(UUID orgId) {
-        List<Enrollment> enrollments = enrollmentRepository.findByOrgId(orgId);
-
-        // Average duration — only enrollments with a known end date have a defined span.
-        List<Long> durationsDays = enrollments.stream()
-                .filter(e -> e.getEndDate() != null)
-                .map(e -> ChronoUnit.DAYS.between(e.getStartDate(), e.getEndDate()))
-                .filter(d -> d >= 0)
-                .toList();
+        // Average duration — only enrollments with a known end date have a defined span. Pulls just
+        // the two date columns of those enrollments, not every enrollment entity in the org.
+        List<Long> durationsDays = new ArrayList<>();
+        for (Object[] row : enrollmentRepository.findEndedSpans(orgId)) {
+            long days = ChronoUnit.DAYS.between((LocalDate) row[0], (LocalDate) row[1]);
+            if (days >= 0) durationsDays.add(days);
+        }
         Double avgDurationWeeks = durationsDays.isEmpty() ? null
                 : Math.round((durationsDays.stream().mapToLong(Long::longValue).average().orElse(0) / 7.0) * 10.0) / 10.0;
 
-        List<OrgSnapshotResponse.ProgramBreakdown> programBreakdown = programBreakdown(enrollments);
+        List<OrgSnapshotResponse.ProgramBreakdown> programBreakdown = orgProgramBreakdown(orgId);
 
         // Admission -> discharge funnel — every stage shown, zero-filled, in the funnel's own order.
         Map<PatientStage, Integer> counts = new HashMap<>();
-        for (Patient p : patientRepository.findByOrgId(orgId)) {
-            counts.merge(p.getStage(), 1, Integer::sum);
+        for (Object[] row : patientRepository.countByStage(orgId)) {
+            counts.put((PatientStage) row[0], ((Long) row[1]).intValue());
         }
         List<OrgSnapshotResponse.StageCount> stageCounts = List.of(PatientStage.values()).stream()
-                .map(s -> new OrgSnapshotResponse.StageCount(s, counts.getOrDefault(s, 0)))
+                .map(st -> new OrgSnapshotResponse.StageCount(st, counts.getOrDefault(st, 0)))
                 .toList();
 
         return new OrgSnapshotResponse(avgDurationWeeks, durationsDays.size(), programBreakdown, stageCounts);
+    }
+
+    /** Org-wide {@link #programBreakdown} computed in SQL (grouped by program name) rather than by
+     *  loading every enrollment — enrollments whose subscription/program can't be resolved are
+     *  reported under "Unknown Program", same as the per-enrollment version. */
+    private List<OrgSnapshotResponse.ProgramBreakdown> orgProgramBreakdown(UUID orgId) {
+        List<OrgSnapshotResponse.ProgramBreakdown> out = new ArrayList<>();
+        for (Object[] row : enrollmentRepository.countByProgramName(orgId)) {
+            out.add(new OrgSnapshotResponse.ProgramBreakdown(
+                    (String) row[0], ((Long) row[1]).intValue(), ((Long) row[2]).intValue()));
+        }
+        for (Object[] row : enrollmentRepository.countWithoutProgram(orgId)) {
+            long enrollments = (Long) row[1];
+            if (enrollments > 0) {
+                out.add(new OrgSnapshotResponse.ProgramBreakdown("Unknown Program", ((Long) row[0]).intValue(), (int) enrollments));
+            }
+        }
+        out.sort(Comparator.comparingInt(OrgSnapshotResponse.ProgramBreakdown::patientCount).reversed());
+        return out;
     }
 
     /**
@@ -331,17 +344,11 @@ public class AnalyticsService {
     }
 
     /** Session count per calendar day in the window — feeds the GitHub-style activity heatmap. */
+    @Cacheable(cacheNames = CacheConfig.ANALYTICS_HEATMAP, key = "#orgId + '|' + #from + '|' + #to", sync = true)
     public List<EngagementOverviewResponse.TrendPoint> sessionHeatmap(UUID orgId, LocalDate from, LocalDate to) {
         validateWindow(from, to);
-        List<TherapySession> sessions = sessionRepository
-                .findByOrgIdAndSessionDateBetweenOrderBySessionDateAscStartTimeAsc(orgId, from, to);
-
-        Map<LocalDate, Integer> byDay = new TreeMap<>();
-        for (TherapySession s : sessions) {
-            byDay.merge(s.getSessionDate(), 1, Integer::sum);
-        }
-        return byDay.entrySet().stream()
-                .map(e -> new EngagementOverviewResponse.TrendPoint(e.getKey(), e.getValue()))
+        return sessionRepository.countByDate(orgId, from, to).stream()
+                .map(row -> new EngagementOverviewResponse.TrendPoint((LocalDate) row[0], ((Long) row[1]).intValue()))
                 .toList();
     }
 
@@ -355,53 +362,57 @@ public class AnalyticsService {
      * activities patients are assigned most. Distinct from {@link #orgSnapshot} (clinical-outcome,
      * point-in-time) and {@link #orgOverview} (goal-mastery trend) — this is activity/engagement.
      */
+    @Cacheable(cacheNames = CacheConfig.ANALYTICS_ENGAGEMENT, key = "#orgId + '|' + #from + '|' + #to", sync = true)
     public EngagementOverviewResponse engagementOverview(UUID orgId, LocalDate from, LocalDate to) {
         validateWindow(from, to);
 
+        // Every figure below is a SQL aggregate or a narrow projection — this used to load every
+        // patient, invitation, activity, assignment and session in the window as full entities
+        // just to count them.
+
         // Active users
-        List<User> staff = userRepository.findByOrgIdAndRoleIn(orgId,
-                List.of(Role.THERAPIST, Role.CLINIC_HEAD, Role.BUSINESS_OWNER));
-        List<Patient> patients = patientRepository.findByOrgId(orgId);
-        EngagementOverviewResponse.UserCounts activeUsers =
-                new EngagementOverviewResponse.UserCounts(staff.size(), patients.size());
+        EngagementOverviewResponse.UserCounts activeUsers = new EngagementOverviewResponse.UserCounts(
+                (int) userRepository.countByOrgIdAndRoleIn(orgId,
+                        List.of(Role.THERAPIST, Role.CLINIC_HEAD, Role.BUSINESS_OWNER)),
+                (int) patientRepository.countByOrgId(orgId));
 
         // Invited users — pending invitations, split staff vs parent (a parent invite is patient-linked)
-        List<Invitation> pending = invitationRepository.findByOrgIdOrderByCreatedAtDesc(orgId).stream()
-                .filter(i -> i.getStatus() == Invitation.Status.PENDING)
-                .toList();
-        long pendingMembers = pending.stream().filter(i -> i.getRole() != Role.PARENT).count();
-        long pendingCases = pending.stream().filter(i -> i.getRole() == Role.PARENT).count();
+        long pendingMembers = 0, pendingCases = 0;
+        for (Object[] row : invitationRepository.countByRole(orgId, Invitation.Status.PENDING)) {
+            long n = (Long) row[1];
+            if (row[0] == Role.PARENT) pendingCases += n; else pendingMembers += n;
+        }
         EngagementOverviewResponse.UserCounts invitedUsers =
                 new EngagementOverviewResponse.UserCounts((int) pendingMembers, (int) pendingCases);
 
-        // Sessions in window — backs the trend, total, average duration and heatmap-adjacent figures
-        List<TherapySession> sessions = sessionRepository
-                .findByOrgIdAndSessionDateBetweenOrderBySessionDateAscStartTimeAsc(orgId, from, to);
-
+        // Sessions in window — backs the trend and the total
         Map<LocalDate, Map<String, Integer>> sessionsByDayAndStatus = new TreeMap<>();
-        List<Long> durations = new ArrayList<>();
-        for (TherapySession s : sessions) {
+        int totalSessions = 0;
+        for (Object[] row : sessionRepository.countByDateAndStatus(orgId, from, to)) {
+            int n = ((Long) row[2]).intValue();
             sessionsByDayAndStatus
-                    .computeIfAbsent(s.getSessionDate(), d -> new LinkedHashMap<>())
-                    .merge(s.getStatus().name(), 1, Integer::sum);
-            // Only sessions that actually happened contribute to duration — a scheduled slot's
-            // planned length is meaningless once it's cancelled, no-showed, or hasn't happened yet.
-            if (s.getStatus() == TherapySessionStatus.COMPLETED) {
-                durations.add(java.time.Duration.between(s.getStartTime(), s.getEndTime()).toMinutes());
-            }
+                    .computeIfAbsent((LocalDate) row[0], d -> new LinkedHashMap<>())
+                    .put(((TherapySessionStatus) row[1]).name(), n);
+            totalSessions += n;
         }
         List<EngagementOverviewResponse.SessionsTrendPoint> sessionsTrend = sessionsByDayAndStatus.entrySet().stream()
                 .map(e -> new EngagementOverviewResponse.SessionsTrendPoint(e.getKey(), e.getValue()))
                 .toList();
+
+        // Only sessions that actually happened contribute to duration — a scheduled slot's
+        // planned length is meaningless once it's cancelled, no-showed, or hasn't happened yet.
+        List<Long> durations = new ArrayList<>();
+        for (Object[] row : sessionRepository.findCompletedTimes(orgId, from, to)) {
+            durations.add(java.time.Duration.between((java.time.LocalTime) row[0], (java.time.LocalTime) row[1]).toMinutes());
+        }
         Integer avgDurationMinutes = durations.isEmpty() ? null
                 : (int) Math.round(durations.stream().mapToLong(Long::longValue).average().orElse(0));
 
         // Age groups — zero-filled bands so a thin org doesn't drop a bar silently
         int[] ageCounts = new int[AGE_BANDS.size()];
         LocalDate today = LocalDate.now();
-        for (Patient p : patients) {
-            if (p.getDateOfBirth() == null) continue;
-            int age = java.time.Period.between(p.getDateOfBirth(), today).getYears();
+        for (LocalDate dob : patientRepository.findDatesOfBirth(orgId)) {
+            int age = java.time.Period.between(dob, today).getYears();
             for (int i = 0; i < AGE_BANDS.size(); i++) {
                 if (age >= AGE_BANDS.get(i)[0] && age <= AGE_BANDS.get(i)[1]) { ageCounts[i]++; break; }
             }
@@ -413,32 +424,23 @@ public class AnalyticsService {
         }
 
         // Skills breakdown — how often each skill's activities have been assigned
-        List<Activity> activities = activityRepository.findByOrgIdOrderByCreatedAtDesc(orgId);
-        List<EngagementOverviewResponse.NameCount> skillsBreakdown = skillsBreakdown(orgId, activities);
+        List<EngagementOverviewResponse.NameCount> skillsBreakdown = skillsBreakdown(orgId);
 
-        // Every assignment in the org backs "most assigned activities" below.
-        List<ActivityAssignment> allAssignments = activityAssignmentRepository.findByOrgId(orgId);
-        Map<UUID, String> activityTitles = activities.stream()
+        // Most-assigned activities — the top five by assignment count, resolved to titles.
+        List<Object[]> topAssigned = activityAssignmentRepository.countByActivity(orgId, PageRequest.of(0, 5));
+        Map<UUID, String> activityTitles = activityRepository
+                .findAllById(topAssigned.stream().map(r -> (UUID) r[0]).toList()).stream()
                 .collect(Collectors.toMap(Activity::getId, Activity::getTitle));
-        Map<UUID, Integer> assignmentCountByActivity = new LinkedHashMap<>();
-        for (ActivityAssignment a : allAssignments) {
-            assignmentCountByActivity.merge(a.getActivityId(), 1, Integer::sum);
-        }
-        List<EngagementOverviewResponse.NameCount> mostAssigned = assignmentCountByActivity.entrySet().stream()
-                .map(e -> new EngagementOverviewResponse.NameCount(
-                        activityTitles.getOrDefault(e.getKey(), "Unknown Activity"), e.getValue()))
-                .sorted(Comparator.comparingInt(EngagementOverviewResponse.NameCount::count).reversed())
-                .limit(5)
+        List<EngagementOverviewResponse.NameCount> mostAssigned = topAssigned.stream()
+                .map(r -> new EngagementOverviewResponse.NameCount(
+                        activityTitles.getOrDefault((UUID) r[0], "Unknown Activity"), ((Long) r[1]).intValue()))
                 .toList();
 
         // "Checklist filled" = the per-session feedback checklist (the therapist's "Detailed
         // Feedback Options" on the Session Notes modal) was actually engaged with.
-        Map<UUID, LocalDate> sessionDateById = sessions.stream()
-                .collect(Collectors.toMap(TherapySession::getId, TherapySession::getSessionDate));
         Map<LocalDate, Integer> checklistByDay = new TreeMap<>();
-        for (UUID sid : checklistFilledSessionIds(sessions)) {
-            LocalDate date = sessionDateById.get(sid);
-            if (date != null) checklistByDay.merge(date, 1, Integer::sum);
+        for (Object[] row : sessionRepository.countChecklistFilledByDate(orgId, from, to)) {
+            checklistByDay.put((LocalDate) row[0], ((Long) row[1]).intValue());
         }
         List<EngagementOverviewResponse.TrendPoint> checklistFilledTrend = checklistByDay.entrySet().stream()
                 .map(e -> new EngagementOverviewResponse.TrendPoint(e.getKey(), e.getValue()))
@@ -446,40 +448,7 @@ public class AnalyticsService {
 
         return new EngagementOverviewResponse(
                 activeUsers, invitedUsers, avgDurationMinutes, skillsBreakdown, ageGroups,
-                sessionsTrend, sessions.size(), checklistFilledTrend, mostAssigned);
-    }
-
-    /**
-     * Session IDs among the given sessions whose per-session feedback checklist (the therapist's
-     * "Detailed Feedback Options" on the Session Notes modal) was actually engaged with — at
-     * least one checkbox selected, or a checklist note written. A feedback-answer row alone isn't
-     * enough to count as "filled": the frontend writes one row per template question on every
-     * save regardless of whether anything was checked, so presence of a row would over-count.
-     */
-    private Set<UUID> checklistFilledSessionIds(List<TherapySession> sessions) {
-        List<UUID> sessionIds = sessions.stream().map(TherapySession::getId).toList();
-        if (sessionIds.isEmpty()) return Set.of();
-
-        List<SessionFeedbackAnswer> answers = sessionFeedbackAnswerRepository.findBySessionIdIn(sessionIds);
-        List<UUID> answerIds = answers.stream().map(SessionFeedbackAnswer::getId).toList();
-        Set<UUID> answerIdsWithOption = answerIds.isEmpty() ? Set.of() :
-                sessionFeedbackAnswerOptionRepository.findById_AnswerIdIn(answerIds).stream()
-                        .map(SessionFeedbackAnswerOption::getAnswerId)
-                        .collect(Collectors.toSet());
-
-        Set<UUID> filled = new HashSet<>();
-        for (SessionFeedbackAnswer ans : answers) {
-            boolean hasText = ans.getTextAnswer() != null && !ans.getTextAnswer().isBlank();
-            if (hasText || answerIdsWithOption.contains(ans.getId())) {
-                filled.add(ans.getSessionId());
-            }
-        }
-        for (TherapySession s : sessions) {
-            if (s.getChecklistNotes() != null && !s.getChecklistNotes().isBlank()) {
-                filled.add(s.getId());
-            }
-        }
-        return filled;
+                sessionsTrend, totalSessions, checklistFilledTrend, mostAssigned);
     }
 
     /**
@@ -487,6 +456,7 @@ public class AnalyticsService {
      * [from, to]; upcoming is deliberately not — a case list filtered to last month should still
      * show what's next, so it's counted from today over a fixed forward-looking cap instead.
      */
+    @Cacheable(cacheNames = CacheConfig.ANALYTICS_CASES, key = "#orgId + '|' + #from + '|' + #to", sync = true)
     public List<CaseSummaryResponse> cases(UUID orgId, LocalDate from, LocalDate to) {
         validateWindow(from, to);
 
@@ -496,15 +466,19 @@ public class AnalyticsService {
         if (patients.isEmpty()) return List.of();
         List<UUID> patientIds = patients.stream().map(Patient::getId).toList();
 
-        // Attended / cancelled / checklist-filled — scoped to the requested window.
-        List<TherapySession> sessionsInWindow = sessionRepository
-                .findByOrgIdAndSessionDateBetweenOrderBySessionDateAscStartTimeAsc(orgId, from, to);
+        // Every figure below is a SQL aggregate rather than a load-and-tally in Java — this used to
+        // pull every assignment, plan, goal and subscription in the org plus the window's full
+        // session rows into memory on every Cases tab load.
+
+        // Attended / cancelled — scoped to the requested window.
         Map<UUID, Integer> attended = new HashMap<>();
         Map<UUID, Integer> cancelled = new HashMap<>();
-        for (TherapySession s : sessionsInWindow) {
-            switch (s.getStatus()) {
-                case COMPLETED -> attended.merge(s.getPatientId(), 1, Integer::sum);
-                case CANCELLED, CANCELLATION_REQUESTED -> cancelled.merge(s.getPatientId(), 1, Integer::sum);
+        for (Object[] row : sessionRepository.countByPatientAndStatus(orgId, from, to)) {
+            UUID patientId = (UUID) row[0];
+            int n = ((Long) row[2]).intValue();
+            switch ((TherapySessionStatus) row[1]) {
+                case COMPLETED -> attended.merge(patientId, n, Integer::sum);
+                case CANCELLED, CANCELLATION_REQUESTED -> cancelled.merge(patientId, n, Integer::sum);
                 default -> { }
             }
         }
@@ -513,48 +487,26 @@ public class AnalyticsService {
         // bounded. Counted in SQL rather than fetching every matching session's full row just to
         // tally it — this window can span up to MAX_WINDOW_DAYS (731) forward org-wide.
         LocalDate today = LocalDate.now();
-        Map<UUID, Integer> upcoming = new HashMap<>();
-        for (Object[] row : sessionRepository.countUpcomingByPatient(orgId, today, today.plusDays(MAX_WINDOW_DAYS))) {
-            upcoming.put((UUID) row[0], ((Long) row[1]).intValue());
-        }
+        Map<UUID, Integer> upcoming = toCountMap(
+                sessionRepository.countUpcomingByPatient(orgId, today, today.plusDays(MAX_WINDOW_DAYS)));
 
         // Members assigned — active therapist-patient links.
-        Map<UUID, Integer> membersAssigned = new HashMap<>();
-        for (TherapistPatient tp : therapistPatientRepository.findByPatientIdInAndIsActive(patientIds, true)) {
-            membersAssigned.merge(tp.getPatientId(), 1, Integer::sum);
-        }
+        Map<UUID, Integer> membersAssigned = toCountMap(therapistPatientRepository.countActiveByPatientIds(patientIds));
 
         // Activities assigned, grouped via assignment -> patient.
-        List<ActivityAssignment> allAssignments = activityAssignmentRepository.findByOrgId(orgId);
-        Map<UUID, Integer> activitiesAssigned = new HashMap<>();
-        for (ActivityAssignment a : allAssignments) {
-            activitiesAssigned.merge(a.getPatientId(), 1, Integer::sum);
-        }
+        Map<UUID, Integer> activitiesAssigned = toCountMap(activityAssignmentRepository.countByPatient(orgId));
 
         // Checklist-filled — sessions in the window whose per-session feedback checklist was
         // actually engaged with, per patient.
-        Map<UUID, UUID> patientBySession = sessionsInWindow.stream()
-                .collect(Collectors.toMap(TherapySession::getId, TherapySession::getPatientId));
-        Map<UUID, Integer> checklistFilled = new HashMap<>();
-        for (UUID sid : checklistFilledSessionIds(sessionsInWindow)) {
-            UUID patientId = patientBySession.get(sid);
-            if (patientId != null) checklistFilled.merge(patientId, 1, Integer::sum);
-        }
+        Map<UUID, Integer> checklistFilled = toCountMap(sessionRepository.countChecklistFilledByPatient(orgId, from, to));
 
         // LT goals — goal count per patient, resolved via their IEP plans.
-        Map<UUID, UUID> patientByPlan = planRepository.findByOrgIdOrderByCreatedAtDesc(orgId).stream()
-                .collect(Collectors.toMap(IEPPlan::getId, IEPPlan::getPatientId));
-        Map<UUID, Integer> ltGoals = new HashMap<>();
-        for (IEPGoal g : goalRepository.findByOrgId(orgId)) {
-            UUID patientId = patientByPlan.get(g.getPlanId());
-            if (patientId != null) ltGoals.merge(patientId, 1, Integer::sum);
-        }
+        Map<UUID, Integer> ltGoals = toCountMap(goalRepository.countByPatient(orgId));
 
         // Payment status — most recently created subscription per patient.
-        Map<UUID, Subscription> latestSubscription = new HashMap<>();
-        for (Subscription sub : subscriptionRepository.findByOrgId(orgId)) {
-            latestSubscription.merge(sub.getPatientId(), sub,
-                    (a, b) -> a.getCreatedAt().isAfter(b.getCreatedAt()) ? a : b);
+        Map<UUID, String> paymentStatus = new HashMap<>();
+        for (Object[] row : subscriptionRepository.findLatestPaymentStatusByPatient(orgId, patientIds)) {
+            paymentStatus.put((UUID) row[0], row[1] == null ? null : ((Enum<?>) row[1]).name());
         }
 
         return patients.stream()
@@ -568,10 +520,84 @@ public class AnalyticsService {
                         activitiesAssigned.getOrDefault(p.getId(), 0),
                         checklistFilled.getOrDefault(p.getId(), 0),
                         ltGoals.getOrDefault(p.getId(), 0),
-                        latestSubscription.containsKey(p.getId()) ? latestSubscription.get(p.getId()).getPaymentStatus().name() : null))
+                        paymentStatus.get(p.getId())))
                 .toList();
     }
 
+    /**
+     * The Cases tab's multi-case trend chart, for every active case in one batched pass — the
+     * same buckets {@link #patientProgress} returns for each, minus the per-request cost of one
+     * HTTP call and six queries per case (the tab used to fire one request per active case at once).
+     * The work is a fixed handful of queries regardless of how many cases there are.
+     */
+    @Cacheable(cacheNames = CacheConfig.ANALYTICS_TRENDS, key = "#orgId + '|' + #granularity + '|' + #from + '|' + #to + '|' + #domainFilter", sync = true)
+    public List<CaseTrendResponse> casesTrends(UUID orgId, Granularity granularity,
+                                               LocalDate from, LocalDate to, String domainFilter) {
+        validateWindow(from, to);
+
+        List<Patient> patients = patientRepository.findByOrgId(orgId).stream()
+                .filter(Patient::isActive)
+                .toList();
+        if (patients.isEmpty()) return List.of();
+        List<UUID> patientIds = patients.stream().map(Patient::getId).toList();
+
+        List<IEPPlan> plans = planRepository.findByOrgIdAndPatientIdIn(orgId, patientIds);
+        Map<UUID, UUID> patientByPlan = plans.stream()
+                .collect(Collectors.toMap(IEPPlan::getId, IEPPlan::getPatientId, (a, b) -> a));
+        List<IEPGoal> allGoals = plans.isEmpty() ? List.of()
+                : goalRepository.findByPlanIdIn(new ArrayList<>(patientByPlan.keySet()));
+
+        Map<UUID, List<IEPGoal>> goalsByPatient = new HashMap<>();
+        Map<UUID, UUID> patientByGoal = new HashMap<>();
+        for (IEPGoal g : allGoals) {
+            UUID patientId = patientByPlan.get(g.getPlanId());
+            if (patientId == null) continue;
+            goalsByPatient.computeIfAbsent(patientId, k -> new ArrayList<>()).add(g);
+            patientByGoal.put(g.getId(), patientId);
+        }
+
+        // Trial progress for the whole org in the window (one indexed query), dealt out per patient
+        // through their goals — avoids an IN list of every goal id in the org.
+        Map<UUID, List<IEPGoalProgress>> progressByPatient = new HashMap<>();
+        for (IEPGoalProgress p : progressRepository.findByOrgIdAndSessionDateBetween(orgId, from, to)) {
+            UUID patientId = patientByGoal.get(p.getGoalId());
+            if (patientId != null) progressByPatient.computeIfAbsent(patientId, k -> new ArrayList<>()).add(p);
+        }
+
+        Map<UUID, List<TherapySession>> sessionsByPatient = new HashMap<>();
+        for (TherapySession s : sessionRepository
+                .findByOrgIdAndPatientIdInAndSessionDateBetweenOrderBySessionDateAscStartTimeAsc(orgId, patientIds, from, to)) {
+            sessionsByPatient.computeIfAbsent(s.getPatientId(), k -> new ArrayList<>()).add(s);
+        }
+
+        Map<UUID, List<ReviewMeeting>> meetingsByPatient = new HashMap<>();
+        for (ReviewMeeting m : reviewMeetingRepository.findInRange(orgId, from, to)) {
+            if (m.getPatientId() != null) meetingsByPatient.computeIfAbsent(m.getPatientId(), k -> new ArrayList<>()).add(m);
+        }
+
+        List<CaseTrendResponse> out = new ArrayList<>(patients.size());
+        for (Patient p : patients) {
+            Inputs inputs = new Inputs(
+                    sessionsByPatient.getOrDefault(p.getId(), List.of()),
+                    progressByPatient.getOrDefault(p.getId(), List.of()),
+                    goalsByPatient.getOrDefault(p.getId(), List.of()),
+                    meetingsByPatient.getOrDefault(p.getId(), List.of()));
+            TimeSeriesResponse series = assemble(SubjectType.PATIENT, p.getId(),
+                    fullName(p.getFirstName(), p.getLastName()), granularity, from, to, inputs, domainFilter);
+            out.add(new CaseTrendResponse(p.getId(), series.buckets()));
+        }
+        return out;
+    }
+
+    private static Map<UUID, Integer> toCountMap(List<Object[]> rows) {
+        Map<UUID, Integer> out = new HashMap<>();
+        for (Object[] row : rows) {
+            if (row[0] != null) out.put((UUID) row[0], ((Long) row[1]).intValue());
+        }
+        return out;
+    }
+
+    @Cacheable(cacheNames = CacheConfig.ANALYTICS_MEMBERS, key = "#orgId + '|' + #from + '|' + #to", sync = true)
     public List<MemberSummaryResponse> members(UUID orgId, LocalDate from, LocalDate to) {
         validateWindow(from, to);
 
@@ -585,41 +611,27 @@ public class AnalyticsService {
             casesAssigned.put((UUID) row[0], ((Long) row[1]).intValue());
         }
 
+        // Every figure below is a SQL GROUP BY count — this endpoint used to load whole tables
+        // (all activities, all assignments, the window's sessions, all IEP plans) into memory
+        // just to tally them, which is what was exhausting the 512MB instance.
+
         // Activities created — authored by this member, standing count like casesAssigned above.
-        Map<UUID, Integer> activitiesCreated = new HashMap<>();
-        for (Activity a : activityRepository.findByOrgIdOrderByCreatedAtDesc(orgId)) {
-            if (a.getCreatedBy() != null) activitiesCreated.merge(a.getCreatedBy(), 1, Integer::sum);
-        }
+        Map<UUID, Integer> activitiesCreated = toCountMap(activityRepository.countCreatedByAuthor(orgId));
+
+        Instant windowStart = from.atStartOfDay(ZoneOffset.UTC).toInstant();
+        Instant windowEnd = to.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
 
         // Activities assigned — by this member to a patient, in the window.
-        Map<UUID, Integer> activitiesAssigned = new HashMap<>();
-        for (ActivityAssignment aa : activityAssignmentRepository.findByOrgId(orgId)) {
-            if (aa.getCreatedAt() == null) continue;
-            LocalDate assignedDate = aa.getCreatedAt().atZone(ZoneOffset.UTC).toLocalDate();
-            if (!assignedDate.isBefore(from) && !assignedDate.isAfter(to)) {
-                activitiesAssigned.merge(aa.getAssignedBy(), 1, Integer::sum);
-            }
-        }
+        Map<UUID, Integer> activitiesAssigned = toCountMap(
+                activityAssignmentRepository.countAssignedByAssigner(orgId, windowStart, windowEnd));
 
         // Sessions cancelled — this member was the assigned therapist, in the window.
-        Map<UUID, Integer> sessionsCancelled = new HashMap<>();
-        for (TherapySession s : sessionRepository.findByOrgIdAndSessionDateBetweenOrderBySessionDateAscStartTimeAsc(orgId, from, to)) {
-            if (s.getStatus() == TherapySessionStatus.CANCELLED || s.getStatus() == TherapySessionStatus.CANCELLATION_REQUESTED) {
-                sessionsCancelled.merge(s.getTherapistId(), 1, Integer::sum);
-            }
-        }
+        Map<UUID, Integer> sessionsCancelled = toCountMap(
+                sessionRepository.countCancelledByTherapist(orgId, from, to));
 
         // IEP plans — this member is the therapist of record, plan created in the window. IEPPlan
         // has no createdBy field, so therapistId is the closest honest proxy for "IEP Created".
-        Instant windowStart = from.atStartOfDay(ZoneOffset.UTC).toInstant();
-        Instant windowEnd = to.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
-        Map<UUID, Integer> iepPlans = new HashMap<>();
-        for (IEPPlan p : planRepository.findByOrgIdOrderByCreatedAtDesc(orgId)) {
-            if (p.getTherapistId() == null || p.getCreatedAt() == null) continue;
-            if (!p.getCreatedAt().isBefore(windowStart) && p.getCreatedAt().isBefore(windowEnd)) {
-                iepPlans.merge(p.getTherapistId(), 1, Integer::sum);
-            }
-        }
+        Map<UUID, Integer> iepPlans = toCountMap(planRepository.countCreatedByTherapist(orgId, windowStart, windowEnd));
 
         return staff.stream()
                 .map(u -> new MemberSummaryResponse(
@@ -638,18 +650,12 @@ public class AnalyticsService {
      * The Schedule tab's session log — every filter is optional and narrows the same window
      * the KPI strip is computed from, so the numbers above the table always match its rows.
      */
+    @Cacheable(cacheNames = CacheConfig.ANALYTICS_SCHEDULE, key = "#orgId + '|' + #from + '|' + #to + '|' + #patientId + '|' + #therapistId + '|' + #programId", sync = true)
     public ScheduleResponse schedule(UUID orgId, LocalDate from, LocalDate to,
                                       UUID patientId, UUID therapistId, UUID programId) {
         validateWindow(from, to);
 
-        List<TherapySession> sessions = sessionRepository
-                .findByOrgIdAndSessionDateBetweenOrderBySessionDateAscStartTimeAsc(orgId, from, to);
-        if (patientId != null) {
-            sessions = sessions.stream().filter(s -> patientId.equals(s.getPatientId())).toList();
-        }
-        if (therapistId != null) {
-            sessions = sessions.stream().filter(s -> therapistId.equals(s.getTherapistId())).toList();
-        }
+        List<TherapySession> sessions = fetchScheduleSessions(orgId, from, to, patientId, therapistId, programId);
         if (sessions.isEmpty()) return emptySchedule();
 
         Set<UUID> enrollmentIds = sessions.stream().map(TherapySession::getEnrollmentId).collect(Collectors.toSet());
@@ -666,10 +672,6 @@ public class AnalyticsService {
             Subscription sub = enr != null ? subscriptionMap.get(enr.getSubscriptionId()) : null;
             if (sub != null) programIdBySession.put(s.getId(), sub.getProgramId());
         }
-        if (programId != null) {
-            sessions = sessions.stream().filter(s -> programId.equals(programIdBySession.get(s.getId()))).toList();
-        }
-        if (sessions.isEmpty()) return emptySchedule();
 
         Set<UUID> patientIds = sessions.stream().map(TherapySession::getPatientId).collect(Collectors.toSet());
         Set<UUID> therapistIds = sessions.stream().map(TherapySession::getTherapistId).collect(Collectors.toSet());
@@ -737,21 +739,49 @@ public class AnalyticsService {
                 entries);
     }
 
+    /**
+     * The sessions the Schedule tab's filters select, narrowed in SQL by the most selective filter
+     * given (program, else patient, else therapist) so a one-child or one-therapist view no longer
+     * loads every session in the org for the window and filters in Java. Any other filters given
+     * are then applied to that already-small set.
+     */
+    private List<TherapySession> fetchScheduleSessions(UUID orgId, LocalDate from, LocalDate to,
+                                                       UUID patientId, UUID therapistId, UUID programId) {
+        List<TherapySession> sessions;
+        if (programId != null) {
+            List<UUID> enrollmentIds = enrollmentRepository.findIdsByProgram(orgId, programId);
+            if (enrollmentIds.isEmpty()) return List.of();
+            sessions = sessionRepository.findByOrgIdAndEnrollmentIdInBetween(orgId, enrollmentIds, from, to);
+        } else if (patientId != null) {
+            sessions = sessionRepository.findByOrgIdAndPatientIdBetween(orgId, patientId, from, to);
+        } else if (therapistId != null) {
+            sessions = sessionRepository.findByOrgIdAndTherapistIdBetween(orgId, therapistId, from, to);
+        } else {
+            return sessionRepository.findByOrgIdAndSessionDateBetweenOrderBySessionDateAscStartTimeAsc(orgId, from, to);
+        }
+        if (patientId != null) {
+            sessions = sessions.stream().filter(s -> patientId.equals(s.getPatientId())).toList();
+        }
+        if (therapistId != null) {
+            sessions = sessions.stream().filter(s -> therapistId.equals(s.getTherapistId())).toList();
+        }
+        return sessions;
+    }
+
     private static ScheduleResponse emptySchedule() {
         return new ScheduleResponse(0, null, null, null, 0, null, List.of());
     }
 
-    private List<EngagementOverviewResponse.NameCount> skillsBreakdown(UUID orgId, List<Activity> activities) {
-        List<UUID> activityIds = activities.stream().map(Activity::getId).toList();
-        if (activityIds.isEmpty()) return List.of();
-        List<ActivitySkill> links = activitySkillRepository.findByActivityIdIn(activityIds);
+    private List<EngagementOverviewResponse.NameCount> skillsBreakdown(UUID orgId) {
+        List<Object[]> rows = activitySkillRepository.countBySkill(orgId);
+        if (rows.isEmpty()) return List.of();
         Map<UUID, String> skillNames = skillRepository.findByOrgIdAndIsActiveTrueOrderByNameAsc(orgId).stream()
                 .collect(Collectors.toMap(Skill::getId, Skill::getName));
         Map<String, Integer> counts = new LinkedHashMap<>();
-        for (ActivitySkill link : links) {
-            String name = skillNames.get(link.getSkillId());
+        for (Object[] row : rows) {
+            String name = skillNames.get((UUID) row[0]);
             if (name == null) continue;
-            counts.merge(name, 1, Integer::sum);
+            counts.merge(name, ((Long) row[1]).intValue(), Integer::sum);
         }
         return counts.entrySet().stream()
                 .map(e -> new EngagementOverviewResponse.NameCount(e.getKey(), e.getValue()))

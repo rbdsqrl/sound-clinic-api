@@ -46,4 +46,14 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
                           @Param("includeActive") boolean includeActive,
                           @Param("includeInactive") boolean includeInactive,
                           Pageable pageable);
+
+    long countByOrgId(UUID orgId);
+
+    /** (stage, count) across the org — the admission-to-discharge funnel without loading every patient. */
+    @Query("SELECT p.stage, COUNT(p) FROM Patient p WHERE p.orgId = :orgId GROUP BY p.stage")
+    List<Object[]> countByStage(@Param("orgId") UUID orgId);
+
+    /** Just the dates of birth — the age-group chart needs nothing else about a patient. */
+    @Query("SELECT p.dateOfBirth FROM Patient p WHERE p.orgId = :orgId AND p.dateOfBirth IS NOT NULL")
+    List<java.time.LocalDate> findDatesOfBirth(@Param("orgId") UUID orgId);
 }

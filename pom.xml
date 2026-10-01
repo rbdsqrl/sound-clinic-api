@@ -124,6 +124,15 @@
             <artifactId>spring-security-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- In-process cache for the org-level analytics endpoints (see config/CacheConfig) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-cache</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
         <!-- H2 in-memory DB — test scope for unit tests, runtime for local profile -->
         <dependency>
             <groupId>com.h2database</groupId>

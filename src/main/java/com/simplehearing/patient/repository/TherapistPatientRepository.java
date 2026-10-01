@@ -24,4 +24,8 @@ public interface TherapistPatientRepository extends JpaRepository<TherapistPatie
     List<Object[]> countCasesByTherapistIds(@Param("ids") List<UUID> ids);
 
     void deleteByPatientId(UUID patientId);
+
+    /** Per-patient count of active therapist links — the Cases tab's "Members" column. */
+    @Query("SELECT tp.patientId, COUNT(tp) FROM TherapistPatient tp WHERE tp.patientId IN :ids AND tp.isActive = true GROUP BY tp.patientId")
+    List<Object[]> countActiveByPatientIds(@Param("ids") List<UUID> ids);
 }

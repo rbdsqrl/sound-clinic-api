@@ -19,4 +19,8 @@ public interface ActivitySkillRepository extends JpaRepository<ActivitySkill, Ac
 
     @Transactional
     void deleteById_ActivityId(UUID activityId);
+
+    /** (skillId, count) over every activity in the org — the Overview tab's skills breakdown. */
+    @Query("SELECT sk.id.skillId, COUNT(sk) FROM ActivitySkill sk, Activity a WHERE sk.id.activityId = a.id AND a.orgId = :orgId GROUP BY sk.id.skillId")
+    List<Object[]> countBySkill(@Param("orgId") UUID orgId);
 }

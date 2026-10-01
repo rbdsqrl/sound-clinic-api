@@ -32,4 +32,10 @@ public interface SubscriptionRepository extends JpaRepository<Subscription, UUID
     List<Subscription> findDueForPaymentReminder(@Param("cutoff") Instant cutoff);
 
     void deleteByPatientId(UUID patientId);
+
+    /** (patientId, paymentStatus) of each given patient's most recently created subscription. */
+    @Query("SELECT s.patientId, s.paymentStatus FROM Subscription s WHERE s.orgId = :orgId AND s.patientId IN :patientIds "
+         + "AND s.createdAt = (SELECT MAX(s2.createdAt) FROM Subscription s2 WHERE s2.orgId = :orgId AND s2.patientId = s.patientId)")
+    List<Object[]> findLatestPaymentStatusByPatient(@Param("orgId") UUID orgId,
+                                                    @Param("patientIds") Collection<UUID> patientIds);
 }

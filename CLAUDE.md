@@ -56,6 +56,7 @@ com.simplehearing
 ├── config/
 │   ├── JacksonConfig.java               # snake_case, NON_NULL, ISO-8601 dates
 │   ├── OpenApiConfig.java               # Swagger/OpenAPI setup
+│   ├── CacheConfig.java                 # Caffeine cache for org-level analytics — 60s TTL, ~3MB/cache weight cap, soft values (sized for Render's 512MB)
 │   └── SecurityConfig.java             # JWT filter chain, role-based access
 │
 ├── common/
@@ -221,6 +222,7 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | GET      | `/api/v1/analytics/engagement-overview` | BUSINESS_OWNER, CLINIC_HEAD                     | Org-wide engagement rollup for the Overview analytics tab — users, sessions, skills, checklist fills |
 | GET      | `/api/v1/analytics/session-heatmap`     | BUSINESS_OWNER, CLINIC_HEAD                     | Session count per day in the window — powers the calendar heatmap |
 | GET      | `/api/v1/analytics/cases`               | BUSINESS_OWNER, CLINIC_HEAD                     | One row per active patient — sessions, members/activities assigned, checklist fills, LT goals, payment status |
+| GET      | `/api/v1/analytics/cases/trends`        | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN       | Trend buckets for every active case in one batched call — feeds the Cases tab's multi-case chart (replaces one `/patients/{id}/progress` request per case) |
 | GET      | `/api/v1/analytics/members`             | BUSINESS_OWNER, CLINIC_HEAD                     | One row per therapist — cases/activities assigned, activities created, sessions cancelled, IEP plans |
 | GET      | `/api/v1/analytics/sessions`            | BUSINESS_OWNER, CLINIC_HEAD                     | Flat session log + KPI strip for the Schedule tab, optionally filtered by patientId/therapistId/programId |
 | GET      | `/api/v1/users/assignable`              | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST, OFFICE_ADMIN | Staff names + roles for assignee pickers; optional `role` param scopes to one role (e.g. the review-meeting Clinic-Head picker) |
@@ -428,6 +430,10 @@ CREATE TABLE ... ;
 - Always return coverage alongside a trend; a series built on thin coverage is a sampling artefact
 - A parent may reschedule at most `PARENT_RESCHEDULE_LIMIT` (3) sessions per enrollment; the count comes from `parent_reschedule_requested`, which is never cleared
 - `performance_score` is a 0-100 percentage (see `UpdateSessionNotesRequest`), read through named bands in the UI — keep it bounded
+
+### Caching
+- `@Cacheable` is used only on the org-level analytics service methods (`CacheConfig`); the key must start with `orgId` so one org can never be served another's data, and only immutable response DTOs are cached — never entities.
+- New cached methods need a named cache registered in `CacheConfig.cacheManager()` and, if the result can be large, a case in `CacheConfig.weigh()` so the memory cap stays honest.
 
 ### Multi-Tenancy
 - Every query must filter by `orgId` from `principal.getOrgId()`
