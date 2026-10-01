@@ -56,4 +56,7 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
     /** Just the dates of birth — the age-group chart needs nothing else about a patient. */
     @Query("SELECT p.dateOfBirth FROM Patient p WHERE p.orgId = :orgId AND p.dateOfBirth IS NOT NULL")
     List<java.time.LocalDate> findDatesOfBirth(@Param("orgId") UUID orgId);
+
+    /** Cases that are neither discharged nor manually deactivated — the dashboard's "Active" count. */
+    long countByOrgIdAndStageNotAndIsActive(UUID orgId, com.simplehearing.patient.enums.PatientStage stage, boolean isActive);
 }

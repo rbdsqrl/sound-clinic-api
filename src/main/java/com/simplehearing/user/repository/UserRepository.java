@@ -73,4 +73,6 @@ public interface UserRepository extends JpaRepository<User, UUID> {
                        Pageable pageable);
 
     long countByOrgIdAndRoleIn(UUID orgId, Collection<Role> roles);
+
+    long countByOrgIdAndRoleInAndIsActive(UUID orgId, Collection<Role> roles, boolean isActive);
 }

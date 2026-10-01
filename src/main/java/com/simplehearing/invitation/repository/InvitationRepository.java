@@ -35,4 +35,6 @@ public interface InvitationRepository extends JpaRepository<Invitation, UUID> {
     /** (role, count) of invitations in a given status — pending counts without loading every invitation. */
     @Query("SELECT i.role, COUNT(i) FROM Invitation i WHERE i.orgId = :orgId AND i.status = :status GROUP BY i.role")
     List<Object[]> countByRole(@Param("orgId") UUID orgId, @Param("status") Invitation.Status status);
+
+    long countByOrgIdAndStatus(UUID orgId, Invitation.Status status);
 }
