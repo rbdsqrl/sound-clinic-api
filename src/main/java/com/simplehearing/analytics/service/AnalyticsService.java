@@ -212,15 +212,27 @@ public class AnalyticsService {
                 .filter(s -> s.getStatus() != TherapySessionStatus.CANCELLED)
                 .toList();
 
-        Set<UUID> enrollmentIds = sessions.stream().map(TherapySession::getEnrollmentId).collect(java.util.stream.Collectors.toSet());
+        Set<UUID> enrollmentIds = sessions.stream().map(TherapySession::getEnrollmentId).collect(Collectors.toSet());
         Map<UUID, Enrollment> enrollmentMap = enrollmentRepository.findAllById(enrollmentIds).stream()
-                .collect(java.util.stream.Collectors.toMap(Enrollment::getId, e -> e));
+                .collect(Collectors.toMap(Enrollment::getId, e -> e));
+
+        // Batched rather than a subscription + program lookup per enrollment in a loop —
+        // same two-step resolution every other method here (schedule(), programBreakdown())
+        // already does in bulk.
+        Set<UUID> subscriptionIds = enrollmentMap.values().stream()
+                .map(Enrollment::getSubscriptionId).collect(Collectors.toSet());
+        Map<UUID, Subscription> subscriptionMap = subscriptionRepository.findAllById(subscriptionIds).stream()
+                .collect(Collectors.toMap(Subscription::getId, s -> s));
+        Set<UUID> programIds = subscriptionMap.values().stream()
+                .map(Subscription::getProgramId).collect(Collectors.toSet());
+        Map<UUID, String> programNames = programRepository.findAllById(programIds).stream()
+                .collect(Collectors.toMap(Program::getId, Program::getName));
 
         Map<UUID, String> programNameByEnrollment = new HashMap<>();
         for (Enrollment e : enrollmentMap.values()) {
-            subscriptionRepository.findById(e.getSubscriptionId()).ifPresent(sub ->
-                    programRepository.findById(sub.getProgramId()).ifPresent(prog ->
-                            programNameByEnrollment.put(e.getId(), prog.getName())));
+            Subscription sub = subscriptionMap.get(e.getSubscriptionId());
+            String name = sub != null ? programNames.get(sub.getProgramId()) : null;
+            if (name != null) programNameByEnrollment.put(e.getId(), name);
         }
 
         Map<LocalDate, List<TherapySession>> byWeek = new TreeMap<>();
@@ -497,14 +509,13 @@ public class AnalyticsService {
             }
         }
 
-        // Upcoming — from today, independent of the requested window, capped so the query stays bounded.
+        // Upcoming — from today, independent of the requested window, capped so the query stays
+        // bounded. Counted in SQL rather than fetching every matching session's full row just to
+        // tally it — this window can span up to MAX_WINDOW_DAYS (731) forward org-wide.
         LocalDate today = LocalDate.now();
         Map<UUID, Integer> upcoming = new HashMap<>();
-        for (TherapySession s : sessionRepository.findByOrgIdAndSessionDateBetweenOrderBySessionDateAscStartTimeAsc(
-                orgId, today, today.plusDays(MAX_WINDOW_DAYS))) {
-            if (s.getStatus() == TherapySessionStatus.SCHEDULED || s.getStatus() == TherapySessionStatus.PENDING_RESCHEDULE) {
-                upcoming.merge(s.getPatientId(), 1, Integer::sum);
-            }
+        for (Object[] row : sessionRepository.countUpcomingByPatient(orgId, today, today.plusDays(MAX_WINDOW_DAYS))) {
+            upcoming.put((UUID) row[0], ((Long) row[1]).intValue());
         }
 
         // Members assigned — active therapist-patient links.

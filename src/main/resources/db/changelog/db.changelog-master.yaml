@@ -341,3 +341,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/114-enrollment-awaiting-payment.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/115-backfill-cancelled-subscription-sessions.sql
+      relativeToChangelogFile: false

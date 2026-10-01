@@ -17,6 +17,18 @@ public interface TherapySessionRepository extends JpaRepository<TherapySession, 
     List<TherapySession> findByOrgIdAndSessionDateBetweenOrderBySessionDateAscStartTimeAsc(
             UUID orgId, LocalDate from, LocalDate to);
 
+    /** Per-patient count of SCHEDULED/PENDING_RESCHEDULE sessions in a date range — powers the
+     *  Cases analytics tab's "Upcoming" column without pulling every matching session's full
+     *  row into memory just to count it (that window can span up to MAX_WINDOW_DAYS forward). */
+    @Query("SELECT s.patientId, COUNT(s) FROM TherapySession s "
+         + "WHERE s.orgId = :orgId AND s.sessionDate BETWEEN :from AND :to "
+         + "AND s.status IN (com.simplehearing.session.enums.TherapySessionStatus.SCHEDULED, "
+         +                  "com.simplehearing.session.enums.TherapySessionStatus.PENDING_RESCHEDULE) "
+         + "GROUP BY s.patientId")
+    List<Object[]> countUpcomingByPatient(@Param("orgId") UUID orgId,
+                                          @Param("from") LocalDate from,
+                                          @Param("to") LocalDate to);
+
     /** Sessions still flagged PENDING_RESCHEDULE whose date has already gone by unaddressed —
      *  the daily auto-cancel sweep (see session.job.MissedRescheduleCancelJob). */
     List<TherapySession> findByStatusAndSessionDateBefore(TherapySessionStatus status, LocalDate date);

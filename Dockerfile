@@ -22,8 +22,16 @@ ENV SPRING_PROFILES_ACTIVE=prod
 
 EXPOSE 8080
 
+# MaxRAMPercentage only bounds the heap — it says nothing about Metaspace, thread stacks, or
+# code cache, which the JVM is otherwise free to grow without limit. On Render's 512MB free
+# tier, 75% left too little headroom for everything else a Spring Boot + Hibernate + AWS SDK +
+# OpenPDF app needs outside the heap (Metaspace alone commonly runs 90-150MB), which is the
+# likely cause of hitting the instance's memory ceiling. Lowered to 50% and Metaspace is now
+# capped explicitly instead of left to grow unbounded; server.tomcat.threads.max (see
+# application-prod.yml) bounds the other big uncapped lever, worst-case thread-stack memory.
 ENTRYPOINT ["java", \
   "-XX:+UseContainerSupport", \
-  "-XX:MaxRAMPercentage=75.0", \
+  "-XX:MaxRAMPercentage=50.0", \
+  "-XX:MaxMetaspaceSize=128m", \
   "-Djava.security.egd=file:/dev/./urandom", \
   "-jar", "app.jar"]

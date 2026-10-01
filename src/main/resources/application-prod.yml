@@ -33,6 +33,14 @@ server:
     min-response-size: 1024
   http2:
     enabled: true
+  tomcat:
+    threads:
+      # Default is 200 — each worker thread reserves its own stack (~1MB), so a burst of
+      # concurrent requests could reserve 200MB+ on top of the heap on Render's 512MB instance.
+      # This org's traffic doesn't need anywhere near that; lowered to a figure a small clinic
+      # deployment won't realistically exceed, bounding the worst case instead of leaving it open.
+      max: 50
+      min-spare: 5
 
 management:
   endpoints:

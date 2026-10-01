@@ -17,6 +17,7 @@ import com.simplehearing.subscription.entity.Subscription;
 import com.simplehearing.subscription.enums.SubscriptionPaymentStatus;
 import com.simplehearing.subscription.enums.SubscriptionStatus;
 import com.simplehearing.subscription.repository.SubscriptionRepository;
+import com.simplehearing.subscription.service.EnrollmentCancellationService;
 import com.simplehearing.subscription.service.EnrollmentPaymentActivationService;
 import com.simplehearing.tax.entity.Tax;
 import com.simplehearing.tax.repository.TaxRepository;
@@ -44,18 +45,21 @@ public class SubscriptionController {
     private final PatientRepository patientRepository;
     private final TaxRepository taxRepository;
     private final EnrollmentPaymentActivationService enrollmentPaymentActivationService;
+    private final EnrollmentCancellationService enrollmentCancellationService;
 
     public SubscriptionController(
             SubscriptionRepository subscriptionRepository,
             ProgramRepository programRepository,
             PatientRepository patientRepository,
             TaxRepository taxRepository,
-            EnrollmentPaymentActivationService enrollmentPaymentActivationService) {
+            EnrollmentPaymentActivationService enrollmentPaymentActivationService,
+            EnrollmentCancellationService enrollmentCancellationService) {
         this.subscriptionRepository = subscriptionRepository;
         this.programRepository = programRepository;
         this.patientRepository = patientRepository;
         this.taxRepository = taxRepository;
         this.enrollmentPaymentActivationService = enrollmentPaymentActivationService;
+        this.enrollmentCancellationService = enrollmentCancellationService;
     }
 
     // ── List subscriptions for a patient ──────────────────────────────────────
@@ -219,6 +223,11 @@ public class SubscriptionController {
 
         sub.setStatus(SubscriptionStatus.CANCELLED);
         Subscription saved = subscriptionRepository.save(sub);
+
+        // Cancelling the plan doesn't by itself touch what it already generated — without this,
+        // the enrollment stayed ACTIVE and every still-ahead session stayed SCHEDULED, fully
+        // live on the calendar and actionable, with no indication the plan behind them was gone.
+        enrollmentCancellationService.cancelForSubscription(saved.getId());
 
         Program program = programRepository.findById(saved.getProgramId()).orElse(null);
         String name = program != null ? program.getName() : "Unknown Program";

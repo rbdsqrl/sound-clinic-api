@@ -2,6 +2,7 @@ package com.simplehearing.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.simplehearing.auth.security.JwtAuthFilter;
+import com.simplehearing.common.activity.ActivityTrackingFilter;
 import com.simplehearing.common.dto.ApiResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -57,10 +58,13 @@ public class SecurityConfig {
     private List<String> allowedOrigins;
 
     private final JwtAuthFilter jwtAuthFilter;
+    private final ActivityTrackingFilter activityTrackingFilter;
     private final ObjectMapper objectMapper;
 
-    public SecurityConfig(JwtAuthFilter jwtAuthFilter, ObjectMapper objectMapper) {
+    public SecurityConfig(JwtAuthFilter jwtAuthFilter, ActivityTrackingFilter activityTrackingFilter,
+                          ObjectMapper objectMapper) {
         this.jwtAuthFilter = jwtAuthFilter;
+        this.activityTrackingFilter = activityTrackingFilter;
         this.objectMapper = objectMapper;
     }
 
@@ -74,6 +78,7 @@ public class SecurityConfig {
                         .requestMatchers(PUBLIC_PATHS).permitAll()
                         .anyRequest().authenticated()
                 )
+                .addFilterBefore(activityTrackingFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint((req, res, e) -> {
