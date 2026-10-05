@@ -9,5 +9,7 @@ public enum IEPGoalDomain {
     SOCIAL,
     COGNITIVE,
     LITERACY,
-    ADAPTIVE
+    ADAPTIVE,
+    /** An organisation-defined domain — the name lives in the goal's customDomain. */
+    CUSTOM
 }

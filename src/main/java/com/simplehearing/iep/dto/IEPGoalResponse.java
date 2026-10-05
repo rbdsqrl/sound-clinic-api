@@ -17,6 +17,8 @@ public record IEPGoalResponse(
         String title,
         String goalStatement,
         IEPGoalDomain domain,
+        /** The domain's name when domain is CUSTOM. */
+        String customDomain,
         String baseline,
         String targetCriteria,
         String targetDate,
@@ -46,6 +48,7 @@ public record IEPGoalResponse(
                 goal.getTitle(),
                 goal.getGoalStatement(),
                 goal.getDomain(),
+                goal.getCustomDomain(),
                 goal.getBaseline(),
                 goal.getTargetCriteria(),
                 goal.getTargetDate() != null ? goal.getTargetDate().toString() : null,

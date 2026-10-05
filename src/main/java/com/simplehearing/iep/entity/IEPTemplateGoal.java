@@ -31,6 +31,9 @@ public class IEPTemplateGoal {
     @Column(name = "domain", length = 50)
     private IEPGoalDomain domain;
 
+    @Column(name = "custom_domain", length = 60)
+    private String customDomain;
+
     @Column(name = "baseline", columnDefinition = "TEXT")
     private String baseline;
 
@@ -59,6 +62,8 @@ public class IEPTemplateGoal {
 
     public IEPGoalDomain getDomain() { return domain; }
     public void setDomain(IEPGoalDomain domain) { this.domain = domain; }
+    public String getCustomDomain() { return customDomain; }
+    public void setCustomDomain(String customDomain) { this.customDomain = customDomain; }
 
     public String getBaseline() { return baseline; }
     public void setBaseline(String baseline) { this.baseline = baseline; }

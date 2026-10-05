@@ -34,6 +34,10 @@ public class IEPGoal {
     @Column(name = "domain", nullable = false)
     private IEPGoalDomain domain;
 
+    /** The domain's name when {@link #domain} is CUSTOM; null otherwise. */
+    @Column(name = "custom_domain", length = 60)
+    private String customDomain;
+
     @Column(name = "baseline", columnDefinition = "TEXT")
     private String baseline;
 
@@ -83,6 +87,14 @@ public class IEPGoal {
 
     public IEPGoalDomain getDomain() { return domain; }
     public void setDomain(IEPGoalDomain domain) { this.domain = domain; }
+    public String getCustomDomain() { return customDomain; }
+    public void setCustomDomain(String customDomain) { this.customDomain = customDomain; }
+
+    /** What reports and filters key a goal's domain by: the custom name, or the built-in domain's name. */
+    public String domainKey() {
+        if (domain == IEPGoalDomain.CUSTOM && customDomain != null && !customDomain.isBlank()) return customDomain;
+        return domain == null ? null : domain.name();
+    }
 
     public String getBaseline() { return baseline; }
     public void setBaseline(String baseline) { this.baseline = baseline; }

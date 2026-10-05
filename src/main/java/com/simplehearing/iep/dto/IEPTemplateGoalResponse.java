@@ -12,6 +12,7 @@ public record IEPTemplateGoalResponse(
         String title,
         String goalStatement,
         String domain,
+        String customDomain,
         String baseline,
         String targetCriteria,
         Instant createdAt
@@ -24,6 +25,7 @@ public record IEPTemplateGoalResponse(
                 goal.getTitle(),
                 goal.getGoalStatement(),
                 goal.getDomain() != null ? goal.getDomain().name() : null,
+                goal.getCustomDomain(),
                 goal.getBaseline(),
                 goal.getTargetCriteria(),
                 goal.getCreatedAt()

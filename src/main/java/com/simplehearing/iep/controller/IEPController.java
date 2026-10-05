@@ -30,8 +30,11 @@ public class IEPController {
 
     private final IEPService iepService;
     private final com.simplehearing.iep.service.GoalPacingService goalPacingService;
+    private final com.simplehearing.iep.service.IEPCustomDomainService customDomainService;
 
-    public IEPController(IEPService iepService, com.simplehearing.iep.service.GoalPacingService goalPacingService) {
+    public IEPController(IEPService iepService, com.simplehearing.iep.service.GoalPacingService goalPacingService,
+                         com.simplehearing.iep.service.IEPCustomDomainService customDomainService) {
+        this.customDomainService = customDomainService;
         this.iepService = iepService;
         this.goalPacingService = goalPacingService;
     }
@@ -132,6 +135,37 @@ public class IEPController {
             @AuthenticationPrincipal UserPrincipal principal) {
 
         iepService.deletePlan(planId, principal);
+        return ResponseEntity.noContent().build();
+    }
+
+    // ── Organisation's custom goal domains ────────────────────────────────────
+
+    public record CustomDomainResponse(UUID id, String name) {}
+    public record CreateCustomDomainRequest(@jakarta.validation.constraints.NotBlank String name) {}
+
+    @Operation(summary = "The organisation's own IEP goal domains (in addition to the built-in ones)")
+    @GetMapping("/custom-domains")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
+    public ResponseEntity<ApiResponse<List<CustomDomainResponse>>> customDomains(@AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(customDomainService.list(principal.getOrgId()).stream()
+                .map(d -> new CustomDomainResponse(d.getId(), d.getName())).toList()));
+    }
+
+    @Operation(summary = "Add a custom IEP goal domain (returns the existing one if the name is already there)")
+    @PostMapping("/custom-domains")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'BUSINESS_OWNER', 'CLINIC_HEAD')")
+    public ResponseEntity<ApiResponse<CustomDomainResponse>> createCustomDomain(
+            @Valid @RequestBody CreateCustomDomainRequest request,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        var d = customDomainService.findOrCreate(principal.getOrgId(), request.name(), principal.getId());
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(new CustomDomainResponse(d.getId(), d.getName())));
+    }
+
+    @Operation(summary = "Remove a custom domain from the picker — goals already using it keep its name")
+    @DeleteMapping("/custom-domains/{id}")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    public ResponseEntity<Void> deleteCustomDomain(@PathVariable UUID id, @AuthenticationPrincipal UserPrincipal principal) {
+        customDomainService.remove(principal.getOrgId(), id);
         return ResponseEntity.noContent().build();
     }
 

@@ -244,6 +244,9 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | PUT      | `/api/v1/leave-policy/allocations`      | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN       | One person's own allocation for a category in a leave year (overrides the category default); omit `days` to reset |
 | GET      | `/api/v1/iep/{planId}/pacing`           | THERAPIST, BUSINESS_OWNER, CLINIC_HEAD          | How the plan's active goals are spread across the upcoming sessions of its linked therapy — per-goal session budget and suggested target date, sessions left, sessions per week, and a "tight" flag when the average goal would get under 3 sessions |
 | POST     | `/api/v1/iep/{planId}/pacing/apply`     | THERAPIST, BUSINESS_OWNER, CLINIC_HEAD          | Set each active goal's target date to its suggested date (re-spreads across the sessions that currently exist) |
+| GET      | `/api/v1/iep/custom-domains`            | THERAPIST, BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN | The organisation's own IEP goal domains (in addition to the built-in ones) |
+| POST     | `/api/v1/iep/custom-domains`            | THERAPIST, BUSINESS_OWNER, CLINIC_HEAD          | Add a custom domain — returns the existing one if the name is already there (case-insensitive) |
+| DELETE   | `/api/v1/iep/custom-domains/{id}`       | BUSINESS_OWNER, CLINIC_HEAD                     | Remove a custom domain from the picker; goals already using it keep its name |
 | GET      | `/api/v1/dashboard/org-overview`        | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN       | Active/inactive case counts + active/invited member counts for the dashboard's Organisation Overview rings (SQL counts, no row loading) |
 | GET      | `/api/v1/analytics/patients/{id}/progress` | BUSINESS_OWNER, CLINIC_HEAD, PARENT (own child) | Mastery series + per-domain breakdown |
 | GET      | `/api/v1/analytics/patients/{id}/activities` | BUSINESS_OWNER, CLINIC_HEAD, PARENT (own child) | Activity assignment/attempt progress |
@@ -424,6 +427,7 @@ Master file: `db.changelog-master.yaml` — lists migrations in order.
 | 119-goal-video-evidence.sql          | `goal_evidence` (video or can't-upload reason per child/goal/session/therapy), `iep_goals.completed_at` (backfilled), and `organisations.evidence_videos_required/max_video_mb/max_video_seconds` |
 | 120-leave-policy.sql                 | `leave_categories`, `leave_allocations` (per-person override per leave year), `leaves.category_id`, `organisations.leave_year_start_month` |
 | 121-evidence-uploads.sql             | `evidence_uploads` — direct uploads in flight (what was approved, until completed or swept) |
+| 122-iep-custom-domains.sql           | `iep_custom_domains` (an organisation's own goal domains) + `custom_domain` on `iep_goals` / `iep_template_goals` |
 | 113-phone-uniqueness.sql             | Normalises existing `users.phone` values (digits + leading `+` only) and adds `uq_users_phone` — a second login identity alongside email, so it must be unique too |
 
 **To add a migration:** create `NNN-description.sql` with the Liquibase header, then add it to the master YAML.
@@ -495,6 +499,10 @@ CREATE TABLE ... ;
 ### Direct-to-storage uploads
 - `StorageService.prepareDirectUpload` issues a signed PUT (S3: presigned URL with `content-type` + `content-length` signed; local dev: an HMAC token handled by `FileController`'s `PUT /api/v1/files/direct/{token}`), and `storedSize` lets the server verify what arrived. `EvidenceUploadCleanupJob` (hourly) removes uploads — record and object — whose link expired over an hour ago.
 - **Ops requirement:** the storage bucket's CORS must allow `PUT` with the `Content-Type` header from the website origins (`app.cors.allowed-origins`). If it doesn't, the website notices the browser can't reach storage and falls back to the older through-the-server upload (`POST /patients/{id}/evidence`, still supported), so nothing breaks — but large videos then go through the API server again.
+
+### IEP custom domains
+- A goal's domain is a built-in `IEPGoalDomain`, or `CUSTOM` with the name in `customDomain`. Saving a goal (or template goal) with a CUSTOM domain adds the name to the organisation's `iep_custom_domains` list via `IEPCustomDomainService.resolve` — so typing one new domain while creating a goal both defines and uses it. Names are tidied (trimmed, whitespace collapsed, 60 chars max), matched case-insensitively against the existing list, and a name that is really a built-in ("speech") resolves to the built-in.
+- Anything that groups or filters by domain (analytics series, the analytics domain filter, discharge snapshots) must use `IEPGoal.domainKey()` — the custom name or the built-in's name — never `getDomain().name()`, which would lump every custom domain under "CUSTOM". CSV import still accepts built-in domains only.
 
 ### Multi-Tenancy
 - Every query must filter by `orgId` from `principal.getOrgId()`

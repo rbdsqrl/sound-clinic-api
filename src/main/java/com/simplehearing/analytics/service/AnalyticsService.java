@@ -999,7 +999,7 @@ public class AnalyticsService {
             trialsTotal[i]  += p.getTrialsTotal();
 
             if (goal != null && goal.getDomain() != null) {
-                String d = goal.getDomain().name();
+                String d = goal.domainKey();
                 domainPassed.computeIfAbsent(d, k -> new int[n])[i] += passed;
                 domainTotal.computeIfAbsent(d, k -> new int[n])[i]  += p.getTrialsTotal();
             }
@@ -1155,7 +1155,7 @@ public class AnalyticsService {
     private static boolean matchesDomain(IEPGoal goal, String domainFilter) {
         if (domainFilter == null || domainFilter.isBlank()) return true;
         return goal != null && goal.getDomain() != null
-                && goal.getDomain().name().equalsIgnoreCase(domainFilter.trim());
+                && goal.domainKey().equalsIgnoreCase(domainFilter.trim());
     }
 
     /** A completed session counts as "logged" once the therapist has written anything into it. */

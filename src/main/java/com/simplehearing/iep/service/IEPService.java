@@ -41,6 +41,7 @@ public class IEPService {
     private final PatientRepository patientRepository;
     private final EnrollmentRepository enrollmentRepository;
     private final EvidenceService evidenceService;
+    private final IEPCustomDomainService customDomainService;
 
     public IEPService(IEPPlanRepository planRepository,
                       IEPGoalRepository goalRepository,
@@ -48,7 +49,9 @@ public class IEPService {
                       UserRepository userRepository,
                       PatientRepository patientRepository,
                       EnrollmentRepository enrollmentRepository,
-                      EvidenceService evidenceService) {
+                      EvidenceService evidenceService,
+                      IEPCustomDomainService customDomainService) {
+        this.customDomainService = customDomainService;
         this.planRepository = planRepository;
         this.goalRepository = goalRepository;
         this.progressRepository = progressRepository;
@@ -129,7 +132,7 @@ public class IEPService {
 
         if (req.goals() != null) {
             for (CreateIEPGoalRequest gr : req.goals()) {
-                IEPGoal goal = buildGoalFromRequest(gr, saved.getId(), principal.getOrgId());
+                IEPGoal goal = buildGoalFromRequest(gr, saved.getId(), principal.getOrgId(), principal.getId());
                 goalRepository.save(goal);
             }
         }
@@ -239,7 +242,7 @@ public class IEPService {
         IEPPlan plan = planRepository.findByIdAndOrgId(planId, principal.getOrgId())
                 .orElseThrow(() -> new ResourceNotFoundException("IEP plan not found"));
 
-        IEPGoal goal = buildGoalFromRequest(req, plan.getId(), principal.getOrgId());
+        IEPGoal goal = buildGoalFromRequest(req, plan.getId(), principal.getOrgId(), principal.getId());
         IEPGoal saved = goalRepository.save(goal);
 
         return IEPGoalResponse.from(saved, null, List.of());
@@ -254,7 +257,11 @@ public class IEPService {
 
         if (req.title() != null) goal.setTitle(req.title());
         if (req.goalStatement() != null) goal.setGoalStatement(req.goalStatement());
-        if (req.domain() != null) goal.setDomain(req.domain());
+        if (req.domain() != null) {
+            var resolved = customDomainService.resolve(principal.getOrgId(), principal.getId(), req.domain(), req.customDomain());
+            goal.setDomain(resolved.domain());
+            goal.setCustomDomain(resolved.customDomain());
+        }
         if (req.baseline() != null) goal.setBaseline(req.baseline());
         if (req.targetCriteria() != null) goal.setTargetCriteria(req.targetCriteria());
         if (req.targetDate() != null) goal.setTargetDate(req.targetDate());
@@ -404,9 +411,10 @@ public class IEPService {
             IEPGoalDomain domain;
             try {
                 domain = IEPGoalDomain.valueOf(goalDomainRaw.toUpperCase());
+                if (domain == IEPGoalDomain.CUSTOM) throw new IllegalArgumentException("custom domains can't be imported");
             } catch (IllegalArgumentException e) {
                 errors.add("Row " + rowNum + ": unknown goal_domain '" + goalDomainRaw + "'. " +
-                        "Valid values: " + Arrays.toString(IEPGoalDomain.values()));
+                        "Valid values: " + Arrays.stream(IEPGoalDomain.values()).filter(d -> d != IEPGoalDomain.CUSTOM).toList());
                 continue;
             }
 
@@ -590,13 +598,15 @@ public class IEPService {
         return u != null ? fullName(u) : null;
     }
 
-    private IEPGoal buildGoalFromRequest(CreateIEPGoalRequest req, UUID planId, UUID orgId) {
+    private IEPGoal buildGoalFromRequest(CreateIEPGoalRequest req, UUID planId, UUID orgId, UUID userId) {
         IEPGoal goal = new IEPGoal();
         goal.setOrgId(orgId);
         goal.setPlanId(planId);
         goal.setTitle(req.title());
         goal.setGoalStatement(req.goalStatement());
-        goal.setDomain(req.domain());
+        var resolved = customDomainService.resolve(orgId, userId, req.domain(), req.customDomain());
+        goal.setDomain(resolved.domain());
+        goal.setCustomDomain(resolved.customDomain());
         goal.setBaseline(req.baseline());
         goal.setTargetCriteria(req.targetCriteria());
         goal.setTargetDate(req.targetDate());

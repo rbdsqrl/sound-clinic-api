@@ -275,7 +275,7 @@ public class DischargeService {
                 .flatMap(planId -> iepGoalRepository.findByPlanId(planId).stream())
                 .map(g -> Map.<String, Object>of(
                         "title", g.getTitle() == null ? "" : g.getTitle(),
-                        "domain", g.getDomain() == null ? "" : g.getDomain().name(),
+                        "domain", g.getDomain() == null ? "" : g.domainKey(),
                         "status", g.getStatus() == null ? "" : g.getStatus().name()))
                 .collect(Collectors.toList());
         try {

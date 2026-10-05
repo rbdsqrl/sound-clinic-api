@@ -19,11 +19,14 @@ public class IEPTemplateService {
 
     private final IEPTemplateRepository templateRepository;
     private final IEPTemplateGoalRepository goalRepository;
+    private final IEPCustomDomainService customDomainService;
 
     public IEPTemplateService(IEPTemplateRepository templateRepository,
-                               IEPTemplateGoalRepository goalRepository) {
+                               IEPTemplateGoalRepository goalRepository,
+                               IEPCustomDomainService customDomainService) {
         this.templateRepository = templateRepository;
         this.goalRepository = goalRepository;
+        this.customDomainService = customDomainService;
     }
 
     public List<IEPTemplateResponse> listTemplates(UserPrincipal principal) {
@@ -76,7 +79,9 @@ public class IEPTemplateService {
         goal.setOrgId(principal.getOrgId());
         goal.setTitle(req.title());
         goal.setGoalStatement(req.goalStatement());
-        goal.setDomain(req.domain());
+        var resolved = customDomainService.resolve(principal.getOrgId(), principal.getId(), req.domain(), req.customDomain());
+        goal.setDomain(resolved.domain());
+        goal.setCustomDomain(resolved.customDomain());
         goal.setBaseline(req.baseline());
         goal.setTargetCriteria(req.targetCriteria());
 
