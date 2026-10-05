@@ -169,6 +169,13 @@ com.simplehearing
 │   ├── enums/Granularity.java           # DAILY | WEEKLY | MONTHLY + ISO bucketing rules
 │   └── service/AnalyticsService.java    # Folds sessions + IEP progress into buckets
 │
+├── memberdocument/
+│   ├── controller/MemberDocumentController.java  # /api/v1/users/{userId}/documents — list/upload/delete; Business Owner + Clinic Head only (HR-sensitive)
+│   ├── dto/MemberDocumentResponse.java
+│   ├── entity/MemberDocument.java                # category, title, file name/url/type/size, notes, uploader
+│   ├── enums/MemberDocumentCategory.java         # IDENTITY_PROOF, QUALIFICATION, CERTIFICATION, EMPLOYMENT_CONTRACT, OTHER
+│   └── repository/MemberDocumentRepository.java
+│
 ├── sharedmedia/
 │   ├── controller/SharedMediaController.java  # /api/v1/patients/{patientId}/shared-media — list/upload/delete
 │   ├── dto/SharedMediaResponse.java            # id, direction, fileUrl (presigned), note, uploader name/role, createdAt
@@ -207,6 +214,9 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | GET      | `/api/v1/users/members`                 | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN                     | Paginated staff list — 20/page, sorted `createdAt` desc by default; `search`, `role`, `clinicId`, `active` (default true) filters |
 | GET      | `/api/v1/users/{id}/profile`            | BUSINESS_OWNER, CLINIC_HEAD                                   | One member's profile — contact, qualification, specialization, languages, case count |
 | PATCH    | `/api/v1/users/{id}/profile`            | BUSINESS_OWNER, CLINIC_HEAD (role change: BUSINESS_OWNER only) | Update a member's phone/clinic/qualification/specialization/languages, and their role (staff roles only, not own role) — phone is normalised and rejected with 409 if another user already has it |
+| GET      | `/api/v1/users/{id}/documents`          | BUSINESS_OWNER, CLINIC_HEAD                     | List the documents on a staff member's record (ID proof, qualifications, contracts…) with short-lived download links |
+| POST     | `/api/v1/users/{id}/documents`          | BUSINESS_OWNER, CLINIC_HEAD                     | Add a document — multipart `file` + `category` (+ optional `title`, `notes`); PDF/Office/text/image only, 25 MB max |
+| DELETE   | `/api/v1/users/{id}/documents/{documentId}` | BUSINESS_OWNER, CLINIC_HEAD                 | Remove a document and its stored file |
 | GET      | `/api/v1/dashboard/org-overview`        | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN       | Active/inactive case counts + active/invited member counts for the dashboard's Organisation Overview rings (SQL counts, no row loading) |
 | GET      | `/api/v1/analytics/patients/{id}/progress` | BUSINESS_OWNER, CLINIC_HEAD, PARENT (own child) | Mastery series + per-domain breakdown |
 | GET      | `/api/v1/analytics/patients/{id}/activities` | BUSINESS_OWNER, CLINIC_HEAD, PARENT (own child) | Activity assignment/attempt progress |
@@ -380,6 +390,7 @@ Master file: `db.changelog-master.yaml` — lists migrations in order.
 | 110-org-geofence.sql                 | `organisations.latitude`/`longitude`/`geo_fence_radius_meters` — mirrors `clinics` (036); lets a BUSINESS_OWNER's attendance check-in be verified against the org's own address instead of a clinic |
 | 111-review-session-slots.sql         | `organisation_review_slot_times` — the org-wide default daily grid a Review Meeting is booked into (a configurable list of times, as many as wanted); same collection-table pattern as `organisation_weekly_off_days` |
 | 112-clinic-head-review-slots.sql     | `user_review_slot_times` — a CLINIC_HEAD's own grid, overriding the org default when set (no rows = inherits the org default) |
+| 116-create-member-documents.sql      | `member_documents` — files kept on a staff member's record (category, title, stored file reference, notes, uploader) |
 | 113-phone-uniqueness.sql             | Normalises existing `users.phone` values (digits + leading `+` only) and adds `uq_users_phone` — a second login identity alongside email, so it must be unique too |
 
 **To add a migration:** create `NNN-description.sql` with the Liquibase header, then add it to the master YAML.

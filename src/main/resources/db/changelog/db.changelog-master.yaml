@@ -344,3 +344,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/115-backfill-cancelled-subscription-sessions.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/116-create-member-documents.sql
+      relativeToChangelogFile: false
