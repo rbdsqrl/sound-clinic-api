@@ -3,6 +3,7 @@ package com.simplehearing.iep.controller;
 import com.simplehearing.auth.security.UserPrincipal;
 import com.simplehearing.common.dto.ApiResponse;
 import com.simplehearing.common.exception.ApiException;
+import com.simplehearing.iep.dto.GoalPacingResponse;
 import com.simplehearing.iep.dto.*;
 import com.simplehearing.iep.service.IEPService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -28,9 +29,11 @@ import java.util.UUID;
 public class IEPController {
 
     private final IEPService iepService;
+    private final com.simplehearing.iep.service.GoalPacingService goalPacingService;
 
-    public IEPController(IEPService iepService) {
+    public IEPController(IEPService iepService, com.simplehearing.iep.service.GoalPacingService goalPacingService) {
         this.iepService = iepService;
+        this.goalPacingService = goalPacingService;
     }
 
     // ── List plans for a patient ──────────────────────────────────────────────
@@ -130,6 +133,26 @@ public class IEPController {
 
         iepService.deletePlan(planId, principal);
         return ResponseEntity.noContent().build();
+    }
+
+    // ── Goal pacing across the linked therapy's sessions ──────────────────────
+
+    @Operation(summary = "How the plan's active goals are spread across the upcoming sessions of its linked therapy")
+    @GetMapping("/{planId}/pacing")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'BUSINESS_OWNER', 'CLINIC_HEAD')")
+    public ResponseEntity<ApiResponse<GoalPacingResponse>> pacing(
+            @PathVariable UUID planId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(goalPacingService.pacing(planId, principal.getOrgId())));
+    }
+
+    @Operation(summary = "Re-spread the plan's active goals across the upcoming sessions and set their target dates to match")
+    @PostMapping("/{planId}/pacing/apply")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'BUSINESS_OWNER', 'CLINIC_HEAD')")
+    public ResponseEntity<ApiResponse<GoalPacingResponse>> applyPacing(
+            @PathVariable UUID planId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(goalPacingService.apply(planId, principal.getOrgId())));
     }
 
     // ── Add a goal to a plan ──────────────────────────────────────────────────

@@ -7,6 +7,8 @@ import org.springframework.core.io.Resource;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
@@ -26,6 +28,17 @@ public class FileController {
 
     public FileController(LocalStorageService storageService) {
         this.storageService = storageService;
+    }
+
+    /** The target of a local direct upload — authorised by the signed token in the path (see LocalStorageService). */
+    @PutMapping("/api/v1/files/direct/{token}")
+    public ResponseEntity<Void> directUpload(@PathVariable String token, HttpServletRequest request) throws IOException {
+        try {
+            storageService.acceptDirectUpload(token, request.getInputStream(), request.getContentLengthLong(), request.getContentType());
+            return ResponseEntity.ok().build();
+        } catch (SecurityException | IllegalArgumentException e) {
+            return ResponseEntity.status(403).build();
+        }
     }
 
     @GetMapping("/api/v1/files/**")

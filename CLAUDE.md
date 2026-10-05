@@ -229,6 +229,8 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | PUT      | `/api/v1/organisation/evidence-settings` | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN      | Update those rules |
 | GET      | `/api/v1/patients/{id}/evidence`        | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST (assigned), PARENT (own child) | A child's video evidence, newest first (`?goalId=` to filter); parents see videos only, never the "couldn't upload" records |
 | POST     | `/api/v1/patients/{id}/evidence`        | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST (assigned) | Upload a video (multipart `file`, optional `goalId`, `sessionId`, `note`, `durationSeconds`) — checked against the org's size/length limits; goal and session are optional so evidence can be ad hoc |
+| POST     | `/api/v1/patients/{id}/evidence/upload-url` | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST (assigned) | Direct-to-storage upload, step 1 — checks the video against the org's rules and returns a short-lived signed PUT link (size and type are part of the signature); the file never passes through this server |
+| POST     | `/api/v1/patients/{id}/evidence/uploads/{uploadId}/complete` | same as above                        | Step 2 — verifies the stored object exists and matches the approved size, then registers it as evidence (409 if it hasn't finished arriving, so the client can retry) |
 | POST     | `/api/v1/patients/{id}/evidence/cannot-upload` | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST (assigned) | Record why a video couldn't be uploaded (categorised reason; `OTHER` needs text) — lets the goal be completed without one, and shows in analytics |
 | DELETE   | `/api/v1/patients/{id}/evidence/{evidenceId}` | Recorder, or BUSINESS_OWNER/CLINIC_HEAD  | Delete evidence and its stored video |
 | GET      | `/api/v1/analytics/evidence`            | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN       | Goals completed per therapist for a window — with video / couldn't upload / no evidence, compliance %, videos uploaded, and the reasons videos couldn't be uploaded |
@@ -240,6 +242,8 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | GET      | `/api/v1/leave-policy/my-balances`      | All staff                                       | The caller's allocated / used / pending / remaining working days per category for a leave year |
 | GET      | `/api/v1/leave-policy/balances`         | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN       | Every staff member's balances plus their pending / approved / rejected request counts — therapist-wise leave status |
 | PUT      | `/api/v1/leave-policy/allocations`      | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN       | One person's own allocation for a category in a leave year (overrides the category default); omit `days` to reset |
+| GET      | `/api/v1/iep/{planId}/pacing`           | THERAPIST, BUSINESS_OWNER, CLINIC_HEAD          | How the plan's active goals are spread across the upcoming sessions of its linked therapy — per-goal session budget and suggested target date, sessions left, sessions per week, and a "tight" flag when the average goal would get under 3 sessions |
+| POST     | `/api/v1/iep/{planId}/pacing/apply`     | THERAPIST, BUSINESS_OWNER, CLINIC_HEAD          | Set each active goal's target date to its suggested date (re-spreads across the sessions that currently exist) |
 | GET      | `/api/v1/dashboard/org-overview`        | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN       | Active/inactive case counts + active/invited member counts for the dashboard's Organisation Overview rings (SQL counts, no row loading) |
 | GET      | `/api/v1/analytics/patients/{id}/progress` | BUSINESS_OWNER, CLINIC_HEAD, PARENT (own child) | Mastery series + per-domain breakdown |
 | GET      | `/api/v1/analytics/patients/{id}/activities` | BUSINESS_OWNER, CLINIC_HEAD, PARENT (own child) | Activity assignment/attempt progress |
@@ -419,6 +423,7 @@ Master file: `db.changelog-master.yaml` — lists migrations in order.
 | 118-widen-session-status.sql         | Widens `therapy_sessions.status` from VARCHAR(20) when still too narrow — `CANCELLATION_REQUESTED` is 22 chars and could not be stored |
 | 119-goal-video-evidence.sql          | `goal_evidence` (video or can't-upload reason per child/goal/session/therapy), `iep_goals.completed_at` (backfilled), and `organisations.evidence_videos_required/max_video_mb/max_video_seconds` |
 | 120-leave-policy.sql                 | `leave_categories`, `leave_allocations` (per-person override per leave year), `leaves.category_id`, `organisations.leave_year_start_month` |
+| 121-evidence-uploads.sql             | `evidence_uploads` — direct uploads in flight (what was approved, until completed or swept) |
 | 113-phone-uniqueness.sql             | Normalises existing `users.phone` values (digits + leading `+` only) and adds `uq_users_phone` — a second login identity alongside email, so it must be unique too |
 
 **To add a migration:** create `NNN-description.sql` with the Liquibase header, then add it to the master YAML.
@@ -483,6 +488,13 @@ CREATE TABLE ... ;
 ### Leave quotas
 - Leave categories are optional: with none configured, leave is requested/approved with no quota exactly as before. Once any active category exists, a request must name one (`categoryId`) and is rejected (409) if it would exceed that category's allowance for the leave year.
 - Quotas count **working days** — weekly off days and public holidays inside a range are excluded (`LeavePolicyService`). A request spanning two leave years draws on each year's balance for its own days. A person's own allocation (`leave_allocations`) overrides the category default; a null allowance means no limit.
+
+### IEP goal pacing
+- `GoalPacingService` divides a linked plan's not-completed goals (in creation order) across the therapy's *upcoming* sessions (counts-toward-plan, not cancelled, dated today or later): each gets floor(R/n) sessions, the first R mod n one more, and its suggested date is the date of the last session in its share. It reads the sessions that actually exist, so a change to the therapy's frequency or dates changes the suggestion — nothing is stored until "apply" writes `targetDate`.
+
+### Direct-to-storage uploads
+- `StorageService.prepareDirectUpload` issues a signed PUT (S3: presigned URL with `content-type` + `content-length` signed; local dev: an HMAC token handled by `FileController`'s `PUT /api/v1/files/direct/{token}`), and `storedSize` lets the server verify what arrived. `EvidenceUploadCleanupJob` (hourly) removes uploads — record and object — whose link expired over an hour ago.
+- **Ops requirement:** the storage bucket's CORS must allow `PUT` with the `Content-Type` header from the website origins (`app.cors.allowed-origins`). If it doesn't, the website notices the browser can't reach storage and falls back to the older through-the-server upload (`POST /patients/{id}/evidence`, still supported), so nothing breaks — but large videos then go through the API server again.
 
 ### Multi-Tenancy
 - Every query must filter by `orgId` from `principal.getOrgId()`

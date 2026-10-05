@@ -13,13 +13,18 @@ import software.amazon.awssdk.services.s3.S3ClientBuilder;
 import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
+import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
 import java.io.IOException;
 import java.net.URI;
 import java.time.Duration;
+import java.util.Map;
+import java.util.OptionalLong;
 import java.util.UUID;
 
 @Service
@@ -131,6 +136,36 @@ public class S3StorageService implements StorageService {
     @Override
     public boolean isHostedFile(String url) {
         return url != null && url.startsWith(urlPrefix());
+    }
+
+    /** A presigned PUT: content type and exact length are part of the signature, so the client can't send
+     *  a different kind of file or a larger one than was approved. */
+    @Override
+    public DirectUpload prepareDirectUpload(String folder, String filename, String contentType,
+                                            long sizeBytes, Duration validFor) {
+        String safe = StringUtils.cleanPath(filename).replaceAll("[^a-zA-Z0-9._-]", "_");
+        String key = folder + "/" + UUID.randomUUID() + "-" + safe;
+        var presigned = presigner.presignPutObject(PutObjectPresignRequest.builder()
+                .signatureDuration(validFor)
+                .putObjectRequest(PutObjectRequest.builder()
+                        .bucket(bucket).key(key).contentType(contentType).contentLength(sizeBytes).build())
+                .build());
+        return new DirectUpload(presigned.url().toString(), buildPublicUrl(key), Map.of("Content-Type", contentType));
+    }
+
+    @Override
+    public OptionalLong storedSize(String storedUrl) {
+        String prefix = urlPrefix();
+        if (storedUrl == null || !storedUrl.startsWith(prefix)) return OptionalLong.empty();
+        try {
+            return OptionalLong.of(s3.headObject(HeadObjectRequest.builder()
+                    .bucket(bucket).key(storedUrl.substring(prefix.length())).build()).contentLength());
+        } catch (NoSuchKeyException e) {
+            return OptionalLong.empty();
+        } catch (software.amazon.awssdk.services.s3.model.S3Exception e) {
+            if (e.statusCode() == 404) return OptionalLong.empty();
+            throw e;
+        }
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────

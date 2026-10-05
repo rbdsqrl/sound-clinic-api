@@ -4,6 +4,8 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.util.Map;
+import java.util.OptionalLong;
 
 /**
  * Provider-agnostic file storage abstraction.
@@ -50,4 +52,25 @@ public interface StorageService {
      * open in a new tab.
      */
     boolean isHostedFile(String url);
+
+    /**
+     * A signed, short-lived destination the client can send a file to directly, so the bytes never pass
+     * through this server (which matters for large videos on a small instance).
+     *
+     * @param uploadUrl where to PUT the file
+     * @param storedUrl the canonical URL the file will have once uploaded (what {@link #presign} accepts)
+     * @param headers   headers the PUT must carry (e.g. Content-Type) — they're part of the signature
+     */
+    record DirectUpload(String uploadUrl, String storedUrl, Map<String, String> headers) {}
+
+    /** Prepares a direct upload of exactly {@code sizeBytes} bytes of {@code contentType} into {@code folder}. */
+    default DirectUpload prepareDirectUpload(String folder, String filename, String contentType,
+                                             long sizeBytes, Duration validFor) {
+        throw new UnsupportedOperationException("This storage provider doesn't support direct uploads");
+    }
+
+    /** The size in bytes of a stored file, or empty if it isn't there (yet). */
+    default OptionalLong storedSize(String storedUrl) {
+        return OptionalLong.empty();
+    }
 }

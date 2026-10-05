@@ -7,9 +7,13 @@ import com.simplehearing.common.exception.ResourceNotFoundException;
 import com.simplehearing.evidence.dto.CannotUploadRequest;
 import com.simplehearing.evidence.dto.EvidenceResponse;
 import com.simplehearing.evidence.dto.EvidenceSettings;
+import com.simplehearing.evidence.dto.UploadUrlDtos.UploadUrlRequest;
+import com.simplehearing.evidence.dto.UploadUrlDtos.UploadUrlResponse;
+import com.simplehearing.evidence.entity.EvidenceUpload;
 import com.simplehearing.evidence.entity.GoalEvidence;
 import com.simplehearing.evidence.enums.EvidenceKind;
 import com.simplehearing.evidence.enums.EvidenceReason;
+import com.simplehearing.evidence.repository.EvidenceUploadRepository;
 import com.simplehearing.evidence.repository.GoalEvidenceRepository;
 import com.simplehearing.evidence.service.EvidenceService;
 import com.simplehearing.iep.entity.IEPGoal;
@@ -36,6 +40,8 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -55,6 +61,7 @@ public class EvidenceController {
     private final IEPPlanRepository planRepository;
     private final TherapySessionRepository sessionRepository;
     private final StorageService storageService;
+    private final EvidenceUploadRepository uploadRepository;
 
     public EvidenceController(GoalEvidenceRepository evidenceRepository,
                               EvidenceService evidenceService,
@@ -64,7 +71,9 @@ public class EvidenceController {
                               IEPGoalRepository goalRepository,
                               IEPPlanRepository planRepository,
                               TherapySessionRepository sessionRepository,
-                              StorageService storageService) {
+                              StorageService storageService,
+                              EvidenceUploadRepository uploadRepository) {
+        this.uploadRepository = uploadRepository;
         this.evidenceRepository = evidenceRepository;
         this.evidenceService = evidenceService;
         this.patientRepository = patientRepository;
@@ -136,17 +145,7 @@ public class EvidenceController {
         if (file == null || file.isEmpty()) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Choose a video to upload");
         }
-        if (file.getContentType() == null || !file.getContentType().startsWith("video/")) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Evidence must be a video file");
-        }
-        if (file.getSize() > rules.maxVideoMb() * MB) {
-            throw new ApiException(HttpStatus.BAD_REQUEST,
-                    "Video is too large — the limit is " + rules.maxVideoMb() + " MB");
-        }
-        if (durationSeconds != null && durationSeconds > rules.maxVideoSeconds()) {
-            throw new ApiException(HttpStatus.BAD_REQUEST,
-                    "Video is too long — the limit is " + rules.maxVideoSeconds() + " seconds");
-        }
+        checkVideoRules(file.getContentType(), file.getSize(), durationSeconds, rules);
 
         GoalEvidence e = newEvidence(patient, goalId, sessionId, principal);
         e.setKind(EvidenceKind.VIDEO);
@@ -158,6 +157,91 @@ public class EvidenceController {
         e.setNote(StringUtils.hasText(note) ? note.trim() : null);
 
         GoalEvidence saved = evidenceRepository.save(e);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(evidenceService.toResponses(List.of(saved)).get(0)));
+    }
+
+    // ── Direct-to-storage upload ─────────────────────────────────────────────
+
+    /** How long an upload link stays valid — generous, because the whole point is slow connections. */
+    private static final Duration UPLOAD_LINK_VALID = Duration.ofMinutes(30);
+
+    @Operation(summary = "Get a signed link to upload a video straight to storage (the file never passes through this server)")
+    @PostMapping("/patients/{patientId}/evidence/upload-url")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST')")
+    public ResponseEntity<ApiResponse<UploadUrlResponse>> uploadUrl(
+            @PathVariable UUID patientId,
+            @Valid @RequestBody UploadUrlRequest body,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        Patient patient = requireAccessible(patientId, principal);
+        checkVideoRules(body.contentType(), body.sizeBytes(), body.durationSeconds(),
+                evidenceService.settings(principal.getOrgId()));
+        newEvidence(patient, body.goalId(), body.sessionId(), principal);   // validates the goal and session belong to this child
+
+        StorageService.DirectUpload direct;
+        try {
+            direct = storageService.prepareDirectUpload("goal-evidence/" + patientId, body.fileName(),
+                    body.contentType(), body.sizeBytes(), UPLOAD_LINK_VALID);
+        } catch (UnsupportedOperationException e) {
+            throw new ApiException(HttpStatus.NOT_IMPLEMENTED, "Direct uploads aren't available — upload through the server instead");
+        }
+
+        EvidenceUpload up = new EvidenceUpload();
+        up.setOrgId(principal.getOrgId());
+        up.setPatientId(patientId);
+        up.setUploadedBy(principal.getId());
+        up.setGoalId(body.goalId());
+        up.setSessionId(body.sessionId());
+        up.setStoredUrl(direct.storedUrl());
+        up.setFileName(body.fileName());
+        up.setContentType(body.contentType());
+        up.setSizeBytes(body.sizeBytes());
+        up.setDurationSeconds(body.durationSeconds());
+        up.setNote(StringUtils.hasText(body.note()) ? body.note().trim() : null);
+        up.setExpiresAt(Instant.now().plus(UPLOAD_LINK_VALID));
+        EvidenceUpload saved = uploadRepository.save(up);
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(new UploadUrlResponse(
+                saved.getId(), direct.uploadUrl(), direct.headers(), (int) UPLOAD_LINK_VALID.toSeconds())));
+    }
+
+    @Operation(summary = "Confirm a direct upload finished — checks the stored file, then registers it as evidence")
+    @PostMapping("/patients/{patientId}/evidence/uploads/{uploadId}/complete")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST')")
+    public ResponseEntity<ApiResponse<EvidenceResponse>> completeUpload(
+            @PathVariable UUID patientId,
+            @PathVariable UUID uploadId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        Patient patient = requireAccessible(patientId, principal);
+        EvidenceUpload up = uploadRepository.findByIdAndOrgIdAndPatientId(uploadId, principal.getOrgId(), patientId)
+                .filter(u -> u.getUploadedBy().equals(principal.getId()))
+                .orElseThrow(() -> new ResourceNotFoundException("Upload not found — it may already have been completed or have expired"));
+
+        java.util.OptionalLong stored = storageService.storedSize(up.getStoredUrl());
+        if (stored.isEmpty()) {
+            // Not there yet: keep the record so the client can finish sending and call this again.
+            throw new ApiException(HttpStatus.CONFLICT, "The video hasn't finished uploading yet — try again");
+        }
+        EvidenceSettings rules = evidenceService.settings(principal.getOrgId());
+        if (stored.getAsLong() != up.getSizeBytes() || stored.getAsLong() > rules.maxVideoMb() * MB) {
+            storageService.delete(up.getStoredUrl());
+            uploadRepository.delete(up);
+            throw new ApiException(HttpStatus.BAD_REQUEST, "The uploaded video doesn't match what was approved — please upload it again");
+        }
+
+        GoalEvidence e = newEvidence(patient, up.getGoalId(), up.getSessionId(), principal);
+        e.setKind(EvidenceKind.VIDEO);
+        e.setFileUrl(up.getStoredUrl());
+        e.setFileName(up.getFileName());
+        e.setContentType(up.getContentType());
+        e.setFileSizeBytes(up.getSizeBytes());
+        e.setDurationSeconds(up.getDurationSeconds());
+        e.setNote(up.getNote());
+        GoalEvidence saved = evidenceRepository.save(e);
+        uploadRepository.delete(up);
+
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(evidenceService.toResponses(List.of(saved)).get(0)));
     }
@@ -213,6 +297,19 @@ public class EvidenceController {
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
+
+    /** The org's rules for a video: it must be a video, and within the size and length limits. */
+    private void checkVideoRules(String contentType, long sizeBytes, Integer durationSeconds, EvidenceSettings rules) {
+        if (contentType == null || !contentType.startsWith("video/")) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Evidence must be a video file");
+        }
+        if (sizeBytes > rules.maxVideoMb() * MB) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Video is too large — the limit is " + rules.maxVideoMb() + " MB");
+        }
+        if (durationSeconds != null && durationSeconds > rules.maxVideoSeconds()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Video is too long — the limit is " + rules.maxVideoSeconds() + " seconds");
+        }
+    }
 
     /** Builds the common fields, checking the goal and session really belong to this child. */
     private GoalEvidence newEvidence(Patient patient, UUID goalId, UUID sessionId, UserPrincipal principal) {
