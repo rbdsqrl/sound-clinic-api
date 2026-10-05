@@ -225,6 +225,28 @@ public class AnalyticsController {
         return ResponseEntity.ok(ApiResponse.success(evidenceAnalyticsService.report(orgId(principal), from, to)));
     }
 
+    @Operation(summary = "Goal completion and evidence per therapist, month by month (calendar months in the organisation's timezone)")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
+    @GetMapping("/evidence/monthly")
+    public ResponseEntity<ApiResponse<com.simplehearing.evidence.dto.EvidenceBreakdownResponses.Monthly>> evidenceMonthly(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        return ResponseEntity.ok(ApiResponse.success(evidenceAnalyticsService.monthly(orgId(principal), from, to)));
+    }
+
+    @Operation(summary = "Goal completion and evidence per child — with their therapies, active goals and sessions completed")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
+    @GetMapping("/evidence/children")
+    public ResponseEntity<ApiResponse<com.simplehearing.evidence.dto.EvidenceBreakdownResponses.ByChild>> evidenceByChild(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        return ResponseEntity.ok(ApiResponse.success(evidenceAnalyticsService.byChild(orgId(principal), from, to)));
+    }
+
     @Operation(summary = "One row per therapist — cases/activities assigned, activities created, sessions cancelled, IEP plans")
     @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
     @GetMapping("/members")

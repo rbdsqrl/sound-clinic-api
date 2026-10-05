@@ -173,7 +173,7 @@ com.simplehearing
 │   ├── controller/MemberDocumentController.java  # /api/v1/users/{userId}/documents — list/upload/delete; Business Owner + Clinic Head only (HR-sensitive)
 │   ├── dto/MemberDocumentResponse.java
 │   ├── entity/MemberDocument.java                # category, title, file name/url/type/size, notes, uploader
-│   ├── enums/MemberDocumentCategory.java         # IDENTITY_PROOF, QUALIFICATION, CERTIFICATION, EMPLOYMENT_CONTRACT, OTHER
+│   ├── enums/MemberDocumentCategory.java         # IDENTITY_PROOF, QUALIFICATION, CERTIFICATION, OFFER_LETTER, EMPLOYMENT_CONTRACT, JOINING_DETAILS, INDUCTION, OTHER
 │   └── repository/MemberDocumentRepository.java
 │
 ├── evidence/
@@ -232,6 +232,8 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | POST     | `/api/v1/patients/{id}/evidence/cannot-upload` | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST (assigned) | Record why a video couldn't be uploaded (categorised reason; `OTHER` needs text) — lets the goal be completed without one, and shows in analytics |
 | DELETE   | `/api/v1/patients/{id}/evidence/{evidenceId}` | Recorder, or BUSINESS_OWNER/CLINIC_HEAD  | Delete evidence and its stored video |
 | GET      | `/api/v1/analytics/evidence`            | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN       | Goals completed per therapist for a window — with video / couldn't upload / no evidence, compliance %, videos uploaded, and the reasons videos couldn't be uploaded |
+| GET      | `/api/v1/analytics/evidence/monthly`    | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN       | The evidence report per therapist month by month — calendar months in the organisation's timezone, every month in the window zero-filled |
+| GET      | `/api/v1/analytics/evidence/children`   | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN       | The evidence report per child — their therapies (via linked plans), active goals, goals completed with video / couldn't upload / no evidence, videos uploaded, sessions completed |
 | GET      | `/api/v1/dashboard/org-overview`        | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN       | Active/inactive case counts + active/invited member counts for the dashboard's Organisation Overview rings (SQL counts, no row loading) |
 | GET      | `/api/v1/analytics/patients/{id}/progress` | BUSINESS_OWNER, CLINIC_HEAD, PARENT (own child) | Mastery series + per-domain breakdown |
 | GET      | `/api/v1/analytics/patients/{id}/activities` | BUSINESS_OWNER, CLINIC_HEAD, PARENT (own child) | Activity assignment/attempt progress |

@@ -39,4 +39,9 @@ public interface GoalEvidenceRepository extends JpaRepository<GoalEvidence, UUID
     @Query("SELECT e.therapistId, e.reasonCode, COUNT(e) FROM GoalEvidence e WHERE e.orgId = :orgId AND e.kind = com.simplehearing.evidence.enums.EvidenceKind.CANNOT_UPLOAD "
          + "AND e.createdAt >= :from AND e.createdAt < :to GROUP BY e.therapistId, e.reasonCode")
     List<Object[]> countCannotUploadByTherapistAndReason(@Param("orgId") UUID orgId, @Param("from") Instant from, @Param("to") Instant to);
+
+    /** (patientId, count) of videos uploaded in [from, to). */
+    @Query("SELECT e.patientId, COUNT(e) FROM GoalEvidence e WHERE e.orgId = :orgId AND e.kind = com.simplehearing.evidence.enums.EvidenceKind.VIDEO "
+         + "AND e.createdAt >= :from AND e.createdAt < :to GROUP BY e.patientId")
+    List<Object[]> countVideosByPatient(@Param("orgId") UUID orgId, @Param("from") Instant from, @Param("to") Instant to);
 }

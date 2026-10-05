@@ -33,8 +33,13 @@ public interface IEPGoalRepository extends JpaRepository<IEPGoal, UUID> {
     @Query("SELECT p.patientId, COUNT(g) FROM IEPGoal g, IEPPlan p WHERE g.planId = p.id AND g.orgId = :orgId AND p.orgId = :orgId GROUP BY p.patientId")
     List<Object[]> countByPatient(@Param("orgId") UUID orgId);
 
-    /** (goalId, plan's therapistId, goal's assignedTherapistId) of goals completed in [from, to) — monthly completion analytics. */
-    @Query("SELECT g.id, p.therapistId, g.assignedTherapistId FROM IEPGoal g, IEPPlan p WHERE g.planId = p.id AND g.orgId = :orgId "
+    /** (goalId, plan's therapistId, goal's assignedTherapistId, completedAt, patientId, plan's enrollmentId) of goals completed in [from, to). */
+    @Query("SELECT g.id, p.therapistId, g.assignedTherapistId, g.completedAt, p.patientId, p.enrollmentId FROM IEPGoal g, IEPPlan p WHERE g.planId = p.id AND g.orgId = :orgId "
          + "AND g.status = com.simplehearing.iep.enums.IEPGoalStatus.COMPLETED AND g.completedAt >= :from AND g.completedAt < :to")
     List<Object[]> findCompletedBetween(@Param("orgId") UUID orgId, @Param("from") java.time.Instant from, @Param("to") java.time.Instant to);
+
+    /** (patientId, count) of goals not yet completed — a child's active goals. */
+    @Query("SELECT p.patientId, COUNT(g) FROM IEPGoal g, IEPPlan p WHERE g.planId = p.id AND g.orgId = :orgId "
+         + "AND g.status <> com.simplehearing.iep.enums.IEPGoalStatus.COMPLETED GROUP BY p.patientId")
+    List<Object[]> countActiveByPatient(@Param("orgId") UUID orgId);
 }
