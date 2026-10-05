@@ -15,6 +15,10 @@ import com.simplehearing.iep.repository.IEPGoalRepository;
 import com.simplehearing.iep.repository.IEPPlanRepository;
 import com.simplehearing.patient.entity.Patient;
 import com.simplehearing.patient.repository.PatientRepository;
+import com.simplehearing.enrollment.entity.Enrollment;
+import com.simplehearing.enrollment.enums.EnrollmentStatus;
+import com.simplehearing.enrollment.repository.EnrollmentRepository;
+import com.simplehearing.evidence.service.EvidenceService;
 import com.simplehearing.user.entity.User;
 import com.simplehearing.user.enums.Role;
 import com.simplehearing.user.repository.UserRepository;
@@ -23,6 +27,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -34,17 +39,23 @@ public class IEPService {
     private final IEPGoalProgressRepository progressRepository;
     private final UserRepository userRepository;
     private final PatientRepository patientRepository;
+    private final EnrollmentRepository enrollmentRepository;
+    private final EvidenceService evidenceService;
 
     public IEPService(IEPPlanRepository planRepository,
                       IEPGoalRepository goalRepository,
                       IEPGoalProgressRepository progressRepository,
                       UserRepository userRepository,
-                      PatientRepository patientRepository) {
+                      PatientRepository patientRepository,
+                      EnrollmentRepository enrollmentRepository,
+                      EvidenceService evidenceService) {
         this.planRepository = planRepository;
         this.goalRepository = goalRepository;
         this.progressRepository = progressRepository;
         this.userRepository = userRepository;
         this.patientRepository = patientRepository;
+        this.enrollmentRepository = enrollmentRepository;
+        this.evidenceService = evidenceService;
     }
 
     // ── List plans for a patient ──────────────────────────────────────────────
@@ -112,7 +123,7 @@ public class IEPService {
         plan.setEndDate(req.endDate());
         plan.setStatus(IEPPlanStatus.ACTIVE);
         plan.setTags(joinTags(req.tags()));
-        plan.setEnrollmentId(req.enrollmentId());
+        plan.setEnrollmentId(validatedEnrollmentId(req.enrollmentId(), patientId, principal.getOrgId()));
 
         IEPPlan saved = planRepository.save(plan);
 
@@ -139,6 +150,21 @@ public class IEPService {
         return IEPPlanResponse.from(saved, therapistName, goalResponses, completedGoals);
     }
 
+    /**
+     * A plan may be linked to one of the child's ongoing therapies (optional). Null passes through;
+     * otherwise the therapy must be this child's, in this org, and still running.
+     */
+    private UUID validatedEnrollmentId(UUID enrollmentId, UUID patientId, UUID orgId) {
+        if (enrollmentId == null) return null;
+        Enrollment enrollment = enrollmentRepository.findById(enrollmentId)
+                .filter(e -> orgId.equals(e.getOrgId()) && patientId.equals(e.getPatientId()))
+                .orElseThrow(() -> new ApiException(HttpStatus.BAD_REQUEST, "That therapy doesn't belong to this child"));
+        if (enrollment.getStatus() != EnrollmentStatus.ACTIVE) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Only an ongoing therapy can be linked to an IEP plan");
+        }
+        return enrollment.getId();
+    }
+
     // ── Update plan ───────────────────────────────────────────────────────────
 
     @Transactional
@@ -151,6 +177,11 @@ public class IEPService {
         if (req.endDate() != null) plan.setEndDate(req.endDate());
         if (req.tags() != null) plan.setTags(joinTags(req.tags()));
         if (req.status() != null) plan.setStatus(req.status());
+        if (Boolean.TRUE.equals(req.unlinkEnrollment())) {
+            plan.setEnrollmentId(null);
+        } else if (req.enrollmentId() != null) {
+            plan.setEnrollmentId(validatedEnrollmentId(req.enrollmentId(), plan.getPatientId(), principal.getOrgId()));
+        }
         if (req.therapistId() != null) {
             Role role = principal.getUser().getRole();
             if (role != Role.BUSINESS_OWNER && role != Role.CLINIC_HEAD) {
@@ -195,6 +226,7 @@ public class IEPService {
         for (IEPGoal goal : goals) {
             List<IEPGoalProgress> progressList = progressRepository.findByGoalIdOrderBySessionDateDesc(goal.getId());
             progressRepository.deleteAll(progressList);
+            evidenceService.deleteForGoal(goal.getId());
         }
         goalRepository.deleteAll(goals);
         planRepository.delete(plan);
@@ -226,7 +258,14 @@ public class IEPService {
         if (req.baseline() != null) goal.setBaseline(req.baseline());
         if (req.targetCriteria() != null) goal.setTargetCriteria(req.targetCriteria());
         if (req.targetDate() != null) goal.setTargetDate(req.targetDate());
-        if (req.status() != null) goal.setStatus(req.status());
+        if (req.status() != null) {
+            boolean completing = req.status() == IEPGoalStatus.COMPLETED && goal.getStatus() != IEPGoalStatus.COMPLETED;
+            // Completing a goal needs its video evidence (or a recorded reason) per the org's rules.
+            if (completing) evidenceService.assertGoalSatisfied(goal, principal.getOrgId());
+            goal.setStatus(req.status());
+            if (completing) goal.setCompletedAt(Instant.now());
+            else if (req.status() != IEPGoalStatus.COMPLETED) goal.setCompletedAt(null);
+        }
         // empty string clears the tag; null means "don't change"
         if (req.progressTag() != null) goal.setProgressTag(req.progressTag().isBlank() ? null : req.progressTag());
 
@@ -251,6 +290,7 @@ public class IEPService {
 
         List<IEPGoalProgress> progressList = progressRepository.findByGoalIdOrderBySessionDateDesc(goalId);
         progressRepository.deleteAll(progressList);
+        evidenceService.deleteForGoal(goalId);
         goalRepository.delete(goal);
     }
 

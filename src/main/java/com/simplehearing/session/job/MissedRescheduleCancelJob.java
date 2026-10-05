@@ -1,6 +1,8 @@
 package com.simplehearing.session.job;
 
 import com.simplehearing.session.entity.TherapySession;
+import com.simplehearing.session.enums.SessionActivityType;
+import com.simplehearing.session.service.SessionActivityService;
 import com.simplehearing.session.enums.TherapySessionStatus;
 import com.simplehearing.session.repository.TherapySessionRepository;
 import org.slf4j.Logger;
@@ -25,9 +27,12 @@ public class MissedRescheduleCancelJob {
     private static final Logger log = LoggerFactory.getLogger(MissedRescheduleCancelJob.class);
 
     private final TherapySessionRepository sessionRepository;
+    private final SessionActivityService activityService;
 
-    public MissedRescheduleCancelJob(TherapySessionRepository sessionRepository) {
+    public MissedRescheduleCancelJob(TherapySessionRepository sessionRepository,
+                                     SessionActivityService activityService) {
         this.sessionRepository = sessionRepository;
+        this.activityService = activityService;
     }
 
     @Scheduled(cron = "0 20 0 * * *")
@@ -41,5 +46,8 @@ public class MissedRescheduleCancelJob {
         log.info("Auto-cancelling {} PENDING_RESCHEDULE session(s) whose date has passed unaddressed", missed.size());
         missed.forEach(s -> s.setStatus(TherapySessionStatus.CANCELLED));
         sessionRepository.saveAll(missed);
+        missed.forEach(s -> activityService.record(s, null, SessionActivityType.STATUS_CHANGED,
+                "Automatically cancelled — the reschedule wasn't actioned before the session date",
+                List.of(SessionActivityService.change("Status", "Pending reschedule", "Cancelled"))));
     }
 }

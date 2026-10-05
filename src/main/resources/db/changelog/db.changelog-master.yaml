@@ -347,3 +347,12 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/116-create-member-documents.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/117-session-activity-events.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/118-widen-session-status.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/119-goal-video-evidence.sql
+      relativeToChangelogFile: false

@@ -57,16 +57,19 @@ public class AnalyticsController {
     private final PatientParentRepository patientParentRepository;
     private final EnrollmentRepository enrollmentRepository;
     private final SuccessCriteriaService successCriteriaService;
+    private final com.simplehearing.evidence.service.EvidenceAnalyticsService evidenceAnalyticsService;
 
     public AnalyticsController(
             AnalyticsService analyticsService,
             PatientParentRepository patientParentRepository,
             EnrollmentRepository enrollmentRepository,
-            SuccessCriteriaService successCriteriaService) {
+            SuccessCriteriaService successCriteriaService,
+            com.simplehearing.evidence.service.EvidenceAnalyticsService evidenceAnalyticsService) {
         this.analyticsService = analyticsService;
         this.patientParentRepository = patientParentRepository;
         this.enrollmentRepository = enrollmentRepository;
         this.successCriteriaService = successCriteriaService;
+        this.evidenceAnalyticsService = evidenceAnalyticsService;
     }
 
     @Operation(summary = "Progress series for one patient, with per-domain breakdown")
@@ -209,6 +212,17 @@ public class AnalyticsController {
 
         List<CaseTrendResponse> data = analyticsService.casesTrends(orgId(principal), granularity, from, to, domain);
         return ResponseEntity.ok(ApiResponse.success(data));
+    }
+
+    @Operation(summary = "Goal completion and video-evidence compliance per therapist — includes the reasons videos couldn't be uploaded")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
+    @GetMapping("/evidence")
+    public ResponseEntity<ApiResponse<com.simplehearing.evidence.dto.EvidenceAnalyticsResponse>> evidence(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        return ResponseEntity.ok(ApiResponse.success(evidenceAnalyticsService.report(orgId(principal), from, to)));
     }
 
     @Operation(summary = "One row per therapist — cases/activities assigned, activities created, sessions cancelled, IEP plans")

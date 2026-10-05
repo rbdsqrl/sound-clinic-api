@@ -70,6 +70,16 @@ public class Organisation {
     @Column(name = "require_all_enrollments_for_discharge", nullable = false)
     private boolean requireAllEnrollmentsForDischarge = true;
 
+    /** Goal video evidence rules. 0 videos required = evidence is optional. */
+    @Column(name = "evidence_videos_required", nullable = false)
+    private int evidenceVideosRequired = 1;
+
+    @Column(name = "evidence_max_video_mb", nullable = false)
+    private int evidenceMaxVideoMb = 50;
+
+    @Column(name = "evidence_max_video_seconds", nullable = false)
+    private int evidenceMaxVideoSeconds = 120;
+
     /** Days of the week autoscheduling (therapy sessions, review meetings) always skips — same treatment as public holidays. Ad-hoc sessions are unaffected. */
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "organisation_weekly_off_days", joinColumns = @JoinColumn(name = "organisation_id"))
@@ -143,6 +153,12 @@ public class Organisation {
     public String getAiApiKey() { return aiApiKey; }
     public void setAiApiKey(String aiApiKey) { this.aiApiKey = aiApiKey; }
 
+    public int getEvidenceVideosRequired() { return evidenceVideosRequired; }
+    public void setEvidenceVideosRequired(int v) { this.evidenceVideosRequired = v; }
+    public int getEvidenceMaxVideoMb() { return evidenceMaxVideoMb; }
+    public void setEvidenceMaxVideoMb(int v) { this.evidenceMaxVideoMb = v; }
+    public int getEvidenceMaxVideoSeconds() { return evidenceMaxVideoSeconds; }
+    public void setEvidenceMaxVideoSeconds(int v) { this.evidenceMaxVideoSeconds = v; }
     public int getGoalMasteryThresholdPct() { return goalMasteryThresholdPct; }
     public void setGoalMasteryThresholdPct(int goalMasteryThresholdPct) { this.goalMasteryThresholdPct = goalMasteryThresholdPct; }
 

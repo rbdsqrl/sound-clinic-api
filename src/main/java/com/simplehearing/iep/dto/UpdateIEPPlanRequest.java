@@ -13,5 +13,9 @@ public record UpdateIEPPlanRequest(
         List<String> tags,
         IEPPlanStatus status,
         /** Assign/reassign the plan's therapist. Only a Business Owner or Clinic Head may set this. */
-        UUID therapistId
+        UUID therapistId,
+        /** Link the plan to one of the child's ongoing therapies. */
+        UUID enrollmentId,
+        /** True removes the plan's therapy link (enrollmentId is ignored when this is set). */
+        Boolean unlinkEnrollment
 ) {}

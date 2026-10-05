@@ -1,6 +1,7 @@
 package com.simplehearing.controller;
 
 import com.simplehearing.auth.security.TokenService;
+import com.simplehearing.common.activity.RequestActivityTracker;
 import com.simplehearing.config.SecurityConfig;
 import com.simplehearing.user.repository.UserRepository;
 import org.junit.jupiter.api.Test;
@@ -14,6 +15,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.hamcrest.Matchers.hasKey;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -42,6 +45,12 @@ class HealthControllerTest {
 
     @MockBean
     private JdbcTemplate jdbcTemplate;
+
+    // ActivityTrackingFilter (a Filter @Component, so WebMvcTest loads it) and HealthController both
+    // take this; it's a plain @Component the slice doesn't scan. A mock reports "no recent activity",
+    // so /health/db runs its query unless a test says otherwise.
+    @MockBean
+    private RequestActivityTracker activityTracker;
 
     @Autowired
     private MockMvc mockMvc;
@@ -103,6 +112,18 @@ class HealthControllerTest {
             .andExpect(jsonPath("$.status", is("UP")))
             .andExpect(jsonPath("$.component", is("database")))
             .andExpect(jsonPath("$", hasKey("timestamp")));
+    }
+
+    @Test
+    void testHealthDbEndpoint_SkipsTheQueryWhenRealTrafficAlreadyKeptTheDbWarm() throws Exception {
+        when(activityTracker.hasRecentActivity(any())).thenReturn(true);
+
+        mockMvc.perform(get("/health/db"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status", is("UP")))
+            .andExpect(jsonPath("$", hasKey("note")));
+
+        verify(jdbcTemplate, never()).queryForObject("SELECT 1", Integer.class);
     }
 
     @Test

@@ -32,4 +32,9 @@ public interface IEPGoalRepository extends JpaRepository<IEPGoal, UUID> {
     /** Per-patient goal count across every plan in the org — the Cases tab's "LT Goals" column. */
     @Query("SELECT p.patientId, COUNT(g) FROM IEPGoal g, IEPPlan p WHERE g.planId = p.id AND g.orgId = :orgId AND p.orgId = :orgId GROUP BY p.patientId")
     List<Object[]> countByPatient(@Param("orgId") UUID orgId);
+
+    /** (goalId, plan's therapistId, goal's assignedTherapistId) of goals completed in [from, to) — monthly completion analytics. */
+    @Query("SELECT g.id, p.therapistId, g.assignedTherapistId FROM IEPGoal g, IEPPlan p WHERE g.planId = p.id AND g.orgId = :orgId "
+         + "AND g.status = com.simplehearing.iep.enums.IEPGoalStatus.COMPLETED AND g.completedAt >= :from AND g.completedAt < :to")
+    List<Object[]> findCompletedBetween(@Param("orgId") UUID orgId, @Param("from") java.time.Instant from, @Param("to") java.time.Instant to);
 }

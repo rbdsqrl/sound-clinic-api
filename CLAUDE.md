@@ -176,6 +176,14 @@ com.simplehearing
 │   ├── enums/MemberDocumentCategory.java         # IDENTITY_PROOF, QUALIFICATION, CERTIFICATION, EMPLOYMENT_CONTRACT, OTHER
 │   └── repository/MemberDocumentRepository.java
 │
+├── evidence/
+│   ├── controller/EvidenceController.java     # /api/v1/patients/{id}/evidence + /organisation/evidence-settings
+│   ├── dto/                                   # EvidenceResponse, CannotUploadRequest, EvidenceSettings, EvidenceAnalyticsResponse
+│   ├── entity/GoalEvidence.java               # a VIDEO file or a CANNOT_UPLOAD reason, linked to child + optional goal/session/therapy
+│   ├── enums/                                 # EvidenceKind, EvidenceReason
+│   ├── repository/GoalEvidenceRepository.java
+│   └── service/                               # EvidenceService (settings + the goal-completion rule), EvidenceAnalyticsService
+│
 ├── sharedmedia/
 │   ├── controller/SharedMediaController.java  # /api/v1/patients/{patientId}/shared-media — list/upload/delete
 │   ├── dto/SharedMediaResponse.java            # id, direction, fileUrl (presigned), note, uploader name/role, createdAt
@@ -217,6 +225,13 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | GET      | `/api/v1/users/{id}/documents`          | BUSINESS_OWNER, CLINIC_HEAD                     | List the documents on a staff member's record (ID proof, qualifications, contracts…) with short-lived download links |
 | POST     | `/api/v1/users/{id}/documents`          | BUSINESS_OWNER, CLINIC_HEAD                     | Add a document — multipart `file` + `category` (+ optional `title`, `notes`); PDF/Office/text/image only, 25 MB max |
 | DELETE   | `/api/v1/users/{id}/documents/{documentId}` | BUSINESS_OWNER, CLINIC_HEAD                 | Remove a document and its stored file |
+| GET      | `/api/v1/organisation/evidence-settings` | All staff                                      | The org's goal video-evidence rules — videos required per goal (0 = optional), max video MB, max video seconds |
+| PUT      | `/api/v1/organisation/evidence-settings` | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN      | Update those rules |
+| GET      | `/api/v1/patients/{id}/evidence`        | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST (assigned), PARENT (own child) | A child's video evidence, newest first (`?goalId=` to filter); parents see videos only, never the "couldn't upload" records |
+| POST     | `/api/v1/patients/{id}/evidence`        | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST (assigned) | Upload a video (multipart `file`, optional `goalId`, `sessionId`, `note`, `durationSeconds`) — checked against the org's size/length limits; goal and session are optional so evidence can be ad hoc |
+| POST     | `/api/v1/patients/{id}/evidence/cannot-upload` | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST (assigned) | Record why a video couldn't be uploaded (categorised reason; `OTHER` needs text) — lets the goal be completed without one, and shows in analytics |
+| DELETE   | `/api/v1/patients/{id}/evidence/{evidenceId}` | Recorder, or BUSINESS_OWNER/CLINIC_HEAD  | Delete evidence and its stored video |
+| GET      | `/api/v1/analytics/evidence`            | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN       | Goals completed per therapist for a window — with video / couldn't upload / no evidence, compliance %, videos uploaded, and the reasons videos couldn't be uploaded |
 | GET      | `/api/v1/dashboard/org-overview`        | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN       | Active/inactive case counts + active/invited member counts for the dashboard's Organisation Overview rings (SQL counts, no row loading) |
 | GET      | `/api/v1/analytics/patients/{id}/progress` | BUSINESS_OWNER, CLINIC_HEAD, PARENT (own child) | Mastery series + per-domain breakdown |
 | GET      | `/api/v1/analytics/patients/{id}/activities` | BUSINESS_OWNER, CLINIC_HEAD, PARENT (own child) | Activity assignment/attempt progress |
@@ -262,6 +277,7 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | PATCH    | `/api/v1/enrollment-concerns/{id}/acknowledge` | All staff (own caseload for THERAPIST)     | Acknowledge a concern |
 | PATCH    | `/api/v1/enrollment-concerns/{id}/resolve` | All staff (own caseload for THERAPIST)         | Resolve a concern |
 | POST     | `/api/v1/therapy-sessions/ad-hoc`       | BUSINESS_OWNER, CLINIC_HEAD                     | Book a one-off session from the calendar |
+| GET      | `/api/v1/therapy-sessions/{id}/activity` | THERAPIST, CLINIC_HEAD, BUSINESS_OWNER, OFFICE_ADMIN | A session's Activity Log, newest first — status changes (completed, cancelled, no show), cancellation requests/approvals, reschedules, scores given, notes saved/edited, checklist saves and attachments, each with before → after values; includes older notes-edit history (`legacy`) |
 | GET      | `/api/v1/therapy-sessions/{id}/feedback` | THERAPIST, CLINIC_HEAD, BUSINESS_OWNER | Session feedback checklist template (per the session's program) + this session's answers |
 | PUT      | `/api/v1/therapy-sessions/{id}/feedback` | THERAPIST, CLINIC_HEAD, BUSINESS_OWNER | Save this session's feedback checklist answers |
 | GET      | `/api/v1/programs/{id}/feedback-template` | BUSINESS_OWNER, CLINIC_HEAD                    | Get a program's session feedback checklist template |
@@ -391,6 +407,9 @@ Master file: `db.changelog-master.yaml` — lists migrations in order.
 | 111-review-session-slots.sql         | `organisation_review_slot_times` — the org-wide default daily grid a Review Meeting is booked into (a configurable list of times, as many as wanted); same collection-table pattern as `organisation_weekly_off_days` |
 | 112-clinic-head-review-slots.sql     | `user_review_slot_times` — a CLINIC_HEAD's own grid, overriding the org default when set (no rows = inherits the org default) |
 | 116-create-member-documents.sql      | `member_documents` — files kept on a staff member's record (category, title, stored file reference, notes, uploader) |
+| 117-session-activity-events.sql      | `session_activity_events` — one row per thing that happened to a session (type, summary, actor, before/after JSON); powers the Activity Log |
+| 118-widen-session-status.sql         | Widens `therapy_sessions.status` from VARCHAR(20) when still too narrow — `CANCELLATION_REQUESTED` is 22 chars and could not be stored |
+| 119-goal-video-evidence.sql          | `goal_evidence` (video or can't-upload reason per child/goal/session/therapy), `iep_goals.completed_at` (backfilled), and `organisations.evidence_videos_required/max_video_mb/max_video_seconds` |
 | 113-phone-uniqueness.sql             | Normalises existing `users.phone` values (digits + leading `+` only) and adds `uq_users_phone` — a second login identity alongside email, so it must be unique too |
 
 **To add a migration:** create `NNN-description.sql` with the Liquibase header, then add it to the master YAML.
@@ -446,6 +465,11 @@ CREATE TABLE ... ;
 ### Caching
 - `@Cacheable` is used only on the org-level analytics service methods (`CacheConfig`); the key must start with `orgId` so one org can never be served another's data, and only immutable response DTOs are cached — never entities.
 - New cached methods need a named cache registered in `CacheConfig.cacheManager()` and, if the result can be large, a case in `CacheConfig.weigh()` so the memory cap stays honest.
+
+### IEP goal completion
+- A goal can only move to COMPLETED once it has the org's required number of videos, or a recorded "couldn't upload" reason (`EvidenceService.assertGoalSatisfied`, called from `IEPService.updateGoal`). Completion stamps `iep_goals.completed_at`; reopening clears it. Deleting a goal or plan removes its evidence files too.
+- An IEP plan can optionally link to one of the child's *ongoing* therapies (`enrollmentId`, validated in `IEPService`); `unlinkEnrollment` removes the link.
+- Evidence endpoints judge access by `principal.getActiveRole()`, not "has the role" — a person who is both a therapist and a parent gets the rules of the hat they're wearing.
 
 ### Multi-Tenancy
 - Every query must filter by `orgId` from `principal.getOrgId()`

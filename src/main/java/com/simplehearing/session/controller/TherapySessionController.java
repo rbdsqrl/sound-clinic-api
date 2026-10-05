@@ -30,7 +30,13 @@ import com.simplehearing.session.dto.SessionAttachmentResponse;
 import com.simplehearing.session.dto.TherapySessionResponse;
 import com.simplehearing.session.dto.UpdateSessionNotesRequest;
 import com.simplehearing.session.dto.UpdateSessionStatusRequest;
+import com.simplehearing.session.dto.SessionActivityResponse;
 import com.simplehearing.session.dto.SessionNotesHistoryResponse;
+import com.simplehearing.session.enums.SessionActivityType;
+import com.simplehearing.session.repository.SessionActivityEventRepository;
+import com.simplehearing.session.service.SessionActivityService;
+import static com.simplehearing.session.service.SessionActivityService.addIfChanged;
+import static com.simplehearing.session.service.SessionActivityService.statusLabel;
 import com.simplehearing.session.entity.SessionAttachment;
 import com.simplehearing.session.entity.SessionNotesHistory;
 import com.simplehearing.session.entity.TherapySession;
@@ -75,6 +81,8 @@ public class TherapySessionController {
     private final UserRepository userRepository;
     private final SessionAttachmentRepository attachmentRepository;
     private final SessionNotesHistoryRepository notesHistoryRepository;
+    private final SessionActivityService activityService;
+    private final SessionActivityEventRepository activityEventRepository;
     private final StorageService storageService;
     private final TherapistPatientRepository therapistPatientRepository;
     private final PatientParentRepository patientParentRepository;
@@ -98,6 +106,8 @@ public class TherapySessionController {
             UserRepository userRepository,
             SessionAttachmentRepository attachmentRepository,
             SessionNotesHistoryRepository notesHistoryRepository,
+            SessionActivityService activityService,
+            SessionActivityEventRepository activityEventRepository,
             StorageService storageService,
             TherapistPatientRepository therapistPatientRepository,
             PatientParentRepository patientParentRepository,
@@ -112,6 +122,8 @@ public class TherapySessionController {
         this.userRepository       = userRepository;
         this.attachmentRepository = attachmentRepository;
         this.notesHistoryRepository = notesHistoryRepository;
+        this.activityService = activityService;
+        this.activityEventRepository = activityEventRepository;
         this.storageService       = storageService;
         this.therapistPatientRepository = therapistPatientRepository;
         this.patientParentRepository = patientParentRepository;
@@ -243,6 +255,9 @@ public class TherapySessionController {
                     "Office Admin can only cancel a session directly, not mark it completed or a no-show");
         }
 
+        TherapySessionStatus previousStatus = session.getStatus();
+        String previousNotes = session.getNotes();
+
         session.setStatus(request.status());
         if (request.notes() != null) session.setNotes(request.notes());
 
@@ -252,6 +267,19 @@ public class TherapySessionController {
         }
 
         TherapySession saved = sessionRepository.save(session);
+
+        var changes = SessionActivityService.list();
+        addIfChanged(changes, "Status", statusLabel(previousStatus), statusLabel(saved.getStatus()));
+        addIfChanged(changes, "Notes", previousNotes, saved.getNotes());
+        if (previousStatus != saved.getStatus() || !changes.isEmpty()) {
+            activityService.record(saved, principal.getId(), SessionActivityType.STATUS_CHANGED,
+                    switch (saved.getStatus()) {
+                        case COMPLETED -> "Marked as completed";
+                        case CANCELLED -> "Session cancelled";
+                        case NO_SHOW   -> "Marked as no show";
+                        default        -> "Status changed to " + statusLabel(saved.getStatus()).toLowerCase();
+                    }, changes);
+        }
         return ResponseEntity.ok(ApiResponse.success(enrich(List.of(saved)).get(0)));
     }
 
@@ -260,8 +288,8 @@ public class TherapySessionController {
     @Operation(
         summary = "Update session feedback, progress report, and notes",
         description = "Editable any time, including well after the session — e.g. amending notes on a "
-                    + "later date. If the session already had any notes content, the values it held right "
-                    + "before this edit are recorded to session_notes_history first."
+                    + "later date. Every change (score given, notes saved or edited, with before/after "
+                    + "values) is recorded to the session's Activity Log."
     )
     @PatchMapping("/{id}/notes")
     @PreAuthorize("hasAnyRole('THERAPIST', 'CLINIC_HEAD', 'BUSINESS_OWNER', 'OFFICE_ADMIN')")
@@ -276,18 +304,21 @@ public class TherapySessionController {
 
         boolean hadPriorContent = session.getFeedback() != null || session.getProgressReport() != null
                 || session.getNotes() != null || session.getPerformanceScore() != null;
-        if (hadPriorContent) {
-            SessionNotesHistory history = new SessionNotesHistory();
-            history.setOrgId(session.getOrgId());
-            history.setSessionId(session.getId());
-            history.setChangedBy(principal.getId());
-            history.setChangedAt(Instant.now());
-            history.setPreviousFeedback(session.getFeedback());
-            history.setPreviousProgressReport(session.getProgressReport());
-            history.setPreviousNotes(session.getNotes());
-            history.setPreviousPerformanceScore(session.getPerformanceScore());
-            notesHistoryRepository.save(history);
+
+        // Before/after of what this save actually changes, for the Activity Log.
+        var changes = SessionActivityService.list();
+        if (request.performanceScore() != null) {
+            addIfChanged(changes, "Performance Score",
+                    session.getPerformanceScore() != null ? session.getPerformanceScore() + "%" : null,
+                    request.performanceScore() + "%");
         }
+        if (request.feedback() != null) {
+            addIfChanged(changes, "Rating",
+                    session.getFeedback() != null ? session.getFeedback() + "/5" : null,
+                    request.feedback().isBlank() ? null : request.feedback() + "/5");
+        }
+        if (request.progressReport() != null) addIfChanged(changes, "Progress Report", session.getProgressReport(), request.progressReport());
+        if (request.notes() != null)          addIfChanged(changes, "Notes", session.getNotes(), request.notes());
 
         if (request.feedback()          != null) session.setFeedback(request.feedback());
         if (request.progressReport()    != null) session.setProgressReport(request.progressReport());
@@ -295,6 +326,12 @@ public class TherapySessionController {
         if (request.performanceScore()  != null) session.setPerformanceScore(request.performanceScore());
 
         TherapySession saved = sessionRepository.save(session);
+
+        if (!changes.isEmpty()) {
+            activityService.record(saved, principal.getId(),
+                    hadPriorContent ? SessionActivityType.NOTES_EDITED : SessionActivityType.NOTES_SAVED,
+                    hadPriorContent ? "Session notes edited" : "Session notes saved", changes);
+        }
         return ResponseEntity.ok(ApiResponse.success(enrich(List.of(saved)).get(0)));
     }
 
@@ -326,6 +363,65 @@ public class TherapySessionController {
                 .toList();
 
         return ResponseEntity.ok(ApiResponse.success(result));
+    }
+
+    @Operation(
+        summary = "A session's Activity Log",
+        description = "Newest first — everything that happened to the session (marked completed, cancelled, "
+                    + "rescheduled, score given, notes saved or edited…) with before/after values. Also "
+                    + "includes the older notes-edit history that predates the event log."
+    )
+    @GetMapping("/{id}/activity")
+    @PreAuthorize("hasAnyRole('THERAPIST', 'CLINIC_HEAD', 'BUSINESS_OWNER', 'OFFICE_ADMIN')")
+    public ResponseEntity<ApiResponse<List<SessionActivityResponse>>> activity(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        TherapySession session = findOwned(id, principal);
+        requireTherapistOwnership(session, principal);
+
+        var events = activityEventRepository.findBySessionIdOrderByCreatedAtDesc(id);
+        var legacy = notesHistoryRepository.findBySessionIdOrderByChangedAtDesc(id);
+
+        Set<UUID> userIds = new java.util.HashSet<>();
+        events.forEach(e -> { if (e.getActorId() != null) userIds.add(e.getActorId()); });
+        legacy.forEach(h -> userIds.add(h.getChangedBy()));
+        Map<UUID, User> users = userRepository.findAllById(userIds).stream()
+                .collect(Collectors.toMap(User::getId, u -> u));
+        java.util.function.Function<UUID, String> nameOf = uid -> {
+            if (uid == null) return "System";
+            User u = users.get(uid);
+            return u != null ? (u.getFirstName() + " " + u.getLastName()).trim() : "Unknown";
+        };
+
+        List<SessionActivityResponse> result = new java.util.ArrayList<>();
+        for (var e : events) {
+            result.add(new SessionActivityResponse(e.getId(), e.getActorId(), nameOf.apply(e.getActorId()),
+                    e.getEventType().name(), e.getSummary(), activityService.parseChanges(e.getChanges()),
+                    false, e.getCreatedAt()));
+        }
+        // Notes edits from before the event log existed: all that was kept is what the notes held
+        // right before the edit, so these show a "was" value and no "now".
+        for (var h : legacy) {
+            var changes = SessionActivityService.list();
+            if (h.getPreviousPerformanceScore() != null) changes.add(SessionActivityService.change("Performance Score", h.getPreviousPerformanceScore() + "%", null));
+            if (h.getPreviousFeedback() != null && !h.getPreviousFeedback().isBlank()) changes.add(SessionActivityService.change("Rating", h.getPreviousFeedback() + "/5", null));
+            if (h.getPreviousProgressReport() != null) changes.add(SessionActivityService.change("Progress Report", h.getPreviousProgressReport(), null));
+            if (h.getPreviousNotes() != null) changes.add(SessionActivityService.change("Notes", h.getPreviousNotes(), null));
+            result.add(new SessionActivityResponse(h.getId(), h.getChangedBy(), nameOf.apply(h.getChangedBy()),
+                    SessionActivityType.NOTES_EDITED.name(), "Session notes edited (earlier version)", changes,
+                    true, h.getChangedAt()));
+        }
+        result.sort(java.util.Comparator.comparing(SessionActivityResponse::createdAt).reversed());
+        return ResponseEntity.ok(ApiResponse.success(result));
+    }
+
+    /** "First Last" for an Activity Log entry, or null when the user can't be found. */
+    private String displayName(UUID userId) {
+        if (userId == null) return null;
+        return userRepository.findById(userId)
+                .map(u -> (u.getFirstName() + " " + u.getLastName()).trim())
+                .orElse(null);
     }
 
     // ── Session feedback checklist (per the session's program) ────────────────
@@ -362,6 +458,8 @@ public class TherapySessionController {
         programFeedbackService.replaceSessionAnswers(session.getId(), request.answers());
         session.setChecklistNotes(request.checklistNotes());
         sessionRepository.save(session);
+        activityService.record(session, principal.getId(), SessionActivityType.CHECKLIST_SAVED,
+                "Feedback checklist saved", List.of());
 
         return ResponseEntity.ok(ApiResponse.success(null));
     }
@@ -404,6 +502,8 @@ public class TherapySessionController {
         LocalDate oldDate = session.getSessionDate();
         LocalTime oldStart = session.getStartTime();
         UUID previousTherapistId = session.getTherapistId();
+        LocalTime oldEnd = session.getEndTime();
+        TherapySessionStatus statusBeforeReschedule = session.getStatus();
 
         if (request.newDate() != null) {
             session.setSessionDate(request.newDate());
@@ -444,6 +544,18 @@ public class TherapySessionController {
         // Counted here rather than derived from status, which is cleared on the next line.
         session.setRescheduleCount(session.getRescheduleCount() + 1);
         TherapySession saved = sessionRepository.save(session);
+
+        var changes = SessionActivityService.list();
+        addIfChanged(changes, "Date", oldDate.toString(), saved.getSessionDate().toString());
+        addIfChanged(changes, "Start Time", oldStart.toString().substring(0, 5), saved.getStartTime().toString().substring(0, 5));
+        if (!java.util.Objects.equals(previousTherapistId, saved.getTherapistId())) {
+            addIfChanged(changes, "Therapist", displayName(previousTherapistId), displayName(saved.getTherapistId()));
+        }
+        addIfChanged(changes, "Status", statusLabel(statusBeforeReschedule), statusLabel(saved.getStatus()));
+        if (request.reason() != null && !request.reason().isBlank()) {
+            changes.add(SessionActivityService.change("Reason", null, request.reason()));
+        }
+        activityService.record(saved, principal.getId(), SessionActivityType.RESCHEDULED, "Session rescheduled", changes);
 
         notifyRescheduled(saved, oldDate, oldStart, previousTherapistId, request.reason());
 
@@ -556,6 +668,11 @@ public class TherapySessionController {
         TherapySession saved = sessionRepository.save(session);
         log.info("Ad-hoc session {} booked for patient {} — countsTowardPlan={}, requiresPayment={}",
                 saved.getId(), saved.getPatientId(), saved.isCountsTowardPlan(), saved.isRequiresPayment());
+        activityService.record(saved, principal.getId(), SessionActivityType.SESSION_CREATED,
+                "Extra session booked",
+                List.of(SessionActivityService.change("Date", null, saved.getSessionDate().toString()),
+                        SessionActivityService.change("Start Time", null, saved.getStartTime().toString().substring(0, 5)),
+                        SessionActivityService.change("Therapist", null, displayName(saved.getTherapistId()))));
 
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(enrich(List.of(saved)).get(0)));
@@ -596,6 +713,9 @@ public class TherapySessionController {
         session.setRescheduleRequestedBy(principal.getId());
 
         TherapySession saved = sessionRepository.save(session);
+        activityService.record(saved, principal.getId(), SessionActivityType.RESCHEDULE_REQUESTED,
+                "Reschedule requested by the family",
+                List.of(SessionActivityService.change("Status", "Scheduled", "Pending reschedule")));
         return ResponseEntity.ok(ApiResponse.success(enrich(List.of(saved)).get(0)));
     }
 
@@ -619,6 +739,9 @@ public class TherapySessionController {
         session.setRescheduleRequestedBy(principal.getId());
 
         TherapySession saved = sessionRepository.save(session);
+        activityService.record(saved, principal.getId(), SessionActivityType.CANCELLATION_REQUESTED,
+                "Cancellation requested",
+                List.of(SessionActivityService.change("Status", "Scheduled", "Cancellation requested")));
         return ResponseEntity.ok(ApiResponse.success(enrich(List.of(saved)).get(0)));
     }
 
@@ -641,6 +764,9 @@ public class TherapySessionController {
         session.setRescheduleRequestedBy(null);
 
         TherapySession saved = sessionRepository.save(session);
+        activityService.record(saved, principal.getId(), SessionActivityType.CANCELLATION_APPROVED,
+                "Cancellation approved — session cancelled",
+                List.of(SessionActivityService.change("Status", "Cancellation requested", "Cancelled")));
         return ResponseEntity.ok(ApiResponse.success(enrich(List.of(saved)).get(0)));
     }
 
@@ -663,6 +789,9 @@ public class TherapySessionController {
         session.setRescheduleRequestedBy(null);
 
         TherapySession saved = sessionRepository.save(session);
+        activityService.record(saved, principal.getId(), SessionActivityType.CANCELLATION_REJECTED,
+                "Cancellation request declined — session stays scheduled",
+                List.of(SessionActivityService.change("Status", "Cancellation requested", "Scheduled")));
         return ResponseEntity.ok(ApiResponse.success(enrich(List.of(saved)).get(0)));
     }
 
@@ -691,6 +820,8 @@ public class TherapySessionController {
         att.setFileSizeBytes(file.getSize());
 
         SessionAttachment saved = attachmentRepository.save(att);
+        activityService.record(session, principal.getId(), SessionActivityType.ATTACHMENT_ADDED,
+                "File attached", List.of(SessionActivityService.change("File", null, saved.getFileName())));
         String presignedUrl = storageService.presign(saved.getFileUrl(), Duration.ofHours(1));
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(SessionAttachmentResponse.from(saved, presignedUrl)));
