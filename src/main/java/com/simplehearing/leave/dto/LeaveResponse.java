@@ -22,8 +22,18 @@ public record LeaveResponse(
         String reviewedByFirstName,
         String reviewedByLastName,
         Instant reviewedAt,
-        Instant createdAt
+        Instant createdAt,
+        UUID categoryId,
+        String categoryName,
+        /** Working days the leave covers (weekly off days and public holidays excluded). Null until enriched. */
+        Integer workingDays
 ) {
+    public LeaveResponse withCategory(String name, Integer days) {
+        return new LeaveResponse(id, therapistId, therapistFirstName, therapistLastName, leaveDate, endDate,
+                leaveType, reason, status, reviewedBy, reviewedByFirstName, reviewedByLastName, reviewedAt,
+                createdAt, categoryId, name, days);
+    }
+
     public static LeaveResponse from(
             Leave leave,
             String therapistFirstName,
@@ -44,7 +54,10 @@ public record LeaveResponse(
                 reviewedByFirstName,
                 reviewedByLastName,
                 leave.getReviewedAt(),
-                leave.getCreatedAt()
+                leave.getCreatedAt(),
+                leave.getCategoryId(),
+                null,
+                null
         );
     }
 }

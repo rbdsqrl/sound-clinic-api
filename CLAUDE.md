@@ -234,6 +234,12 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | GET      | `/api/v1/analytics/evidence`            | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN       | Goals completed per therapist for a window — with video / couldn't upload / no evidence, compliance %, videos uploaded, and the reasons videos couldn't be uploaded |
 | GET      | `/api/v1/analytics/evidence/monthly`    | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN       | The evidence report per therapist month by month — calendar months in the organisation's timezone, every month in the window zero-filled |
 | GET      | `/api/v1/analytics/evidence/children`   | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN       | The evidence report per child — their therapies (via linked plans), active goals, goals completed with video / couldn't upload / no evidence, videos uploaded, sessions completed |
+| GET      | `/api/v1/leave-policy/categories`       | All staff                                       | Active leave categories (Casual, Sick…); `?all=true` (admin roles) includes deactivated ones |
+| POST/PATCH | `/api/v1/leave-policy/categories[/{id}]` | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN    | Add, rename, set/clear the yearly allowance, or (de)activate a category — never deleted, so past leaves keep their label |
+| GET/PUT  | `/api/v1/leave-policy/settings`         | GET all staff; PUT admin roles                  | The month the leave year starts (1 = calendar year, 4 = April–March) |
+| GET      | `/api/v1/leave-policy/my-balances`      | All staff                                       | The caller's allocated / used / pending / remaining working days per category for a leave year |
+| GET      | `/api/v1/leave-policy/balances`         | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN       | Every staff member's balances plus their pending / approved / rejected request counts — therapist-wise leave status |
+| PUT      | `/api/v1/leave-policy/allocations`      | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN       | One person's own allocation for a category in a leave year (overrides the category default); omit `days` to reset |
 | GET      | `/api/v1/dashboard/org-overview`        | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN       | Active/inactive case counts + active/invited member counts for the dashboard's Organisation Overview rings (SQL counts, no row loading) |
 | GET      | `/api/v1/analytics/patients/{id}/progress` | BUSINESS_OWNER, CLINIC_HEAD, PARENT (own child) | Mastery series + per-domain breakdown |
 | GET      | `/api/v1/analytics/patients/{id}/activities` | BUSINESS_OWNER, CLINIC_HEAD, PARENT (own child) | Activity assignment/attempt progress |
@@ -412,6 +418,7 @@ Master file: `db.changelog-master.yaml` — lists migrations in order.
 | 117-session-activity-events.sql      | `session_activity_events` — one row per thing that happened to a session (type, summary, actor, before/after JSON); powers the Activity Log |
 | 118-widen-session-status.sql         | Widens `therapy_sessions.status` from VARCHAR(20) when still too narrow — `CANCELLATION_REQUESTED` is 22 chars and could not be stored |
 | 119-goal-video-evidence.sql          | `goal_evidence` (video or can't-upload reason per child/goal/session/therapy), `iep_goals.completed_at` (backfilled), and `organisations.evidence_videos_required/max_video_mb/max_video_seconds` |
+| 120-leave-policy.sql                 | `leave_categories`, `leave_allocations` (per-person override per leave year), `leaves.category_id`, `organisations.leave_year_start_month` |
 | 113-phone-uniqueness.sql             | Normalises existing `users.phone` values (digits + leading `+` only) and adds `uq_users_phone` — a second login identity alongside email, so it must be unique too |
 
 **To add a migration:** create `NNN-description.sql` with the Liquibase header, then add it to the master YAML.
@@ -472,6 +479,10 @@ CREATE TABLE ... ;
 - A goal can only move to COMPLETED once it has the org's required number of videos, or a recorded "couldn't upload" reason (`EvidenceService.assertGoalSatisfied`, called from `IEPService.updateGoal`). Completion stamps `iep_goals.completed_at`; reopening clears it. Deleting a goal or plan removes its evidence files too.
 - An IEP plan can optionally link to one of the child's *ongoing* therapies (`enrollmentId`, validated in `IEPService`); `unlinkEnrollment` removes the link.
 - Evidence endpoints judge access by `principal.getActiveRole()`, not "has the role" — a person who is both a therapist and a parent gets the rules of the hat they're wearing.
+
+### Leave quotas
+- Leave categories are optional: with none configured, leave is requested/approved with no quota exactly as before. Once any active category exists, a request must name one (`categoryId`) and is rejected (409) if it would exceed that category's allowance for the leave year.
+- Quotas count **working days** — weekly off days and public holidays inside a range are excluded (`LeavePolicyService`). A request spanning two leave years draws on each year's balance for its own days. A person's own allocation (`leave_allocations`) overrides the category default; a null allowance means no limit.
 
 ### Multi-Tenancy
 - Every query must filter by `orgId` from `principal.getOrgId()`

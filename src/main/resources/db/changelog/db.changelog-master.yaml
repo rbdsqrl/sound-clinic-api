@@ -356,3 +356,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/119-goal-video-evidence.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/120-leave-policy.sql
+      relativeToChangelogFile: false

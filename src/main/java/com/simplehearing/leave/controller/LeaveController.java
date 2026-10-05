@@ -46,10 +46,13 @@ public class LeaveController {
     private final EmailService emailService;
     private final TherapySessionRepository sessionRepository;
     private final OrganisationRepository organisationRepository;
+    private final com.simplehearing.leave.service.LeavePolicyService leavePolicy;
 
     public LeaveController(LeaveRepository leaveRepository, UserRepository userRepository,
                            EmailService emailService, TherapySessionRepository sessionRepository,
-                           OrganisationRepository organisationRepository) {
+                           OrganisationRepository organisationRepository,
+                           com.simplehearing.leave.service.LeavePolicyService leavePolicy) {
+        this.leavePolicy = leavePolicy;
         this.leaveRepository = leaveRepository;
         this.userRepository = userRepository;
         this.emailService = emailService;
@@ -71,7 +74,26 @@ public class LeaveController {
             throw new ApiException(HttpStatus.BAD_REQUEST, "End date can't be before the start date");
         }
 
+        // When the organisation has leave categories, the request must name one and fit within its yearly
+        // allowance; with no categories configured leave works as it always did.
+        UUID categoryId = null;
+        var categories = leavePolicy.activeCategories(principal.getOrgId());
+        if (!categories.isEmpty()) {
+            if (request.categoryId() == null) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "Choose a leave type");
+            }
+            var category = categories.stream().filter(c -> c.getId().equals(request.categoryId())).findFirst()
+                    .orElseThrow(() -> new ApiException(HttpStatus.BAD_REQUEST, "That leave type isn't available"));
+            if (leavePolicy.workingDays(principal.getOrgId(), request.leaveDate(), endDate) == 0) {
+                throw new ApiException(HttpStatus.BAD_REQUEST,
+                        "Those dates have no working days — they're all weekly off days or public holidays");
+            }
+            leavePolicy.assertWithinBalance(principal.getOrgId(), principal.getId(), category, request.leaveDate(), endDate);
+            categoryId = category.getId();
+        }
+
         Leave leave = new Leave();
+        leave.setCategoryId(categoryId);
         leave.setOrgId(principal.getOrgId());
         leave.setTherapistId(principal.getId());
         leave.setLeaveDate(request.leaveDate());
@@ -86,7 +108,8 @@ public class LeaveController {
                 therapist.getFirstName(), therapist.getLastName(),
                 null, null);
 
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(leavePolicy.enrich(principal.getOrgId(), List.of(response)).get(0)));
     }
 
     // ── Own leaves (all roles) ────────────────────────────────────────────────
@@ -119,7 +142,7 @@ public class LeaveController {
                     reviewer != null ? reviewer.getLastName()  : null);
         }).toList();
 
-        return ResponseEntity.ok(ApiResponse.success(result));
+        return ResponseEntity.ok(ApiResponse.success(leavePolicy.enrich(principal.getOrgId(), result)));
     }
 
     // ── List leaves (admin management view) ──────────────────────────────────
@@ -168,7 +191,7 @@ public class LeaveController {
                     reviewer  != null ? reviewer.getLastName()   : null);
         }).toList();
 
-        return ResponseEntity.ok(ApiResponse.success(result));
+        return ResponseEntity.ok(ApiResponse.success(leavePolicy.enrich(principal.getOrgId(), result)));
     }
 
     // ── Review a leave request (approve / reject) ─────────────────────────────
@@ -247,11 +270,12 @@ public class LeaveController {
             );
         }
 
-        return ResponseEntity.ok(ApiResponse.success(LeaveResponse.from(saved,
+        LeaveResponse reviewed = LeaveResponse.from(saved,
                 therapist != null ? therapist.getFirstName() : "",
                 therapist != null ? therapist.getLastName()  : "",
                 reviewer  != null ? reviewer.getFirstName()  : null,
-                reviewer  != null ? reviewer.getLastName()   : null)));
+                reviewer  != null ? reviewer.getLastName()   : null);
+        return ResponseEntity.ok(ApiResponse.success(leavePolicy.enrich(principal.getOrgId(), List.of(reviewed)).get(0)));
     }
 
     // ── Cancel own pending leave ───────────────────────────────────────────────

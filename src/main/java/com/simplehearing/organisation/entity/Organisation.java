@@ -70,6 +70,10 @@ public class Organisation {
     @Column(name = "require_all_enrollments_for_discharge", nullable = false)
     private boolean requireAllEnrollmentsForDischarge = true;
 
+    /** The month (1-12) the leave year starts — 1 for a calendar year, 4 for April-March. */
+    @Column(name = "leave_year_start_month", nullable = false)
+    private int leaveYearStartMonth = 1;
+
     /** Goal video evidence rules. 0 videos required = evidence is optional. */
     @Column(name = "evidence_videos_required", nullable = false)
     private int evidenceVideosRequired = 1;
@@ -153,6 +157,8 @@ public class Organisation {
     public String getAiApiKey() { return aiApiKey; }
     public void setAiApiKey(String aiApiKey) { this.aiApiKey = aiApiKey; }
 
+    public int getLeaveYearStartMonth() { return leaveYearStartMonth; }
+    public void setLeaveYearStartMonth(int v) { this.leaveYearStartMonth = v; }
     public int getEvidenceVideosRequired() { return evidenceVideosRequired; }
     public void setEvidenceVideosRequired(int v) { this.evidenceVideosRequired = v; }
     public int getEvidenceMaxVideoMb() { return evidenceMaxVideoMb; }

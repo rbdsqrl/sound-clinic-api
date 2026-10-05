@@ -24,4 +24,13 @@ public interface LeaveRepository extends JpaRepository<Leave, UUID> {
     /** Approved leaves for one staff member whose (possibly multi-day) range covers the given date. */
     List<Leave> findByOrgIdAndTherapistIdAndStatusAndLeaveDateLessThanEqualAndEndDateGreaterThanEqual(
             UUID orgId, UUID therapistId, LeaveStatus status, java.time.LocalDate date, java.time.LocalDate sameDate);
+
+    /** Leaves of the given people, in the given statuses, whose range overlaps [from, to] — the basis of leave balances. */
+    @org.springframework.data.jpa.repository.Query("SELECT l FROM Leave l WHERE l.orgId = :orgId AND l.therapistId IN :userIds "
+         + "AND l.status IN :statuses AND l.leaveDate <= :to AND l.endDate >= :from")
+    List<Leave> findOverlapping(@org.springframework.data.repository.query.Param("orgId") UUID orgId,
+                                @org.springframework.data.repository.query.Param("userIds") java.util.Collection<UUID> userIds,
+                                @org.springframework.data.repository.query.Param("statuses") java.util.Collection<LeaveStatus> statuses,
+                                @org.springframework.data.repository.query.Param("from") java.time.LocalDate from,
+                                @org.springframework.data.repository.query.Param("to") java.time.LocalDate to);
 }

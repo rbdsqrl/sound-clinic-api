@@ -39,6 +39,10 @@ public class Leave {
     @Column(columnDefinition = "TEXT")
     private String reason;
 
+    /** The leave category this counts against — null when the organisation has no leave categories (or a legacy leave). */
+    @Column(name = "category_id")
+    private UUID categoryId;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private LeaveStatus status = LeaveStatus.PENDING;
@@ -77,6 +81,8 @@ public class Leave {
     public UUID getReviewedBy() { return reviewedBy; }
     public void setReviewedBy(UUID reviewedBy) { this.reviewedBy = reviewedBy; }
     public Instant getReviewedAt() { return reviewedAt; }
+    public UUID getCategoryId() { return categoryId; }
+    public void setCategoryId(UUID categoryId) { this.categoryId = categoryId; }
     public void setReviewedAt(Instant reviewedAt) { this.reviewedAt = reviewedAt; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
