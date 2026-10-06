@@ -365,3 +365,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/122-iep-custom-domains.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/123-one-active-enrollment-per-subscription.sql
+      relativeToChangelogFile: false

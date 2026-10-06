@@ -192,6 +192,14 @@ public class EnrollmentController {
             throw new ApiException(HttpStatus.FORBIDDEN, "Access denied");
         }
 
+        // One live enrollment per subscription — a repeat submit (double-click, retry after a slow
+        // response) would otherwise create a duplicate with its own full set of sessions.
+        if (enrollmentRepository.findBySubscriptionId(sub.getId()).stream()
+                .anyMatch(e -> e.getStatus() == EnrollmentStatus.ACTIVE)) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "This program is already enrolled — refresh to see the existing enrollment");
+        }
+
         boolean awaitingPayment = sub.getPaymentStatus() != SubscriptionPaymentStatus.PAID;
 
         // Validate therapist exists and belongs to org
