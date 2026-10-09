@@ -116,6 +116,8 @@ public interface TherapySessionRepository extends JpaRepository<TherapySession, 
     List<TherapySession> findByOrgIdAndStatus(
             @Param("orgId") UUID orgId, @Param("status") TherapySessionStatus status);
 
+    long countByOrgIdAndStatus(UUID orgId, TherapySessionStatus status);
+
     /** All PENDING_RESCHEDULE sessions for the dashboard (covers leave, holiday, and parent requests) */
     @Query("SELECT s FROM TherapySession s WHERE s.orgId = :orgId " +
            "AND s.status = com.simplehearing.session.enums.TherapySessionStatus.PENDING_RESCHEDULE " +

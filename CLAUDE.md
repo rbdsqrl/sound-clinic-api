@@ -248,6 +248,7 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | POST     | `/api/v1/iep/custom-domains`            | THERAPIST, BUSINESS_OWNER, CLINIC_HEAD          | Add a custom domain — returns the existing one if the name is already there (case-insensitive) |
 | DELETE   | `/api/v1/iep/custom-domains/{id}`       | BUSINESS_OWNER, CLINIC_HEAD                     | Remove a custom domain from the picker; goals already using it keep its name |
 | GET      | `/api/v1/dashboard/org-overview`        | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN       | Active/inactive case counts + active/invited member counts for the dashboard's Organisation Overview rings (SQL counts, no row loading) |
+| GET      | `/api/v1/dashboard/attention-counts`    | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN       | Counts behind the needs-attention cards — sessions awaiting reschedule, cancellation requests, open concerns (SQL counts). The dashboard fetches each card's full list only when its count is above zero |
 | GET      | `/api/v1/analytics/patients/{id}/progress` | BUSINESS_OWNER, CLINIC_HEAD, PARENT (own child) | Mastery series + per-domain breakdown |
 | GET      | `/api/v1/analytics/patients/{id}/activities` | BUSINESS_OWNER, CLINIC_HEAD, PARENT (own child) | Activity assignment/attempt progress |
 | GET      | `/api/v1/analytics/patients/{id}/frequency` | BUSINESS_OWNER, CLINIC_HEAD, PARENT (own child) | Sessions/week across every concurrent enrollment |

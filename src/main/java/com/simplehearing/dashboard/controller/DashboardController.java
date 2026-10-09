@@ -3,11 +3,16 @@ package com.simplehearing.dashboard.controller;
 import com.simplehearing.auth.security.UserPrincipal;
 import com.simplehearing.common.dto.ApiResponse;
 import com.simplehearing.common.exception.ApiException;
+import com.simplehearing.concern.enums.ConcernStatus;
+import com.simplehearing.concern.repository.ConcernRepository;
+import com.simplehearing.dashboard.dto.AttentionCountsResponse;
 import com.simplehearing.dashboard.dto.OrgOverviewResponse;
 import com.simplehearing.invitation.entity.Invitation;
 import com.simplehearing.invitation.repository.InvitationRepository;
 import com.simplehearing.patient.enums.PatientStage;
 import com.simplehearing.patient.repository.PatientRepository;
+import com.simplehearing.session.enums.TherapySessionStatus;
+import com.simplehearing.session.repository.TherapySessionRepository;
 import com.simplehearing.user.enums.Role;
 import com.simplehearing.user.repository.UserRepository;
 import io.swagger.v3.oas.annotations.Operation;
@@ -35,10 +40,16 @@ public class DashboardController {
     private final PatientRepository patientRepository;
     private final UserRepository userRepository;
     private final InvitationRepository invitationRepository;
+    private final TherapySessionRepository sessionRepository;
+    private final ConcernRepository concernRepository;
 
     public DashboardController(PatientRepository patientRepository,
                                UserRepository userRepository,
-                               InvitationRepository invitationRepository) {
+                               InvitationRepository invitationRepository,
+                               TherapySessionRepository sessionRepository,
+                               ConcernRepository concernRepository) {
+        this.sessionRepository = sessionRepository;
+        this.concernRepository = concernRepository;
         this.patientRepository = patientRepository;
         this.userRepository = userRepository;
         this.invitationRepository = invitationRepository;
@@ -60,5 +71,19 @@ public class DashboardController {
 
         return ResponseEntity.ok(ApiResponse.success(new OrgOverviewResponse(
                 (int) activeCases, (int) (totalCases - activeCases), (int) activeMembers, (int) invitedMembers)));
+    }
+
+    @Operation(summary = "Counts behind the dashboard's needs-attention cards — sessions to reschedule, cancellation requests, open concerns")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
+    @GetMapping("/attention-counts")
+    public ResponseEntity<ApiResponse<AttentionCountsResponse>> attentionCounts(@AuthenticationPrincipal UserPrincipal principal) {
+        UUID orgId = principal.getOrgId();
+        if (orgId == null) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "No organisation on the current account");
+        }
+        return ResponseEntity.ok(ApiResponse.success(new AttentionCountsResponse(
+                (int) sessionRepository.countByOrgIdAndStatus(orgId, TherapySessionStatus.PENDING_RESCHEDULE),
+                (int) sessionRepository.countByOrgIdAndStatus(orgId, TherapySessionStatus.CANCELLATION_REQUESTED),
+                concernRepository.countByOrgIdAndStatus(orgId, ConcernStatus.OPEN))));
     }
 }
