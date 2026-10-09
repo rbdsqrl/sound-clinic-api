@@ -2,6 +2,7 @@ package com.simplehearing.session.repository;
 
 import com.simplehearing.session.entity.TherapySession;
 import com.simplehearing.session.enums.TherapySessionStatus;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -48,6 +49,51 @@ public interface TherapySessionRepository extends JpaRepository<TherapySession, 
             @Param("therapistId") UUID therapistId,
             @Param("byPatients") boolean byPatients,
             @Param("patientIds") Collection<UUID> patientIds);
+
+    /**
+     * A therapist's own sessions in [from, today] that are still SCHEDULED although they have
+     * ended — before today, or today with an end time before {@code nowTime} — oldest first.
+     * Pass a {@link Pageable} to take just the first few.
+     */
+    @Query("""
+            SELECT new com.simplehearing.session.dto.TherapySessionSummaryResponse(
+                   s.id, s.enrollmentId, s.patientId, p.firstName, p.lastName,
+                   s.therapistId, t.firstName, t.lastName,
+                   COALESCE(pr.name, 'Unknown Program'),
+                   s.sessionDate, s.startTime, s.endTime, s.status)
+            FROM TherapySession s
+            LEFT JOIN Patient p ON p.id = s.patientId
+            LEFT JOIN User t ON t.id = s.therapistId
+            LEFT JOIN Enrollment e ON e.id = s.enrollmentId
+            LEFT JOIN Subscription sub ON sub.id = e.subscriptionId
+            LEFT JOIN Program pr ON pr.id = sub.programId
+            WHERE s.orgId = :orgId AND s.therapistId = :therapistId
+              AND s.status = com.simplehearing.session.enums.TherapySessionStatus.SCHEDULED
+              AND s.sessionDate >= :from
+              AND (s.sessionDate < :today OR (s.sessionDate = :today AND s.endTime < :nowTime))
+            ORDER BY s.sessionDate ASC, s.startTime ASC
+            """)
+    List<com.simplehearing.session.dto.TherapySessionSummaryResponse> findOverdueNotes(
+            @Param("orgId") UUID orgId,
+            @Param("therapistId") UUID therapistId,
+            @Param("from") LocalDate from,
+            @Param("today") LocalDate today,
+            @Param("nowTime") java.time.LocalTime nowTime,
+            Pageable pageable);
+
+    @Query("""
+            SELECT COUNT(s) FROM TherapySession s
+            WHERE s.orgId = :orgId AND s.therapistId = :therapistId
+              AND s.status = com.simplehearing.session.enums.TherapySessionStatus.SCHEDULED
+              AND s.sessionDate >= :from
+              AND (s.sessionDate < :today OR (s.sessionDate = :today AND s.endTime < :nowTime))
+            """)
+    long countOverdueNotes(
+            @Param("orgId") UUID orgId,
+            @Param("therapistId") UUID therapistId,
+            @Param("from") LocalDate from,
+            @Param("today") LocalDate today,
+            @Param("nowTime") java.time.LocalTime nowTime);
 
     /** Per-patient count of SCHEDULED/PENDING_RESCHEDULE sessions in a date range — powers the
      *  Cases analytics tab's "Upcoming" column without pulling every matching session's full
@@ -98,12 +144,6 @@ public interface TherapySessionRepository extends JpaRepository<TherapySession, 
 
     /** How many sessions of a plan the parent has already asked to move. */
     int countByEnrollmentIdAndParentRescheduleRequestedTrue(UUID enrollmentId);
-
-    /** Batched form of the above — one round trip for every enrollment touched by a session list, instead of one per enrollment. */
-    @Query("SELECT s.enrollmentId, COUNT(s) FROM TherapySession s " +
-           "WHERE s.enrollmentId IN :enrollmentIds AND s.parentRescheduleRequested = true " +
-           "GROUP BY s.enrollmentId")
-    List<Object[]> countParentReschedulesByEnrollmentIds(@Param("enrollmentIds") java.util.Collection<UUID> enrollmentIds);
 
     /** Live count of completed sessions that count toward the plan — the source of truth for an
      *  enrollment's progress. Deliberately not a stored counter on Enrollment: a counter needs every

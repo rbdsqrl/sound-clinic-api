@@ -91,8 +91,10 @@ public class AttendanceService {
             }
         }
 
-        Clinic clinic = clinicRepository.findByIdAndOrgId(request.clinicId(), principal.getOrgId())
-                .orElseThrow(() -> new ResourceNotFoundException("Clinic not found"));
+        // Where this check-in is — a clinic, or (Business Owner only) the organisation itself.
+        Clinic clinic = requireClinicUnlessOrganisation(request.clinicId(), request.atOrganisation(), principal);
+        Organisation org = organisationRepository.findById(principal.getOrgId()).orElse(null);
+        String placeName = clinic != null ? clinic.getName() : (org != null ? org.getName() : "");
 
         Attendance attendance = attendanceRepository
                 .findByUserIdAndAttendanceDate(principal.getId(), today)
@@ -104,7 +106,8 @@ public class AttendanceService {
 
         attendance.setOrgId(principal.getOrgId());
         attendance.setUserId(principal.getId());
-        attendance.setClinicId(clinic.getId());
+        attendance.setClinicId(clinic != null ? clinic.getId() : null);
+        attendance.setAtOrganisation(request.atOrganisation());
         attendance.setAttendanceDate(today);
         attendance.setCheckInTime(Instant.now());
         attendance.setCheckInLat(request.latitude());
@@ -112,7 +115,7 @@ public class AttendanceService {
         attendance.setCheckOutTime(null);
         attendance.setCheckOutLat(null);
         attendance.setCheckOutLon(null);
-        GeoFenceTarget geoFenceTarget = resolveGeoFenceTarget(principal, clinic);
+        GeoFenceTarget geoFenceTarget = resolveGeoFenceTarget(principal, clinic, request.atOrganisation());
         attendance.setGeoVerified(verifyGeoFence(request.latitude(), request.longitude(), geoFenceTarget));
         attendance.setFaceVerified(faceVerified);
         attendance.setFaceOverride(faceOverride);
@@ -127,7 +130,6 @@ public class AttendanceService {
                     .map(User::getEmail)
                     .collect(Collectors.toList());
             if (!recipients.isEmpty()) {
-                Organisation org = organisationRepository.findById(principal.getOrgId()).orElse(null);
                 String orgName = org != null ? org.getName() : "";
                 String employeeName = currentUser.getFirstName() + " " + currentUser.getLastName();
                 String checkInTime = DateTimeFormatter.ofPattern("HH:mm 'UTC'")
@@ -139,13 +141,13 @@ public class AttendanceService {
                         employeeName,
                         currentUser.getEmail(),
                         checkInTime,
-                        clinic.getName(),
+                        placeName,
                         attendanceDate,
                         orgName);
             }
         }
 
-        return AttendanceResponse.from(saved, currentUser.getFirstName(), currentUser.getLastName(), clinic.getName(), null);
+        return AttendanceResponse.from(saved, currentUser.getFirstName(), currentUser.getLastName(), placeName, null);
     }
 
     // ── Check-out ─────────────────────────────────────────────────────────────
@@ -157,8 +159,7 @@ public class AttendanceService {
                 .findByUserIdAndAttendanceDateAndStatus(principal.getId(), today, AttendanceStatus.CHECKED_IN)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "No active check-in found for today"));
 
-        Clinic clinic = clinicRepository.findById(attendance.getClinicId())
-                .orElseThrow(() -> new ResourceNotFoundException("Clinic not found"));
+        String placeName = placeNameOf(attendance);
 
         attendance.setCheckOutTime(Instant.now());
         attendance.setCheckOutLat(request.latitude());
@@ -171,7 +172,7 @@ public class AttendanceService {
 
         Attendance saved = attendanceRepository.save(attendance);
         User user = principal.getUser();
-        return AttendanceResponse.from(saved, user.getFirstName(), user.getLastName(), clinic.getName(), null);
+        return AttendanceResponse.from(saved, user.getFirstName(), user.getLastName(), placeName, null);
     }
 
     // ── My attendance ─────────────────────────────────────────────────────────
@@ -200,13 +201,14 @@ public class AttendanceService {
                 .findByUserIdAndAttendanceDate(principal.getId(), today)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "No attendance record found for today"));
 
-        Clinic clinic = clinicRepository.findById(attendance.getClinicId())
-                .orElseThrow(() -> new ResourceNotFoundException("Clinic not found"));
+        Clinic clinic = attendance.isAtOrganisation() ? null
+                : clinicRepository.findById(attendance.getClinicId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Clinic not found"));
 
         if (request.latitude() != null && request.longitude() != null) {
             attendance.setCheckInLat(request.latitude());
             attendance.setCheckInLon(request.longitude());
-            GeoFenceTarget geoFenceTarget = resolveGeoFenceTarget(principal, clinic);
+            GeoFenceTarget geoFenceTarget = resolveGeoFenceTarget(principal, clinic, attendance.isAtOrganisation());
             attendance.setGeoVerified(verifyGeoFence(request.latitude(), request.longitude(), geoFenceTarget));
         }
         if (request.faceDescriptor() != null && !request.faceDescriptor().isEmpty()) {
@@ -215,7 +217,7 @@ public class AttendanceService {
 
         Attendance saved = attendanceRepository.save(attendance);
         User user = principal.getUser();
-        return AttendanceResponse.from(saved, user.getFirstName(), user.getLastName(), clinic.getName(), null);
+        return AttendanceResponse.from(saved, user.getFirstName(), user.getLastName(), placeNameOf(saved), null);
     }
 
     // ── All org attendance (admin view) ───────────────────────────────────────
@@ -265,15 +267,14 @@ public class AttendanceService {
     // ── Live geo-fence preview (before an actual check-in/verify is submitted) ───
 
     /**
-     * Distance from the caller's current position to whatever their check-in is verified
-     * against — a clinic for most roles, the organisation's own address for BUSINESS_OWNER
-     * (who isn't tied to any single clinic). Read-only: doesn't touch the attendance record.
+     * Distance from the caller's current position to the place they are checking in at — the
+     * chosen clinic, or the organisation's own address when {@code atOrganisation} (Business
+     * Owner only). Read-only: doesn't touch the attendance record.
      */
     @Transactional(readOnly = true)
-    public GeoCheckResponse previewGeoCheck(UUID clinicId, double latitude, double longitude, UserPrincipal principal) {
-        Clinic clinic = clinicRepository.findByIdAndOrgId(clinicId, principal.getOrgId())
-                .orElseThrow(() -> new ResourceNotFoundException("Clinic not found"));
-        GeoFenceTarget target = resolveGeoFenceTarget(principal, clinic);
+    public GeoCheckResponse previewGeoCheck(UUID clinicId, boolean atOrganisation, double latitude, double longitude, UserPrincipal principal) {
+        Clinic clinic = requireClinicUnlessOrganisation(clinicId, atOrganisation, principal);
+        GeoFenceTarget target = resolveGeoFenceTarget(principal, clinic, atOrganisation);
 
         if (target.latitude() == null || target.longitude() == null) {
             return new GeoCheckResponse(true, null, target.radiusMeters(), target.label(), target.type());
@@ -285,11 +286,29 @@ public class AttendanceService {
 
     // ── Private helpers ───────────────────────────────────────────────────────
 
-    /** Where a geo-fence check is measured against — a clinic, or (for BUSINESS_OWNER) the org itself. */
+    /** Where a geo-fence check is measured against — a clinic, or the organisation itself. */
     private record GeoFenceTarget(Double latitude, Double longitude, int radiusMeters, String label, GeoCheckReferenceType type) {}
 
-    private GeoFenceTarget resolveGeoFenceTarget(UserPrincipal principal, Clinic clinic) {
-        if (principal.getUser().getRole() == Role.BUSINESS_OWNER) {
+    /**
+     * The clinic being checked into, or null for the organisation's own location. Only a Business
+     * Owner (judged by primary role, as elsewhere here) may choose the organisation.
+     */
+    private Clinic requireClinicUnlessOrganisation(UUID clinicId, boolean atOrganisation, UserPrincipal principal) {
+        if (atOrganisation) {
+            if (principal.getUser().getRole() != Role.BUSINESS_OWNER) {
+                throw new ApiException(HttpStatus.FORBIDDEN, "Only a Business Owner can check in at the organisation");
+            }
+            return null;
+        }
+        if (clinicId == null) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "clinicId is required");
+        }
+        return clinicRepository.findByIdAndOrgId(clinicId, principal.getOrgId())
+                .orElseThrow(() -> new ResourceNotFoundException("Clinic not found"));
+    }
+
+    private GeoFenceTarget resolveGeoFenceTarget(UserPrincipal principal, Clinic clinic, boolean atOrganisation) {
+        if (atOrganisation) {
             Organisation org = organisationRepository.findById(principal.getOrgId())
                     .orElseThrow(() -> new ResourceNotFoundException("Organisation not found"));
             int radius = org.getGeoFenceRadiusMeters() != null ? org.getGeoFenceRadiusMeters() : 200;
@@ -297,6 +316,14 @@ public class AttendanceService {
         }
         int radius = clinic.getGeoFenceRadiusMeters() != null ? clinic.getGeoFenceRadiusMeters() : 200;
         return new GeoFenceTarget(clinic.getLatitude(), clinic.getLongitude(), radius, clinic.getName(), GeoCheckReferenceType.CLINIC);
+    }
+
+    /** The display name of where a record was made — its clinic, or the organisation. */
+    private String placeNameOf(Attendance a) {
+        if (a.isAtOrganisation() || a.getClinicId() == null) {
+            return organisationRepository.findById(a.getOrgId()).map(Organisation::getName).orElse("");
+        }
+        return clinicRepository.findById(a.getClinicId()).map(Clinic::getName).orElse("");
     }
 
     private boolean verifyGeoFence(Double lat, Double lon, GeoFenceTarget target) {
@@ -335,7 +362,8 @@ public class AttendanceService {
 
     private List<AttendanceResponse> enrich(List<Attendance> records) {
         Set<UUID> userIds   = records.stream().map(Attendance::getUserId).collect(Collectors.toSet());
-        Set<UUID> clinicIds = records.stream().map(Attendance::getClinicId).collect(Collectors.toSet());
+        Set<UUID> clinicIds = records.stream().map(Attendance::getClinicId)
+                .filter(id -> id != null).collect(Collectors.toSet());
 
         // also collect reviewer UUIDs for override enrichment
         Set<UUID> reviewerIds = records.stream()
@@ -351,9 +379,14 @@ public class AttendanceService {
         Map<UUID, Clinic> clinicMap = clinicRepository.findAllById(clinicIds).stream()
                 .collect(Collectors.toMap(Clinic::getId, c -> c));
 
+        // Records made at the organisation have no clinic — they show the organisation's name.
+        String orgName = records.stream().anyMatch(a -> a.getClinicId() == null)
+                ? organisationRepository.findById(records.get(0).getOrgId()).map(Organisation::getName).orElse("")
+                : "";
+
         return records.stream().map(a -> {
             User   u = userMap.get(a.getUserId());
-            Clinic c = clinicMap.get(a.getClinicId());
+            Clinic c = a.getClinicId() != null ? clinicMap.get(a.getClinicId()) : null;
             String reviewerName = null;
             if (a.getOverrideReviewedBy() != null) {
                 User reviewer = userMap.get(a.getOverrideReviewedBy());
@@ -365,7 +398,7 @@ public class AttendanceService {
                     a,
                     u != null ? u.getFirstName() : "",
                     u != null ? u.getLastName()  : "",
-                    c != null ? c.getName()      : "",
+                    a.getClinicId() == null ? orgName : (c != null ? c.getName() : ""),
                     reviewerName);
         }).toList();
     }

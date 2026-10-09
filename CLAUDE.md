@@ -294,7 +294,8 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | PATCH    | `/api/v1/enrollment-concerns/{id}/resolve` | All staff (own caseload for THERAPIST)         | Resolve a concern |
 | POST     | `/api/v1/therapy-sessions/ad-hoc`       | BUSINESS_OWNER, CLINIC_HEAD                     | Book a one-off session from the calendar |
 | GET      | `/api/v1/therapy-sessions/summary`      | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST, PARENT, OFFICE_ADMIN | Slim session rows for `from`/`to` — names, program, times, status only (one joined query; role-scoped like the full list). For lists that just draw a row (dashboard Today's Sessions, sidebar calendar badge) |
-| GET      | `/api/v1/therapy-sessions/{id}`         | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST (own), PARENT (own child), OFFICE_ADMIN | One session in full — notes, feedback, plan totals, and the parent's remaining reschedules. Only this endpoint (and single-session mutation responses) computes `parentReschedulesRemaining`; the list endpoints return 0 for it |
+| GET      | `/api/v1/therapy-sessions/overdue-notes` | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST, OFFICE_ADMIN | The caller's own sessions that have ended but are still SCHEDULED (last 90 days, judged on the organisation's timezone): `count` plus the first `limit` slim rows, oldest first (all rows when `limit` is omitted). Feeds the therapist dashboard's Action Needed card |
+| GET      | `/api/v1/therapy-sessions/{id}`         | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST (own), PARENT (own child), OFFICE_ADMIN | One session in full — notes, feedback and plan totals. Used when a single session is opened (dashboard session modal) so lists can stay slim |
 | GET      | `/api/v1/therapy-sessions/{id}/activity` | THERAPIST, CLINIC_HEAD, BUSINESS_OWNER, OFFICE_ADMIN | A session's Activity Log, newest first — status changes (completed, cancelled, no show), cancellation requests/approvals, reschedules, scores given, notes saved/edited, checklist saves and attachments, each with before → after values; includes older notes-edit history (`legacy`) |
 | GET      | `/api/v1/therapy-sessions/{id}/feedback` | THERAPIST, CLINIC_HEAD, BUSINESS_OWNER | Session feedback checklist template (per the session's program) + this session's answers |
 | PUT      | `/api/v1/therapy-sessions/{id}/feedback` | THERAPIST, CLINIC_HEAD, BUSINESS_OWNER | Save this session's feedback checklist answers |
@@ -431,6 +432,7 @@ Master file: `db.changelog-master.yaml` — lists migrations in order.
 | 120-leave-policy.sql                 | `leave_categories`, `leave_allocations` (per-person override per leave year), `leaves.category_id`, `organisations.leave_year_start_month` |
 | 121-evidence-uploads.sql             | `evidence_uploads` — direct uploads in flight (what was approved, until completed or swept) |
 | 122-iep-custom-domains.sql           | `iep_custom_domains` (an organisation's own goal domains) + `custom_domain` on `iep_goals` / `iep_template_goals` |
+| 124-attendance-at-organisation.sql   | `attendance.clinic_id` becomes optional + `attendance.at_organisation` — a Business Owner can check in at the organisation's own location instead of a clinic (geo-fence measured against the organisation; a clinic choice is measured against that clinic) |
 | 113-phone-uniqueness.sql             | Normalises existing `users.phone` values (digits + leading `+` only) and adds `uq_users_phone` — a second login identity alongside email, so it must be unique too |
 
 **To add a migration:** create `NNN-description.sql` with the Liquibase header, then add it to the master YAML.
@@ -480,7 +482,7 @@ CREATE TABLE ... ;
 - A period with no data serialises `masteryPct` as null — never 0, which would read as a regression
 - Bucket on `LocalDate` fields (`session_date`, `meeting_date`), never on `created_at` (`Instant`)
 - Always return coverage alongside a trend; a series built on thin coverage is a sampling artefact
-- A parent may reschedule at most `PARENT_RESCHEDULE_LIMIT` (3) sessions per enrollment; the count comes from `parent_reschedule_requested`, which is never cleared
+- A parent may reschedule at most `PARENT_RESCHEDULE_LIMIT` (3) sessions per enrollment; the count comes from `parent_reschedule_requested`, which is never cleared. The limit is enforced only in `POST /therapy-sessions/{id}/reschedule-request` (409 with a message) — responses do not carry a "remaining" figure
 - `performance_score` is a 0-100 percentage (see `UpdateSessionNotesRequest`), read through named bands in the UI — keep it bounded
 
 ### Caching

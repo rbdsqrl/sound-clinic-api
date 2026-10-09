@@ -13,7 +13,9 @@ public record AttendanceResponse(
         String userFirstName,
         String userLastName,
         UUID clinicId,
+        /** The clinic's name — or the organisation's, when {@code atOrganisation}. */
         String clinicName,
+        boolean atOrganisation,
         LocalDate attendanceDate,
         Instant checkInTime,
         Instant checkOutTime,
@@ -39,6 +41,7 @@ public record AttendanceResponse(
                 userLastName,
                 a.getClinicId(),
                 clinicName,
+                a.isAtOrganisation(),
                 a.getAttendanceDate(),
                 a.getCheckInTime(),
                 a.getCheckOutTime(),

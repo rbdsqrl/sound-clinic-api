@@ -23,8 +23,13 @@ public class Attendance {
     @Column(name = "user_id", nullable = false)
     private UUID userId;
 
-    @Column(name = "clinic_id", nullable = false)
+    /** Null when the check-in was at the organisation's own location (see {@link #atOrganisation}). */
+    @Column(name = "clinic_id")
     private UUID clinicId;
+
+    /** True when checked in at the organisation's location rather than a clinic — Business Owner only. */
+    @Column(name = "at_organisation", nullable = false)
+    private boolean atOrganisation = false;
 
     @Column(name = "attendance_date", nullable = false)
     private LocalDate attendanceDate;
@@ -86,6 +91,8 @@ public class Attendance {
     public void setUserId(UUID userId) { this.userId = userId; }
     public UUID getClinicId() { return clinicId; }
     public void setClinicId(UUID clinicId) { this.clinicId = clinicId; }
+    public boolean isAtOrganisation() { return atOrganisation; }
+    public void setAtOrganisation(boolean atOrganisation) { this.atOrganisation = atOrganisation; }
     public LocalDate getAttendanceDate() { return attendanceDate; }
     public void setAttendanceDate(LocalDate attendanceDate) { this.attendanceDate = attendanceDate; }
     public Instant getCheckInTime() { return checkInTime; }

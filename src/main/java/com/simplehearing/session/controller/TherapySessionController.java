@@ -27,6 +27,7 @@ import com.simplehearing.patient.repository.TherapistPatientRepository;
 import com.simplehearing.session.dto.CreateAdHocSessionRequest;
 import com.simplehearing.session.dto.RescheduleSessionRequest;
 import com.simplehearing.session.dto.SessionAttachmentResponse;
+import com.simplehearing.session.dto.OverdueNotesResponse;
 import com.simplehearing.session.dto.TherapySessionResponse;
 import com.simplehearing.session.dto.TherapySessionSummaryResponse;
 import com.simplehearing.session.dto.UpdateSessionNotesRequest;
@@ -151,7 +152,7 @@ public class TherapySessionController {
             List<TherapySession> byStatus = (status == TherapySessionStatus.PENDING_RESCHEDULE)
                     ? sessionRepository.findAllPendingReschedule(principal.getOrgId())
                     : sessionRepository.findByOrgIdAndStatus(principal.getOrgId(), status);
-            return ResponseEntity.ok(ApiResponse.success(enrich(byStatus, false)));
+            return ResponseEntity.ok(ApiResponse.success(enrich(byStatus)));
         }
 
         LocalDate start = from != null ? from : LocalDate.now().withDayOfMonth(1);
@@ -189,7 +190,7 @@ public class TherapySessionController {
                             principal.getOrgId(), start, end);
         }
 
-        return ResponseEntity.ok(ApiResponse.success(enrich(sessions, false)));
+        return ResponseEntity.ok(ApiResponse.success(enrich(sessions)));
     }
 
     // ── Lightweight session rows (dashboard card, sidebar badge) ───────────────
@@ -220,9 +221,46 @@ public class TherapySessionController {
         return ResponseEntity.ok(ApiResponse.success(rows));
     }
 
+    // ── A therapist's overdue session write-ups ────────────────────────────────
+
+    /** How far back the "Action Needed" card looks. */
+    private static final int OVERDUE_NOTES_WINDOW_DAYS = 90;
+
+    @Operation(summary = "The caller's own sessions that have ended but are still SCHEDULED (last 90 days) — a total plus the first `limit` rows, oldest first")
+    @GetMapping("/overdue-notes")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'OFFICE_ADMIN')")
+    public ResponseEntity<ApiResponse<OverdueNotesResponse>> overdueNotes(
+            @RequestParam(required = false) Integer limit,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        // "Has it ended" is judged on the organisation's clock — session times are wall-clock.
+        java.time.ZonedDateTime now = java.time.ZonedDateTime.now(orgZone(principal.getOrgId()));
+        LocalDate today = now.toLocalDate();
+        LocalDate from = today.minusDays(OVERDUE_NOTES_WINDOW_DAYS);
+
+        long count = sessionRepository.countOverdueNotes(
+                principal.getOrgId(), principal.getId(), from, today, now.toLocalTime());
+        // Nothing overdue (the usual case) — skip the row query entirely.
+        List<TherapySessionSummaryResponse> rows = count == 0 ? List.of()
+                : sessionRepository.findOverdueNotes(
+                        principal.getOrgId(), principal.getId(), from, today, now.toLocalTime(),
+                        org.springframework.data.domain.PageRequest.of(0,
+                                limit != null && limit > 0 ? Math.min(limit, 1000) : 1000));
+        return ResponseEntity.ok(ApiResponse.success(new OverdueNotesResponse((int) count, rows)));
+    }
+
+    private java.time.ZoneId orgZone(UUID orgId) {
+        try {
+            return organisationRepository.findById(orgId)
+                    .map(o -> java.time.ZoneId.of(o.getTimezone())).orElse(java.time.ZoneOffset.UTC);
+        } catch (Exception e) {
+            return java.time.ZoneOffset.UTC;
+        }
+    }
+
     // ── One session, in full ───────────────────────────────────────────────────
 
-    @Operation(summary = "One session with everything — notes, feedback, plan totals and the parent's remaining reschedules")
+    @Operation(summary = "One session with everything — notes, feedback and plan totals")
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'PARENT', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<TherapySessionResponse>> get(
@@ -240,7 +278,7 @@ public class TherapySessionController {
                     .stream().anyMatch(pp -> pp.getId().getParentId().equals(principal.getId()));
             if (!isLinkedParent) throw new ApiException(HttpStatus.FORBIDDEN, "Access denied");
         }
-        return ResponseEntity.ok(ApiResponse.success(enrich(List.of(session), true).get(0)));
+        return ResponseEntity.ok(ApiResponse.success(enrich(List.of(session)).get(0)));
     }
 
     // ── Sessions for a specific enrollment ─────────────────────────────────────
@@ -277,7 +315,7 @@ public class TherapySessionController {
             });
         }
 
-        return ResponseEntity.ok(ApiResponse.success(enrich(sessions, false)));
+        return ResponseEntity.ok(ApiResponse.success(enrich(sessions)));
     }
 
     // ── Update session status ──────────────────────────────────────────────────
@@ -955,12 +993,6 @@ public class TherapySessionController {
     }
 
     private List<TherapySessionResponse> enrich(List<TherapySession> sessions) {
-        return enrich(sessions, true);
-    }
-
-    /** {@code withAllowance} adds each plan's remaining parent reschedules — one extra query, only
-     *  worth running when a single session is being opened, not for every row of a list. */
-    private List<TherapySessionResponse> enrich(List<TherapySession> sessions, boolean withAllowance) {
         if (sessions.isEmpty()) return List.of();
 
         Set<UUID> patientIds    = sessions.stream().map(TherapySession::getPatientId).collect(Collectors.toSet());
@@ -971,16 +1003,6 @@ public class TherapySessionController {
                 .collect(Collectors.toMap(Patient::getId, p -> p));
         Map<UUID, User>    therapistMap = userRepository.findAllById(therapistIds).stream()
                 .collect(Collectors.toMap(User::getId, u -> u));
-
-        // One count per plan rather than per session — the allowance is a plan-level figure.
-        // Batched (was one query per enrollment) — this loop runs on every Cases/Calendar/Dashboard
-        // sessions fetch, so a day with sessions across a dozen plans was a dozen round trips.
-        Map<UUID, Long> rescheduleCounts = !withAllowance ? Map.of() : sessionRepository
-                .countParentReschedulesByEnrollmentIds(enrollmentIds).stream()
-                .collect(Collectors.toMap(row -> (UUID) row[0], row -> (Long) row[1]));
-        Map<UUID, Integer> parentReschedulesLeft = enrollmentIds.stream()
-                .collect(Collectors.toMap(eid -> eid, eid ->
-                        Math.max(0, PARENT_RESCHEDULE_LIMIT - rescheduleCounts.getOrDefault(eid, 0L).intValue())));
 
         // Same batching for enrollment -> subscription -> program — was up to three queries per
         // enrollment (findById chained three deep), now three findAllById calls total.
@@ -1017,8 +1039,7 @@ public class TherapySessionController {
                     therapist != null ? therapist.getFirstName() : "",
                     therapist != null ? therapist.getLastName()  : "",
                     programNameMap.getOrDefault(s.getEnrollmentId(), "Unknown Program"),
-                    totalSessionsMap.getOrDefault(s.getEnrollmentId(), 0),
-                    withAllowance ? parentReschedulesLeft.getOrDefault(s.getEnrollmentId(), PARENT_RESCHEDULE_LIMIT) : 0);
+                    totalSessionsMap.getOrDefault(s.getEnrollmentId(), 0));
         }).toList();
     }
 }

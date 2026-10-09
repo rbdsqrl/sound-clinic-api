@@ -38,8 +38,6 @@ public record TherapySessionResponse(
 
         /** True once a parent has asked for this session to be moved. Never resets. */
         boolean parentRescheduleRequested,
-        /** Sessions of this plan the parent may still ask to move. */
-        int parentReschedulesRemaining,
 
         /** Booked by hand from the calendar rather than generated with the plan. */
         boolean adHoc,
@@ -63,8 +61,7 @@ public record TherapySessionResponse(
             String therapistFirstName,
             String therapistLastName,
             String programName,
-            int totalSessions,
-            int parentReschedulesRemaining) {
+            int totalSessions) {
         return new TherapySessionResponse(
                 session.getId(),
                 session.getEnrollmentId(),
@@ -90,7 +87,6 @@ public record TherapySessionResponse(
                 session.getRescheduleLeaveStartDate(),
                 session.getRescheduleLeaveEndDate(),
                 session.isParentRescheduleRequested(),
-                parentReschedulesRemaining,
                 session.isAdHoc(),
                 session.isCountsTowardPlan(),
                 session.isRequiresPayment(),

@@ -63,16 +63,17 @@ public class AttendanceController {
         return ResponseEntity.ok(ApiResponse.success(attendanceService.verifyToday(request, principal)));
     }
 
-    @Operation(summary = "Live distance/verified preview against the check-in reference (clinic, or the org's address for a Business Owner) — no attendance record is touched")
+    @Operation(summary = "Live distance/verified preview against the check-in reference (a clinic, or the organisation's own address when `atOrganisation` — Business Owner only) — no attendance record is touched")
     @GetMapping("/geo-check")
     @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'PATIENT', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<GeoCheckResponse>> geoCheck(
-            @RequestParam UUID clinicId,
+            @RequestParam(required = false) UUID clinicId,
+            @RequestParam(defaultValue = "false") boolean atOrganisation,
             @RequestParam double latitude,
             @RequestParam double longitude,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
-                attendanceService.previewGeoCheck(clinicId, latitude, longitude, principal)));
+                attendanceService.previewGeoCheck(clinicId, atOrganisation, latitude, longitude, principal)));
     }
 
     @Operation(summary = "Get today's attendance record for the caller")
