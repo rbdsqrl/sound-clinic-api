@@ -51,6 +51,8 @@ public class PatientController {
                       "to ACTIVE; an explicitly empty value " +
                       "returns every status. `mine` scopes to " +
                       "patients assigned to the caller (always on for THERAPIST, regardless of this param). " +
+                      "`joinedFrom`/`joinedTo` (yyyy-MM-dd, UTC days, inclusive, either optional) " +
+                      "narrow to cases created in that window, in SQL. " +
                       "`compact=true` returns parents/therapists as id-only stubs (blank name/email) — for " +
                       "callers that only read .length (e.g. the Cases page's invite-status pill and specialist " +
                       "count), not their names; leave false for callers that display names (e.g. Dashboard's " +
@@ -63,10 +65,12 @@ public class PatientController {
             @RequestParam(defaultValue = "false") boolean mine,
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "false") boolean compact,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate joinedFrom,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate joinedTo,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
-                patientService.listForOrg(search, mine, status, compact, pageable, principal)));
+                patientService.listForOrg(search, mine, status, compact, joinedFrom, joinedTo, pageable, principal)));
     }
 
     @Operation(summary = "Patients whose birthday falls in the next 30 days")

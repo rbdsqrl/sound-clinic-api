@@ -28,6 +28,7 @@ import com.simplehearing.session.dto.CreateAdHocSessionRequest;
 import com.simplehearing.session.dto.RescheduleSessionRequest;
 import com.simplehearing.session.dto.SessionAttachmentResponse;
 import com.simplehearing.session.dto.TherapySessionResponse;
+import com.simplehearing.session.dto.TherapySessionSummaryResponse;
 import com.simplehearing.session.dto.UpdateSessionNotesRequest;
 import com.simplehearing.session.dto.UpdateSessionStatusRequest;
 import com.simplehearing.session.dto.SessionActivityResponse;
@@ -150,7 +151,7 @@ public class TherapySessionController {
             List<TherapySession> byStatus = (status == TherapySessionStatus.PENDING_RESCHEDULE)
                     ? sessionRepository.findAllPendingReschedule(principal.getOrgId())
                     : sessionRepository.findByOrgIdAndStatus(principal.getOrgId(), status);
-            return ResponseEntity.ok(ApiResponse.success(enrich(byStatus)));
+            return ResponseEntity.ok(ApiResponse.success(enrich(byStatus, false)));
         }
 
         LocalDate start = from != null ? from : LocalDate.now().withDayOfMonth(1);
@@ -188,7 +189,58 @@ public class TherapySessionController {
                             principal.getOrgId(), start, end);
         }
 
-        return ResponseEntity.ok(ApiResponse.success(enrich(sessions)));
+        return ResponseEntity.ok(ApiResponse.success(enrich(sessions, false)));
+    }
+
+    // ── Lightweight session rows (dashboard card, sidebar badge) ───────────────
+
+    @Operation(summary = "Slim session rows for a date range — names and times only, for lists that just draw a row")
+    @GetMapping("/summary")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'PARENT', 'OFFICE_ADMIN')")
+    public ResponseEntity<ApiResponse<List<TherapySessionSummaryResponse>>> summary(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        // Same scoping as the full list: the active role decides whose sessions come back.
+        Role role = principal.getActiveRole();
+        UUID none = UUID.randomUUID();   // placeholder for a switched-off filter, never matches anything
+        List<TherapySessionSummaryResponse> rows;
+        if (role == Role.THERAPIST) {
+            rows = sessionRepository.findSummaries(principal.getOrgId(), from, to, true, principal.getId(), false, List.of(none));
+        } else if (role == Role.PARENT) {
+            List<UUID> childIds = patientParentRepository.findById_ParentId(principal.getId()).stream()
+                    .map(pp -> pp.getId().getPatientId())
+                    .toList();
+            rows = childIds.isEmpty() ? List.of()
+                    : sessionRepository.findSummaries(principal.getOrgId(), from, to, false, none, true, childIds);
+        } else {
+            rows = sessionRepository.findSummaries(principal.getOrgId(), from, to, false, none, false, List.of(none));
+        }
+        return ResponseEntity.ok(ApiResponse.success(rows));
+    }
+
+    // ── One session, in full ───────────────────────────────────────────────────
+
+    @Operation(summary = "One session with everything — notes, feedback, plan totals and the parent's remaining reschedules")
+    @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'PARENT', 'OFFICE_ADMIN')")
+    public ResponseEntity<ApiResponse<TherapySessionResponse>> get(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        TherapySession session = findOwned(id, principal);
+
+        Role role = principal.getActiveRole();
+        if (role == Role.THERAPIST && !session.getTherapistId().equals(principal.getId())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Access denied");
+        }
+        if (role == Role.PARENT) {
+            boolean isLinkedParent = patientParentRepository.findById_PatientId(session.getPatientId())
+                    .stream().anyMatch(pp -> pp.getId().getParentId().equals(principal.getId()));
+            if (!isLinkedParent) throw new ApiException(HttpStatus.FORBIDDEN, "Access denied");
+        }
+        return ResponseEntity.ok(ApiResponse.success(enrich(List.of(session), true).get(0)));
     }
 
     // ── Sessions for a specific enrollment ─────────────────────────────────────
@@ -225,7 +277,7 @@ public class TherapySessionController {
             });
         }
 
-        return ResponseEntity.ok(ApiResponse.success(enrich(sessions)));
+        return ResponseEntity.ok(ApiResponse.success(enrich(sessions, false)));
     }
 
     // ── Update session status ──────────────────────────────────────────────────
@@ -903,6 +955,12 @@ public class TherapySessionController {
     }
 
     private List<TherapySessionResponse> enrich(List<TherapySession> sessions) {
+        return enrich(sessions, true);
+    }
+
+    /** {@code withAllowance} adds each plan's remaining parent reschedules — one extra query, only
+     *  worth running when a single session is being opened, not for every row of a list. */
+    private List<TherapySessionResponse> enrich(List<TherapySession> sessions, boolean withAllowance) {
         if (sessions.isEmpty()) return List.of();
 
         Set<UUID> patientIds    = sessions.stream().map(TherapySession::getPatientId).collect(Collectors.toSet());
@@ -917,7 +975,7 @@ public class TherapySessionController {
         // One count per plan rather than per session — the allowance is a plan-level figure.
         // Batched (was one query per enrollment) — this loop runs on every Cases/Calendar/Dashboard
         // sessions fetch, so a day with sessions across a dozen plans was a dozen round trips.
-        Map<UUID, Long> rescheduleCounts = sessionRepository
+        Map<UUID, Long> rescheduleCounts = !withAllowance ? Map.of() : sessionRepository
                 .countParentReschedulesByEnrollmentIds(enrollmentIds).stream()
                 .collect(Collectors.toMap(row -> (UUID) row[0], row -> (Long) row[1]));
         Map<UUID, Integer> parentReschedulesLeft = enrollmentIds.stream()
@@ -960,7 +1018,7 @@ public class TherapySessionController {
                     therapist != null ? therapist.getLastName()  : "",
                     programNameMap.getOrDefault(s.getEnrollmentId(), "Unknown Program"),
                     totalSessionsMap.getOrDefault(s.getEnrollmentId(), 0),
-                    parentReschedulesLeft.getOrDefault(s.getEnrollmentId(), PARENT_RESCHEDULE_LIMIT));
+                    withAllowance ? parentReschedulesLeft.getOrDefault(s.getEnrollmentId(), PARENT_RESCHEDULE_LIMIT) : 0);
         }).toList();
     }
 }

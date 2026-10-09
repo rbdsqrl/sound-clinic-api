@@ -38,6 +38,7 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
                     (:includeActive = true AND p.stage <> com.simplehearing.patient.enums.PatientStage.DISCHARGED AND p.isActive = true)
                  OR (:includeInactive = true AND (p.stage = com.simplehearing.patient.enums.PatientStage.DISCHARGED OR p.isActive = false))
                   )
+              AND p.createdAt >= :joinedFrom AND p.createdAt < :joinedBefore
             """)
     Page<Patient> search(@Param("orgId") UUID orgId,
                           @Param("search") String search,
@@ -45,7 +46,19 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
                           @Param("userId") UUID userId,
                           @Param("includeActive") boolean includeActive,
                           @Param("includeInactive") boolean includeInactive,
+                          @Param("joinedFrom") java.time.Instant joinedFrom,
+                          @Param("joinedBefore") java.time.Instant joinedBefore,
                           Pageable pageable);
+
+    /**
+     * Active cases whose birthday (month*100 + day, e.g. 1009 for 9 Oct) is in {@code monthDays} —
+     * lets the birthday card load only the handful of matching rows instead of every patient.
+     */
+    @Query("""
+            SELECT p FROM Patient p WHERE p.orgId = :orgId AND p.isActive = true AND p.dateOfBirth IS NOT NULL
+              AND (EXTRACT(MONTH FROM p.dateOfBirth) * 100 + EXTRACT(DAY FROM p.dateOfBirth)) IN :monthDays
+            """)
+    List<Patient> findActiveWithBirthdayIn(@Param("orgId") UUID orgId, @Param("monthDays") java.util.Collection<Integer> monthDays);
 
     long countByOrgId(UUID orgId);
 

@@ -8,6 +8,7 @@ spring:
     password: ${DB_PASS:simplehearing}
     driver-class-name: org.postgresql.Driver
   jpa:
+    open-in-view: false   # don't hold a DB connection + session for the whole request, including JSON rendering
     hibernate:
       ddl-auto: validate
     properties:

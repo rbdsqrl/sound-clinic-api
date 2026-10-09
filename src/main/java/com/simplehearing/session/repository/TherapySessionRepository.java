@@ -17,6 +17,38 @@ public interface TherapySessionRepository extends JpaRepository<TherapySession, 
     List<TherapySession> findByOrgIdAndSessionDateBetweenOrderBySessionDateAscStartTimeAsc(
             UUID orgId, LocalDate from, LocalDate to);
 
+    /**
+     * Lightweight session rows for a date range — one query that joins patient, therapist and
+     * program names in, instead of loading full session rows and then looking each name up
+     * separately. The two filters are switchable (a flag plus a dummy value when off) rather than
+     * nullable, since Postgres can't infer the type of a null parameter in a comparison.
+     */
+    @Query("""
+            SELECT new com.simplehearing.session.dto.TherapySessionSummaryResponse(
+                   s.id, s.enrollmentId, s.patientId, p.firstName, p.lastName,
+                   s.therapistId, t.firstName, t.lastName,
+                   COALESCE(pr.name, 'Unknown Program'),
+                   s.sessionDate, s.startTime, s.endTime, s.status)
+            FROM TherapySession s
+            LEFT JOIN Patient p ON p.id = s.patientId
+            LEFT JOIN User t ON t.id = s.therapistId
+            LEFT JOIN Enrollment e ON e.id = s.enrollmentId
+            LEFT JOIN Subscription sub ON sub.id = e.subscriptionId
+            LEFT JOIN Program pr ON pr.id = sub.programId
+            WHERE s.orgId = :orgId AND s.sessionDate BETWEEN :from AND :to
+              AND (:byTherapist = false OR s.therapistId = :therapistId)
+              AND (:byPatients = false OR s.patientId IN :patientIds)
+            ORDER BY s.sessionDate ASC, s.startTime ASC
+            """)
+    List<com.simplehearing.session.dto.TherapySessionSummaryResponse> findSummaries(
+            @Param("orgId") UUID orgId,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to,
+            @Param("byTherapist") boolean byTherapist,
+            @Param("therapistId") UUID therapistId,
+            @Param("byPatients") boolean byPatients,
+            @Param("patientIds") Collection<UUID> patientIds);
+
     /** Per-patient count of SCHEDULED/PENDING_RESCHEDULE sessions in a date range — powers the
      *  Cases analytics tab's "Upcoming" column without pulling every matching session's full
      *  row into memory just to count it (that window can span up to MAX_WINDOW_DAYS forward). */

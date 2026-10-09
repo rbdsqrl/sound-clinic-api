@@ -41,7 +41,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.time.MonthDay;
 import java.time.temporal.ChronoUnit;
 import java.util.AbstractMap;
@@ -152,7 +154,7 @@ public class PatientService {
      */
     @Transactional(readOnly = true)
     public PagedResponse<PatientResponse> listForOrg(String search, boolean mine, String status, boolean compact,
-                                                       Pageable pageable, UserPrincipal principal) {
+                                                       LocalDate joinedFrom, LocalDate joinedTo, Pageable pageable, UserPrincipal principal) {
         Role role = principal.getUser().getRole();
         boolean onlyMine = mine || role == Role.THERAPIST;
 
@@ -172,12 +174,20 @@ public class PatientService {
         // "every patient in the org" request (the shape patientsApi.list() sends for pickers and
         // dashboards). Skip the filtered query entirely rather than running the caseload subquery
         // the Cases page's status pills need but this request doesn't.
-        Page<Patient> page = (q.isEmpty() && !onlyMine && anyStatus)
+        // Joined-date window (UTC days, both ends inclusive), applied in SQL. Open ends fall back to
+        // a wide-open bound rather than null, which Postgres can't type-infer in a comparison.
+        boolean dateFiltered = joinedFrom != null || joinedTo != null;
+        Instant from = joinedFrom != null ? joinedFrom.atStartOfDay(ZoneOffset.UTC).toInstant() : Instant.EPOCH;
+        Instant before = joinedTo != null ? joinedTo.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant()
+                : Instant.parse("2200-01-01T00:00:00Z");
+
+        Page<Patient> page = (q.isEmpty() && !onlyMine && anyStatus && !dateFiltered)
                 ? patientRepository.findByOrgId(principal.getOrgId(), pageable)
                 : patientRepository.search(
                         principal.getOrgId(), q, onlyMine, principal.getId(),
                         anyStatus || statuses.contains("ACTIVE"),
                         anyStatus || statuses.contains("INACTIVE"),
+                        from, before,
                         pageable);
 
         List<PatientResponse> content = buildResponses(page.getContent(), compact);
@@ -343,9 +353,8 @@ public class PatientService {
                     .filter(p -> p.getOrgId().equals(principal.getOrgId()) && p.getDateOfBirth() != null && p.isActive())
                     .toList();
         } else {
-            patients = patientRepository.findByOrgId(principal.getOrgId()).stream()
-                    .filter(p -> p.getDateOfBirth() != null && p.isActive())
-                    .toList();
+            // Narrow to the 31 calendar days in the window in SQL — don't load every patient.
+            patients = patientRepository.findActiveWithBirthdayIn(principal.getOrgId(), birthdayWindowKeys(LocalDate.now(), 30));
         }
 
         LocalDate today    = LocalDate.now();
@@ -370,6 +379,19 @@ public class PatientService {
                             p.getDateOfBirth(), daysUntil);
                 })
                 .toList();
+    }
+
+    /** month*100+day for each date from {@code today} through {@code today + days}. A 29 Feb
+     *  birthday counts as 28 Feb in a non-leap year (matching {@code MonthDay.atYear}), so 29 Feb
+     *  is added whenever 28 Feb of a non-leap year is in the window. */
+    private static Set<Integer> birthdayWindowKeys(LocalDate today, int days) {
+        Set<Integer> keys = new HashSet<>();
+        for (int i = 0; i <= days; i++) {
+            LocalDate d = today.plusDays(i);
+            keys.add(d.getMonthValue() * 100 + d.getDayOfMonth());
+            if (d.getMonthValue() == 2 && d.getDayOfMonth() == 28 && !d.isLeapYear()) keys.add(229);
+        }
+        return keys;
     }
 
     // ── Conditions ────────────────────────────────────────────────────────────
