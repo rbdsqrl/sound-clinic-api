@@ -1,5 +1,6 @@
 package com.simplehearing.enrollment.controller;
 
+import com.simplehearing.auditlog.service.AuditLogService;
 import com.simplehearing.enrollment.dto.ChangeTherapistRequest;
 import com.simplehearing.review.entity.ReviewMeeting;
 import com.simplehearing.review.enums.ReviewMeetingStatus;
@@ -75,6 +76,7 @@ public class EnrollmentController {
     private final ReviewMeetingService reviewMeetingService;
     private final TherapySessionRepository therapySessionRepository;
     private final ReviewMeetingRepository reviewMeetingRepository;
+    private final AuditLogService auditLog;
 
     public EnrollmentController(
             EnrollmentRepository enrollmentRepository,
@@ -88,7 +90,8 @@ public class EnrollmentController {
             TherapistPatientRepository therapistPatientRepository,
             ReviewMeetingService reviewMeetingService,
             TherapySessionRepository therapySessionRepository,
-            ReviewMeetingRepository reviewMeetingRepository) {
+            ReviewMeetingRepository reviewMeetingRepository,
+            AuditLogService auditLog) {
         this.enrollmentRepository = enrollmentRepository;
         this.subscriptionRepository = subscriptionRepository;
         this.programRepository = programRepository;
@@ -101,6 +104,18 @@ public class EnrollmentController {
         this.reviewMeetingService = reviewMeetingService;
         this.therapySessionRepository = therapySessionRepository;
         this.reviewMeetingRepository = reviewMeetingRepository;
+        this.auditLog = auditLog;
+    }
+
+    private String programNameOf(Enrollment e) {
+        return subscriptionRepository.findById(e.getSubscriptionId())
+                .flatMap(s -> programRepository.findById(s.getProgramId()))
+                .map(Program::getName)
+                .orElse("a program");
+    }
+
+    private static String fullName(User u) {
+        return (u.getFirstName() + " " + u.getLastName()).trim();
     }
 
     // ── Available therapists for a given slot ─────────────────────────────────
@@ -280,6 +295,11 @@ public class EnrollmentController {
         Program program = programRepository.findById(sub.getProgramId()).orElse(null);
         String programName = program != null ? program.getName() : "Unknown Program";
 
+        auditLog.recordCase(principal.getOrgId(), saved.getPatientId(), principal.getId(), "PROGRAM_ASSIGNED",
+                "Program assigned: " + programName + " with " + fullName(therapist), null);
+        auditLog.recordUser(principal.getOrgId(), therapist.getId(), principal.getId(), "PROGRAM_ASSIGNED",
+                "Assigned to " + programName + " for a case", null);
+
         EnrollmentResponse response = EnrollmentResponse.from(
                 saved,
                 therapist.getFirstName(),
@@ -379,6 +399,11 @@ public class EnrollmentController {
         log.info("Enrollment {} moved from therapist {} to {} — {} session(s), {} review meeting(s)",
                 id, previousTherapistId, therapist.getId(), movedSessions, movedMeetings);
 
+        String previousName = userRepository.findById(previousTherapistId).map(EnrollmentController::fullName).orElse("Unknown");
+        auditLog.recordCase(principal.getOrgId(), enrollment.getPatientId(), principal.getId(), "THERAPIST_CHANGED",
+                programNameOf(enrollment) + ": therapist changed",
+                List.of(AuditLogService.change("Therapist", previousName, fullName(therapist))));
+
         List<EnrollmentResponse> enriched = enrichEnrollments(List.of(saved));
         return ResponseEntity.ok(ApiResponse.success(enriched.get(0)));
     }
@@ -405,6 +430,8 @@ public class EnrollmentController {
 
         enrollment.setStatus(EnrollmentStatus.CANCELLED);
         Enrollment saved = enrollmentRepository.save(enrollment);
+        auditLog.recordCase(principal.getOrgId(), enrollment.getPatientId(), principal.getId(), "PROGRAM_CANCELLED",
+                "Program cancelled: " + programNameOf(enrollment), null);
 
         List<EnrollmentResponse> enriched = enrichEnrollments(List.of(saved));
         return ResponseEntity.ok(ApiResponse.success(enriched.get(0)));
@@ -663,6 +690,8 @@ public class EnrollmentController {
         therapySessionRepository.saveAll(toRestore);
 
         Enrollment saved = enrollmentRepository.save(enrollment);
+        auditLog.recordCase(principal.getOrgId(), enrollment.getPatientId(), principal.getId(), "PROGRAM_REACTIVATED",
+                "Program reactivated: " + programNameOf(enrollment), null);
 
         List<EnrollmentResponse> enriched = enrichEnrollments(List.of(saved));
         return ResponseEntity.ok(ApiResponse.success(enriched.get(0)));

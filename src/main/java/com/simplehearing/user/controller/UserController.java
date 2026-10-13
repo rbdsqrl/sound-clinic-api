@@ -15,6 +15,8 @@ import com.simplehearing.user.dto.MemberProfileResponse;
 import com.simplehearing.user.dto.StaffMemberResponse;
 import com.simplehearing.user.dto.UpdateMemberProfileRequest;
 import com.simplehearing.user.dto.UserResponse;
+import com.simplehearing.auditlog.service.AuditLogService;
+import com.simplehearing.session.dto.SessionActivityResponse.Change;
 import com.simplehearing.user.entity.User;
 import com.simplehearing.user.entity.UserLanguage;
 import com.simplehearing.user.enums.Role;
@@ -33,7 +35,10 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashSet;
+import java.util.Objects;
 import java.util.List;
 import java.util.stream.Stream;
 import java.util.Map;
@@ -63,17 +68,40 @@ public class UserController {
     private final ClinicRepository clinicRepository;
     private final LanguageRepository languageRepository;
     private final UserLanguageRepository userLanguageRepository;
+    private final AuditLogService auditLog;
 
     public UserController(UserRepository userRepository,
                           TherapistPatientRepository therapistPatientRepository,
                           ClinicRepository clinicRepository,
                           LanguageRepository languageRepository,
-                          UserLanguageRepository userLanguageRepository) {
+                          UserLanguageRepository userLanguageRepository,
+                          AuditLogService auditLog) {
         this.userRepository = userRepository;
         this.therapistPatientRepository = therapistPatientRepository;
         this.clinicRepository = clinicRepository;
         this.languageRepository = languageRepository;
         this.userLanguageRepository = userLanguageRepository;
+        this.auditLog = auditLog;
+    }
+
+    /** "CLINIC_HEAD" → "Clinic Head". */
+    private static String roleLabel(Role role) {
+        StringBuilder sb = new StringBuilder();
+        for (String w : role.name().split("_")) {
+            if (sb.length() > 0) sb.append(' ');
+            sb.append(w.charAt(0)).append(w.substring(1).toLowerCase());
+        }
+        return sb.toString();
+    }
+
+    private String clinicName(UUID clinicId) {
+        return clinicId == null ? null : clinicRepository.findById(clinicId).map(Clinic::getName).orElse(null);
+    }
+
+    private String languageNames(Collection<UUID> ids) {
+        if (ids.isEmpty()) return null;
+        return languageRepository.findAllById(ids).stream().map(l -> l.getName()).sorted()
+                .collect(Collectors.joining(", "));
     }
 
     /** Roles that count as "clinical staff" for the therapists list. */
@@ -250,6 +278,13 @@ public class UserController {
             @AuthenticationPrincipal UserPrincipal principal) {
 
         User user = loadOrgScopedMember(id, principal);
+        Role roleBefore = null;
+        String phoneBefore = user.getPhone();
+        UUID clinicBefore = user.getClinicId();
+        String qualificationBefore = user.getQualification();
+        String specializationBefore = user.getSpecialization();
+        Set<UUID> languagesBefore = userLanguageRepository.findById_UserId(id).stream()
+                .map(UserLanguage::getLanguageId).collect(Collectors.toSet());
 
         if (request.clinicId() != null) {
             clinicRepository.findByIdAndOrgId(request.clinicId(), principal.getOrgId())
@@ -266,6 +301,7 @@ public class UserController {
             if (id.equals(principal.getId())) {
                 throw new ApiException(HttpStatus.BAD_REQUEST, "You cannot change your own role");
             }
+            roleBefore = user.getRole();
             user.setRole(request.role());
         }
 
@@ -292,6 +328,22 @@ public class UserController {
         List<UUID> languageIds = request.languageIds() != null ? request.languageIds() : List.of();
         for (UUID languageId : languageIds) {
             userLanguageRepository.save(new UserLanguage(id, languageId));
+        }
+
+        List<Change> changes = AuditLogService.list();
+        if (roleBefore != null) AuditLogService.addIfChanged(changes, "Role", roleLabel(roleBefore), roleLabel(user.getRole()));
+        AuditLogService.addIfChanged(changes, "Phone", phoneBefore, user.getPhone());
+        if (!Objects.equals(clinicBefore, user.getClinicId())) {
+            AuditLogService.addIfChanged(changes, "Clinic", clinicName(clinicBefore), clinicName(user.getClinicId()));
+        }
+        AuditLogService.addIfChanged(changes, "Qualification", qualificationBefore, user.getQualification());
+        AuditLogService.addIfChanged(changes, "Specialization", specializationBefore, user.getSpecialization());
+        Set<UUID> languagesAfter = new HashSet<>(languageIds);
+        if (!languagesBefore.equals(languagesAfter)) {
+            AuditLogService.addIfChanged(changes, "Languages", languageNames(languagesBefore), languageNames(languagesAfter));
+        }
+        if (!changes.isEmpty()) {
+            auditLog.recordUser(principal.getOrgId(), id, principal.getId(), "PROFILE_EDITED", "Profile updated", changes);
         }
 
         return ResponseEntity.ok(ApiResponse.success(buildMemberProfile(user)));
@@ -326,7 +378,7 @@ public class UserController {
 
     @Operation(summary = "Deactivate a member — revokes login access while preserving audit records")
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('BUSINESS_OWNER')")
+    @PreAuthorize("hasAnyRole('CLINIC_HEAD', 'BUSINESS_OWNER', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deleteMember(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -339,14 +391,18 @@ public class UserController {
         if (!target.getOrgId().equals(principal.getOrgId())) {
             throw new ApiException(HttpStatus.FORBIDDEN, "User does not belong to this organisation");
         }
+        if (target.hasRole(Role.BUSINESS_OWNER) && !principal.getUser().hasRole(Role.BUSINESS_OWNER)) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only a Business Owner can deactivate a Business Owner");
+        }
         target.setActive(false);
         userRepository.save(target);
+        auditLog.recordUser(principal.getOrgId(), id, principal.getId(), "DEACTIVATED", "Deactivated", null);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     @Operation(summary = "Reactivate a deactivated member — restores login access with their existing role")
     @PatchMapping("/{id}/activate")
-    @PreAuthorize("hasRole('BUSINESS_OWNER')")
+    @PreAuthorize("hasAnyRole('CLINIC_HEAD', 'BUSINESS_OWNER', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<Void>> activateMember(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -356,8 +412,12 @@ public class UserController {
         if (!target.getOrgId().equals(principal.getOrgId())) {
             throw new ApiException(HttpStatus.FORBIDDEN, "User does not belong to this organisation");
         }
+        if (target.hasRole(Role.BUSINESS_OWNER) && !principal.getUser().hasRole(Role.BUSINESS_OWNER)) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only a Business Owner can reactivate a Business Owner");
+        }
         target.setActive(true);
         userRepository.save(target);
+        auditLog.recordUser(principal.getOrgId(), id, principal.getId(), "REACTIVATED", "Reactivated", null);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
@@ -485,6 +545,8 @@ public class UserController {
 
         user.getAdditionalRoles().add(roleToAdd);
         userRepository.save(user);
+        auditLog.recordUser(principal.getOrgId(), id, principal.getId(), "ROLE_ADDED",
+                roleLabel(roleToAdd) + " role added", null);
 
         return ResponseEntity.ok(ApiResponse.success(buildMemberProfile(user)));
     }
@@ -512,6 +574,8 @@ public class UserController {
         }
 
         userRepository.save(user);
+        auditLog.recordUser(principal.getOrgId(), id, principal.getId(), "ROLE_REMOVED",
+                roleLabel(roleToRemove) + " role removed", null);
         return ResponseEntity.ok(ApiResponse.success(buildMemberProfile(user)));
     }
 

@@ -169,6 +169,12 @@ com.simplehearing
 │   ├── enums/Granularity.java           # DAILY | WEEKLY | MONTHLY + ISO bucketing rules
 │   └── service/AnalyticsService.java    # Folds sessions + IEP progress into buckets
 │
+├── auditlog/
+│   ├── controller/AuditLogController.java  # GET /api/v1/audit-log — Business Owner only
+│   ├── entity/AuditLogEntry.java           # subjectType USER|CASE, subjectId, actorId, eventType, summary, changes JSON
+│   ├── repository/AuditLogEntryRepository.java
+│   └── service/AuditLogService.java        # recordUser / recordCase — best-effort writes, called from UserController, InvitationService, PatientService, EnrollmentController, TherapistReassignmentService
+│
 ├── memberdocument/
 │   ├── controller/MemberDocumentController.java  # /api/v1/users/{userId}/documents — list/upload/delete; Business Owner + Clinic Head only (HR-sensitive)
 │   ├── dto/MemberDocumentResponse.java
@@ -280,6 +286,7 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | PATCH    | `/api/v1/review-meetings/{id}/complete` | All staff                                               | Mark a meeting completed            |
 | PUT      | `/api/v1/review-meetings/{id}/parent-feedback`    | PARENT (linked to patient)                    | Rating + comments on the therapist  |
 | PUT      | `/api/v1/review-meetings/{id}/therapist-feedback` | THERAPIST, CLINIC_HEAD, BUSINESS_OWNER      | Summary + progress notes            |
+| GET      | `/api/v1/audit-log`                     | BUSINESS_OWNER                                  | Activity log of a member/parent (`subjectType=USER`) or case (`CASE`) with `subjectId` — who changed what, newest first, max 200 entries |
 | PATCH    | `/api/v1/enrollments/{id}/therapist`    | BUSINESS_OWNER, CLINIC_HEAD                     | Reassign an ongoing plan's therapist |
 | PATCH    | `/api/v1/enrollments/{id}/schedule`     | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN       | Edit an active plan's start time and/or session days and/or therapist, effective from a chosen date — sessions before that date are untouched, sessions on/after it are re-dated onto the new pattern (same session count) |
 | POST     | `/api/v1/therapist-reassignments`       | Admin Roles                                     | Bulk-reassign selected cases from one therapist to another — permanent, or bounded to a start/end window that hands back automatically; moves scheduled sessions, upcoming review meetings, active IEP plans and the caseload link |
@@ -433,6 +440,7 @@ Master file: `db.changelog-master.yaml` — lists migrations in order.
 | 121-evidence-uploads.sql             | `evidence_uploads` — direct uploads in flight (what was approved, until completed or swept) |
 | 122-iep-custom-domains.sql           | `iep_custom_domains` (an organisation's own goal domains) + `custom_domain` on `iep_goals` / `iep_template_goals` |
 | 124-attendance-at-organisation.sql   | `attendance.clinic_id` becomes optional + `attendance.at_organisation` — a Business Owner can check in at the organisation's own location instead of a clinic (geo-fence measured against the organisation; a clinic choice is measured against that clinic) |
+| 125-audit-log.sql                    | `audit_log_entries` — one row per change to a member, parent or case profile (subject type/id, actor, event type, summary, before/after JSON); powers the Business-Owner-only Activity Log tab |
 | 113-phone-uniqueness.sql             | Normalises existing `users.phone` values (digits + leading `+` only) and adds `uq_users_phone` — a second login identity alongside email, so it must be unique too |
 
 **To add a migration:** create `NNN-description.sql` with the Liquibase header, then add it to the master YAML.

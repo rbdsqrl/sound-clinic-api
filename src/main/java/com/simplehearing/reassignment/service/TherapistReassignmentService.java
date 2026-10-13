@@ -1,5 +1,6 @@
 package com.simplehearing.reassignment.service;
 
+import com.simplehearing.auditlog.service.AuditLogService;
 import com.simplehearing.auth.security.UserPrincipal;
 import com.simplehearing.common.exception.ApiException;
 import com.simplehearing.common.exception.ResourceNotFoundException;
@@ -68,6 +69,7 @@ public class TherapistReassignmentService {
     private final TherapistPatientRepository therapistPatientRepository;
     private final PatientRepository patientRepository;
     private final UserRepository userRepository;
+    private final AuditLogService auditLog;
 
     public TherapistReassignmentService(TherapistReassignmentRepository reassignmentRepository,
                                         TherapistReassignmentCaseRepository reassignmentCaseRepository,
@@ -77,7 +79,8 @@ public class TherapistReassignmentService {
                                         IEPPlanRepository iepPlanRepository,
                                         TherapistPatientRepository therapistPatientRepository,
                                         PatientRepository patientRepository,
-                                        UserRepository userRepository) {
+                                        UserRepository userRepository,
+                                        AuditLogService auditLog) {
         this.reassignmentRepository = reassignmentRepository;
         this.reassignmentCaseRepository = reassignmentCaseRepository;
         this.enrollmentRepository = enrollmentRepository;
@@ -87,6 +90,12 @@ public class TherapistReassignmentService {
         this.therapistPatientRepository = therapistPatientRepository;
         this.patientRepository = patientRepository;
         this.userRepository = userRepository;
+        this.auditLog = auditLog;
+    }
+
+    private String nameOf(UUID userId) {
+        return userRepository.findById(userId)
+                .map(u -> (u.getFirstName() + " " + u.getLastName()).trim()).orElse("Unknown");
     }
 
     @Transactional
@@ -215,6 +224,17 @@ public class TherapistReassignmentService {
             caseRow.setPatientId(patientId);
             caseRow.setEnrollmentId(movedEnrollmentId);
             reassignmentCaseRepository.save(caseRow);
+
+            String kind = request.type() == ReassignmentType.TEMPORARY ? "temporarily" : "permanently";
+            String fromName = nameOf(request.fromTherapistId());
+            String toName = toTherapist.getFirstName() + " " + toTherapist.getLastName();
+            auditLog.recordCase(principal.getOrgId(), patientId, principal.getId(), "THERAPIST_REASSIGNED",
+                    "Case reassigned " + kind + " to " + toName.trim(),
+                    List.of(AuditLogService.change("Therapist", fromName, toName.trim())));
+            auditLog.recordUser(principal.getOrgId(), request.fromTherapistId(), principal.getId(), "CASE_REASSIGNED_OUT",
+                    "A case was reassigned " + kind + " to " + toName.trim(), null);
+            auditLog.recordUser(principal.getOrgId(), request.toTherapistId(), principal.getId(), "CASE_REASSIGNED_IN",
+                    "A case was reassigned " + kind + " from " + fromName, null);
 
             // Caseload flip — deactivate the old link, activate/create the new one.
             link.setActive(false);

@@ -16,6 +16,7 @@ import com.simplehearing.notification.EmailService;
 import com.simplehearing.organisation.repository.OrganisationRepository;
 import com.simplehearing.patient.entity.PatientParent;
 import com.simplehearing.patient.repository.PatientParentRepository;
+import com.simplehearing.auditlog.service.AuditLogService;
 import com.simplehearing.user.entity.User;
 import com.simplehearing.user.enums.Role;
 import com.simplehearing.user.repository.UserRepository;
@@ -63,6 +64,7 @@ public class InvitationService {
     private final PatientParentRepository patientParentRepository;
     private final OrganisationRepository organisationRepository;
     private final EmailService emailService;
+    private final AuditLogService auditLog;
 
     public InvitationService(InvitationRepository invitationRepository,
                              UserRepository userRepository,
@@ -70,7 +72,8 @@ public class InvitationService {
                              PasswordEncoder passwordEncoder,
                              PatientParentRepository patientParentRepository,
                              OrganisationRepository organisationRepository,
-                             EmailService emailService) {
+                             EmailService emailService,
+                             AuditLogService auditLog) {
         this.invitationRepository = invitationRepository;
         this.userRepository = userRepository;
         this.clinicRepository = clinicRepository;
@@ -78,6 +81,16 @@ public class InvitationService {
         this.patientParentRepository = patientParentRepository;
         this.organisationRepository = organisationRepository;
         this.emailService = emailService;
+        this.auditLog = auditLog;
+    }
+
+    private static String roleLabel(Role role) {
+        StringBuilder sb = new StringBuilder();
+        for (String w : role.name().split("_")) {
+            if (sb.length() > 0) sb.append(' ');
+            sb.append(w.charAt(0)).append(w.substring(1).toLowerCase());
+        }
+        return sb.toString();
     }
 
     /**
@@ -130,6 +143,11 @@ public class InvitationService {
         invitationRepository.save(invitation);
 
         log.info("Invitation created for {} ({}) by {}", request.email(), request.role(), caller.getId());
+
+        // A re-invite of an archived member lands on their existing profile's log.
+        userRepository.findByEmail(EmailNormalizer.normalize(request.email())).ifPresent(existing ->
+                auditLog.recordUser(caller.getOrgId(), existing.getId(), caller.getId(), "INVITED",
+                        "Re-invited as " + roleLabel(request.role()), null));
 
         String acceptPath = "/accept-invite?token=" + rawToken;
         String orgName = organisationRepository.findById(caller.getOrgId())
@@ -231,6 +249,15 @@ public class InvitationService {
         invitationRepository.save(invitation);
 
         log.info("Invitation accepted — {} ({}) created", invitation.getEmail(), invitation.getRole());
+
+        // Actor is whoever sent the invitation — that is the "who invited them" answer.
+        auditLog.recordUser(invitation.getOrgId(), user.getId(), invitation.getInvitedBy(), "JOINED",
+                "Accepted the invitation and joined as " + roleLabel(invitation.getRole()), null);
+        if (invitation.getPatientId() != null) {
+            auditLog.recordCase(invitation.getOrgId(), invitation.getPatientId(), invitation.getInvitedBy(),
+                    "PARENT_LINKED", "Parent " + (user.getFirstName() + " " + user.getLastName()).trim()
+                            + " joined and was linked", null);
+        }
 
         String orgName = organisationRepository.findById(invitation.getOrgId())
                 .map(o -> o.getName()).orElse("Simple Hearing");

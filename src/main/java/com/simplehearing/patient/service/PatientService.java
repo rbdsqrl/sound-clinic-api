@@ -5,6 +5,7 @@ import com.simplehearing.auth.security.UserPrincipal;
 import com.simplehearing.clinic.repository.ClinicRepository;
 import com.simplehearing.common.dto.PagedResponse;
 import com.simplehearing.common.exception.ApiException;
+import com.simplehearing.auditlog.service.AuditLogService;
 import com.simplehearing.condition.entity.Condition;
 import com.simplehearing.condition.repository.ConditionRepository;
 import com.simplehearing.enrollment.entity.Enrollment;
@@ -81,6 +82,7 @@ public class PatientService {
     private final IEPGoalProgressRepository iepGoalProgressRepository;
     private final InvitationRepository invitationRepository;
     private final InvitationService invitationService;
+    private final AuditLogService auditLog;
 
     public PatientService(PatientRepository patientRepository,
                           PatientConditionRepository patientConditionRepository,
@@ -101,7 +103,8 @@ public class PatientService {
                           IEPGoalRepository iepGoalRepository,
                           IEPGoalProgressRepository iepGoalProgressRepository,
                           InvitationRepository invitationRepository,
-                          InvitationService invitationService) {
+                          InvitationService invitationService,
+                          AuditLogService auditLog) {
         this.patientRepository = patientRepository;
         this.patientConditionRepository = patientConditionRepository;
         this.patientParentRepository = patientParentRepository;
@@ -122,6 +125,26 @@ public class PatientService {
         this.iepGoalProgressRepository = iepGoalProgressRepository;
         this.invitationRepository = invitationRepository;
         this.invitationService = invitationService;
+        this.auditLog = auditLog;
+    }
+
+    /** "ACTIVE_THERAPY" → "Active Therapy". */
+    private static String label(Enum<?> value) {
+        if (value == null) return null;
+        StringBuilder sb = new StringBuilder();
+        for (String w : value.name().split("_")) {
+            if (sb.length() > 0) sb.append(' ');
+            sb.append(w.charAt(0)).append(w.substring(1).toLowerCase());
+        }
+        return sb.toString();
+    }
+
+    private static String fullName(User u) {
+        return (u.getFirstName() + " " + u.getLastName()).trim();
+    }
+
+    private String userName(UUID userId) {
+        return userRepository.findById(userId).map(PatientService::fullName).orElse("Unknown");
     }
 
     // ── CRUD ─────────────────────────────────────────────────────────────────
@@ -139,6 +162,8 @@ public class PatientService {
         patient.setGender(request.gender());
         patient.setNotes(request.notes());
         patientRepository.save(patient);
+        auditLog.recordCase(principal.getOrgId(), patient.getId(), principal.getId(), "CASE_CREATED",
+                "Case created", null);
 
         return buildResponse(patient);
     }
@@ -223,12 +248,28 @@ public class PatientService {
 
     public PatientResponse update(UUID patientId, CreatePatientRequest request, UserPrincipal principal) {
         Patient patient = findPatient(patientId, principal.getOrgId());
+        String firstBefore = patient.getFirstName();
+        String lastBefore = patient.getLastName();
+        Object dobBefore = patient.getDateOfBirth();
+        Object genderBefore = patient.getGender();
+        String notesBefore = patient.getNotes();
 
         if (request.firstName() != null)   patient.setFirstName(request.firstName());
         if (request.lastName() != null)    patient.setLastName(request.lastName());
         if (request.dateOfBirth() != null) patient.setDateOfBirth(request.dateOfBirth());
         if (request.gender() != null)      patient.setGender(request.gender());
         if (request.notes() != null)       patient.setNotes(request.notes());
+
+        var changes = AuditLogService.list();
+        AuditLogService.addIfChanged(changes, "First Name", firstBefore, patient.getFirstName());
+        AuditLogService.addIfChanged(changes, "Last Name", lastBefore, patient.getLastName());
+        AuditLogService.addIfChanged(changes, "Date of Birth", dobBefore, patient.getDateOfBirth());
+        AuditLogService.addIfChanged(changes, "Gender", genderBefore, patient.getGender());
+        AuditLogService.addIfChanged(changes, "Notes", notesBefore, patient.getNotes());
+        if (!changes.isEmpty()) {
+            auditLog.recordCase(principal.getOrgId(), patientId, principal.getId(), "PROFILE_EDITED",
+                    "Case details updated", changes);
+        }
 
         return buildResponse(patientRepository.save(patient));
     }
@@ -239,7 +280,12 @@ public class PatientService {
                     "Use POST /patients/{id}/discharge to discharge a patient — it snapshots the episode's success criteria");
         }
         Patient patient = findPatient(patientId, principal.getOrgId());
+        var stageBefore = patient.getStage();
         patient.setStage(request.stage());
+        if (stageBefore != request.stage()) {
+            auditLog.recordCase(principal.getOrgId(), patientId, principal.getId(), "STAGE_CHANGED",
+                    "Stage changed", java.util.List.of(AuditLogService.change("Stage", label(stageBefore), label(request.stage()))));
+        }
         return buildResponse(patientRepository.save(patient));
     }
 
@@ -268,6 +314,9 @@ public class PatientService {
         }
 
         patient.setActive(active);
+        auditLog.recordCase(principal.getOrgId(), patientId, principal.getId(),
+                active ? "REACTIVATED" : "DEACTIVATED",
+                active ? "Case marked active" : "Case marked inactive", null);
         LocalDate today = LocalDate.now();
 
         if (!active) {
@@ -399,13 +448,15 @@ public class PatientService {
     public PatientResponse addCondition(UUID patientId, AddConditionRequest request, UserPrincipal principal) {
         Patient patient = findPatient(patientId, principal.getOrgId());
 
-        conditionRepository.findById(request.conditionId())
+        Condition condition = conditionRepository.findById(request.conditionId())
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Condition not found"));
 
         PatientCondition pc = new PatientCondition(patientId, request.conditionId());
         pc.setDiagnosedAt(request.diagnosedAt());
         pc.setNotes(request.notes());
         patientConditionRepository.save(pc);
+        auditLog.recordCase(principal.getOrgId(), patientId, principal.getId(), "CONDITION_ADDED",
+                "Condition added: " + condition.getName(), null);
 
         return buildResponse(patient);
     }
@@ -413,6 +464,9 @@ public class PatientService {
     public void removeCondition(UUID patientId, UUID conditionId, UserPrincipal principal) {
         findPatient(patientId, principal.getOrgId());
         patientConditionRepository.deleteById_PatientIdAndId_ConditionId(patientId, conditionId);
+        String conditionName = conditionRepository.findById(conditionId).map(Condition::getName).orElse("a condition");
+        auditLog.recordCase(principal.getOrgId(), patientId, principal.getId(), "CONDITION_REMOVED",
+                "Condition removed: " + conditionName, null);
     }
 
     // ── Parents ───────────────────────────────────────────────────────────────
@@ -427,13 +481,21 @@ public class PatientService {
 
         PatientParent link = new PatientParent(patientId, parent.getId());
         patientParentRepository.save(link);
+        auditLog.recordCase(principal.getOrgId(), patientId, principal.getId(), "PARENT_LINKED",
+                "Parent linked: " + fullName(parent), null);
+        auditLog.recordUser(principal.getOrgId(), parent.getId(), principal.getId(), "CASE_LINKED",
+                "Linked to case " + (patient.getFirstName() + " " + patient.getLastName()).trim(), null);
 
         return buildResponse(patient);
     }
 
     public void unlinkParent(UUID patientId, UUID parentId, UserPrincipal principal) {
-        findPatient(patientId, principal.getOrgId());
+        Patient patient = findPatient(patientId, principal.getOrgId());
         patientParentRepository.deleteById_PatientIdAndId_ParentId(patientId, parentId);
+        auditLog.recordCase(principal.getOrgId(), patientId, principal.getId(), "PARENT_UNLINKED",
+                "Parent unlinked: " + userName(parentId), null);
+        auditLog.recordUser(principal.getOrgId(), parentId, principal.getId(), "CASE_UNLINKED",
+                "Unlinked from case " + (patient.getFirstName() + " " + patient.getLastName()).trim(), null);
     }
 
     /** Invites someone who doesn't have an account yet; they're auto-linked as this patient's
@@ -455,6 +517,9 @@ public class PatientService {
         String link = invitationService.createLinkedInvitation(
                 request.email(), Role.PARENT, patient.getClinicId(), patient.getId(),
                 principal.getOrgId(), principal.getId());
+
+        auditLog.recordCase(principal.getOrgId(), patientId, principal.getId(), "PARENT_INVITED",
+                "Parent invited: " + request.email(), null);
 
         return InviteParentResponse.invited(link);
     }
@@ -485,6 +550,10 @@ public class PatientService {
 
         PatientParent link = new PatientParent(patientId, user.getId());
         patientParentRepository.save(link);
+        auditLog.recordCase(principal.getOrgId(), patientId, principal.getId(), "PARENT_LINKED",
+                "Parent linked: " + fullName(user), null);
+        auditLog.recordUser(principal.getOrgId(), user.getId(), principal.getId(), "CASE_LINKED",
+                "Linked to case " + (patient.getFirstName() + " " + patient.getLastName()).trim(), null);
 
         return buildResponse(patient);
     }
@@ -517,18 +586,26 @@ public class PatientService {
             assignment.setAssignedBy(principal.getId());
             therapistPatientRepository.save(assignment);
         }
+        auditLog.recordCase(principal.getOrgId(), patientId, principal.getId(), "THERAPIST_ASSIGNED",
+                "Therapist assigned: " + fullName(therapist), null);
+        auditLog.recordUser(principal.getOrgId(), therapist.getId(), principal.getId(), "CASE_ASSIGNED",
+                "Assigned case " + (patient.getFirstName() + " " + patient.getLastName()).trim(), null);
 
         return buildResponse(patient);
     }
 
     public void unassignTherapist(UUID patientId, UUID therapistId, UserPrincipal principal) {
-        findPatient(patientId, principal.getOrgId());
+        Patient patient = findPatient(patientId, principal.getOrgId());
         therapistPatientRepository.findByPatientIdAndTherapistId(patientId, therapistId)
                 .ifPresent(tp -> {
                     tp.setActive(false);
                     // A manual unassign always wins over a stale reassignment marker.
                     tp.setReassignmentId(null);
                     therapistPatientRepository.save(tp);
+                    auditLog.recordCase(principal.getOrgId(), patientId, principal.getId(), "THERAPIST_UNASSIGNED",
+                            "Therapist unassigned: " + userName(therapistId), null);
+                    auditLog.recordUser(principal.getOrgId(), therapistId, principal.getId(), "CASE_UNASSIGNED",
+                            "Unassigned from case " + (patient.getFirstName() + " " + patient.getLastName()).trim(), null);
                 });
     }
 
