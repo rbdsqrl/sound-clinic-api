@@ -358,6 +358,37 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success(buildMemberProfile(user)));
     }
 
+    public record SetCustomRoleRequest(String customRole) {}
+
+    @Operation(summary = "Set or clear a member's Custom Role — open to every Admin Role, unlike the wider profile edit")
+    @PatchMapping("/{id}/custom-role")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'OFFICE_ADMIN')")
+    public ResponseEntity<ApiResponse<MemberProfileResponse>> setCustomRole(
+            @PathVariable UUID id,
+            @RequestBody SetCustomRoleRequest request,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        User user = loadOrgScopedMember(id, principal);
+        // Same tier rule as deactivating a member: only a Business Owner touches a Business Owner.
+        if (user.getRole() == Role.BUSINESS_OWNER && !principal.getUser().hasRole(Role.BUSINESS_OWNER)) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only a Business Owner can change a Business Owner's Custom Role");
+        }
+
+        String before = user.getSpecialization();
+        String name = OrgCustomRoleService.clean(request.customRole());
+        user.setSpecialization(name.isEmpty()
+                ? null
+                : customRoleService.findOrCreate(principal.getOrgId(), name, principal.getId()).getName());
+        userRepository.save(user);
+
+        List<Change> changes = AuditLogService.list();
+        AuditLogService.addIfChanged(changes, "Custom Role", before, user.getSpecialization());
+        if (!changes.isEmpty()) {
+            auditLog.recordUser(principal.getOrgId(), id, principal.getId(), "PROFILE_EDITED", "Profile updated", changes);
+        }
+        return ResponseEntity.ok(ApiResponse.success(buildMemberProfile(user)));
+    }
+
     private User loadOrgScopedMember(UUID id, UserPrincipal principal) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Member not found"));
