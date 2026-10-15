@@ -156,6 +156,11 @@ public class User {
     public String getSpecialization() { return specialization; }
     public void setSpecialization(String specialization) { this.specialization = specialization; }
 
+    /** The "Custom Role" shown in place of the role name across the UI — null when none is set. */
+    public String customRoleOrNull() {
+        return specialization == null || specialization.isBlank() ? null : specialization.trim();
+    }
+
     public Set<LocalTime> getReviewSlotTimes() { return reviewSlotTimes; }
     public void setReviewSlotTimes(Set<LocalTime> reviewSlotTimes) { this.reviewSlotTimes = reviewSlotTimes; }
 

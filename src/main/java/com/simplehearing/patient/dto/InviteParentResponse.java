@@ -12,7 +12,7 @@ import java.util.UUID;
  */
 public record InviteParentResponse(String inviteLink, ExistingUserSummary existingUser) {
 
-    public record ExistingUserSummary(UUID id, String firstName, String lastName, Role role) {}
+    public record ExistingUserSummary(UUID id, String firstName, String lastName, Role role, String customRole) {}
 
     public static InviteParentResponse invited(String inviteLink) {
         return new InviteParentResponse(inviteLink, null);

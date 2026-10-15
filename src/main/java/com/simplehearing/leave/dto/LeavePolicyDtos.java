@@ -50,7 +50,7 @@ public final class LeavePolicyDtos {
     public record Balance(UUID categoryId, String categoryName, Integer allocated, int used, int pending,
                           Integer remaining, boolean custom) {}
 
-    public record PersonBalances(UUID userId, String name, String role, List<Balance> balances,
+    public record PersonBalances(UUID userId, String name, String role, String customRole, List<Balance> balances,
                                  int pendingRequests, int approvedRequests, int rejectedRequests) {}
 
     public record BalancesResponse(int year, LocalDate yearStart, LocalDate yearEnd, List<PersonBalances> people) {}

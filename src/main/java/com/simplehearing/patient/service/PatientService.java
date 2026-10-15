@@ -511,7 +511,7 @@ public class PatientService {
         if (existing.isPresent()) {
             User u = existing.get();
             return InviteParentResponse.existingUser(
-                    new InviteParentResponse.ExistingUserSummary(u.getId(), u.getFirstName(), u.getLastName(), u.getRole()));
+                    new InviteParentResponse.ExistingUserSummary(u.getId(), u.getFirstName(), u.getLastName(), u.getRole(), u.customRoleOrNull()));
         }
 
         String link = invitationService.createLinkedInvitation(

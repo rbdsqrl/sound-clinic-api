@@ -16,11 +16,12 @@ public record ParticipantResponse(
         String firstName,
         String lastName,
         Role role,
+        String customRole,
         /** The person the meeting is organised by, where there is one. */
         boolean isOrganiser
 ) {
     public static ParticipantResponse from(User user, boolean isOrganiser) {
         return new ParticipantResponse(
-                user.getId(), user.getFirstName(), user.getLastName(), user.getRole(), isOrganiser);
+                user.getId(), user.getFirstName(), user.getLastName(), user.getRole(), user.customRoleOrNull(), isOrganiser);
     }
 }

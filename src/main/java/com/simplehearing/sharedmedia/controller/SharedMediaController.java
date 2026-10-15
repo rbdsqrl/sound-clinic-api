@@ -78,8 +78,9 @@ public class SharedMediaController {
             User uploader = uploaders.get(m.getUploadedBy());
             String uploaderName = uploader != null ? uploader.getFirstName() + " " + uploader.getLastName() : "Unknown";
             Role uploaderRole = uploader != null ? uploader.getRole() : null;
+            String uploaderCustomRole = uploader != null ? uploader.customRoleOrNull() : null;
             String presignedUrl = m.getFileUrl() != null ? storageService.presign(m.getFileUrl(), Duration.ofHours(1)) : null;
-            return SharedMediaResponse.from(m, uploaderName, uploaderRole, presignedUrl);
+            return SharedMediaResponse.from(m, uploaderName, uploaderRole, uploaderCustomRole, presignedUrl);
         }).toList();
 
         return ResponseEntity.ok(ApiResponse.success(result));
@@ -129,7 +130,7 @@ public class SharedMediaController {
         String presignedUrl = saved.getFileUrl() != null ? storageService.presign(saved.getFileUrl(), Duration.ofHours(1)) : null;
 
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(
-                SharedMediaResponse.from(saved, actor.getFirstName() + " " + actor.getLastName(), actor.getRole(), presignedUrl)));
+                SharedMediaResponse.from(saved, actor.getFirstName() + " " + actor.getLastName(), actor.getRole(), actor.customRoleOrNull(), presignedUrl)));
     }
 
     @Operation(summary = "Delete a shared file/note — the uploader, or BUSINESS_OWNER/CLINIC_HEAD")

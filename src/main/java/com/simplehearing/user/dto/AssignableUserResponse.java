@@ -16,14 +16,16 @@ public record AssignableUserResponse(
         UUID id,
         String firstName,
         String lastName,
-        Role role
+        Role role,
+        String customRole
 ) {
     public static AssignableUserResponse from(User user) {
         return new AssignableUserResponse(
                 user.getId(),
                 user.getFirstName(),
                 user.getLastName(),
-                user.getRole()
+                user.getRole(),
+                user.customRoleOrNull()
         );
     }
 }

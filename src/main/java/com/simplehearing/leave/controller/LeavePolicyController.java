@@ -171,7 +171,7 @@ public class LeavePolicyController {
                 .sorted(Comparator.comparing((User u) -> (u.getFirstName() + " " + u.getLastName()).toLowerCase()))
                 .map(u -> {
                     int[] c = counts.getOrDefault(u.getId(), new int[3]);
-                    return new PersonBalances(u.getId(), (u.getFirstName() + " " + u.getLastName()).trim(), u.getRole().name(),
+                    return new PersonBalances(u.getId(), (u.getFirstName() + " " + u.getLastName()).trim(), u.getRole().name(), u.customRoleOrNull(),
                             balances.getOrDefault(u.getId(), List.of()), c[0], c[1], c[2]);
                 }).toList();
         return ResponseEntity.ok(ApiResponse.success(new BalancesResponse(y, start, end, people)));

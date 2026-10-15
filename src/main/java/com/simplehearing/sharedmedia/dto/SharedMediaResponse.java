@@ -19,9 +19,10 @@ public record SharedMediaResponse(
         UUID uploadedById,
         String uploadedByName,
         Role uploadedByRole,
+        String uploadedByCustomRole,
         Instant createdAt
 ) {
-    public static SharedMediaResponse from(SharedMedia m, String uploaderName, Role uploaderRole, String presignedUrl) {
+    public static SharedMediaResponse from(SharedMedia m, String uploaderName, Role uploaderRole, String uploaderCustomRole, String presignedUrl) {
         return new SharedMediaResponse(
                 m.getId(),
                 m.getPatientId(),
@@ -34,6 +35,7 @@ public record SharedMediaResponse(
                 m.getUploadedBy(),
                 uploaderName,
                 uploaderRole,
+                uploaderCustomRole,
                 m.getCreatedAt()
         );
     }
