@@ -175,6 +175,12 @@ com.simplehearing
 │   ├── repository/AuditLogEntryRepository.java
 │   └── service/AuditLogService.java        # recordUser / recordCase — best-effort writes, called from UserController, InvitationService, PatientService, EnrollmentController, TherapistReassignmentService
 │
+├── customrole/
+│   ├── controller/OrgCustomRoleController.java  # /api/v1/organisation/custom-roles — list/add/remove; Admin Roles only
+│   ├── entity/OrgCustomRole.java                # org-scoped picker list; a member's choice is stored on users.specialization
+│   ├── repository/OrgCustomRoleRepository.java
+│   └── service/OrgCustomRoleService.java        # clean() + findOrCreate (case-insensitive); also called when a member's profile is saved
+│
 ├── memberdocument/
 │   ├── controller/MemberDocumentController.java  # /api/v1/users/{userId}/documents — list/upload/delete; Business Owner + Clinic Head only (HR-sensitive)
 │   ├── dto/MemberDocumentResponse.java
@@ -228,6 +234,8 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | GET      | `/api/v1/users/members`                 | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN                     | Paginated staff list — 20/page, sorted `createdAt` desc by default; `search`, `role`, `clinicId`, `active` (default true) filters |
 | GET      | `/api/v1/users/{id}/profile`            | BUSINESS_OWNER, CLINIC_HEAD                                   | One member's profile — contact, qualification, specialization, languages, case count |
 | PATCH    | `/api/v1/users/{id}/profile`            | BUSINESS_OWNER, CLINIC_HEAD (role change: BUSINESS_OWNER only) | Update a member's phone/clinic/qualification/specialization/languages, and their role (staff roles only, not own role) — phone is normalised and rejected with 409 if another user already has it |
+| GET/POST | `/api/v1/organisation/custom-roles`     | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN       | The organisation's Custom Role names (picker list) / add one — returns the existing entry if the name is already there (case-insensitive) |
+| DELETE   | `/api/v1/organisation/custom-roles/{id}` | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN      | Remove a name from the picker — members who already have it keep it |
 | GET      | `/api/v1/users/{id}/documents`          | BUSINESS_OWNER, CLINIC_HEAD                     | List the documents on a staff member's record (ID proof, qualifications, contracts…) with short-lived download links |
 | POST     | `/api/v1/users/{id}/documents`          | BUSINESS_OWNER, CLINIC_HEAD                     | Add a document — multipart `file` + `category` (+ optional `title`, `notes`); PDF/Office/text/image only, 25 MB max |
 | DELETE   | `/api/v1/users/{id}/documents/{documentId}` | BUSINESS_OWNER, CLINIC_HEAD                 | Remove a document and its stored file |
@@ -441,6 +449,7 @@ Master file: `db.changelog-master.yaml` — lists migrations in order.
 | 122-iep-custom-domains.sql           | `iep_custom_domains` (an organisation's own goal domains) + `custom_domain` on `iep_goals` / `iep_template_goals` |
 | 124-attendance-at-organisation.sql   | `attendance.clinic_id` becomes optional + `attendance.at_organisation` — a Business Owner can check in at the organisation's own location instead of a clinic (geo-fence measured against the organisation; a clinic choice is measured against that clinic) |
 | 125-audit-log.sql                    | `audit_log_entries` — one row per change to a member, parent or case profile (subject type/id, actor, event type, summary, before/after JSON); powers the Business-Owner-only Activity Log tab |
+| 126-org-custom-roles.sql             | `org_custom_roles` — an organisation's Custom Role picker list (name unique per org, case-insensitive); a member's own value lives in `users.specialization` |
 | 113-phone-uniqueness.sql             | Normalises existing `users.phone` values (digits + leading `+` only) and adds `uq_users_phone` — a second login identity alongside email, so it must be unique too |
 
 **To add a migration:** create `NNN-description.sql` with the Liquibase header, then add it to the master YAML.

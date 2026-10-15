@@ -1,5 +1,6 @@
 package com.simplehearing.user.controller;
 
+import com.simplehearing.customrole.service.OrgCustomRoleService;
 import com.simplehearing.activity.dto.LanguageResponse;
 import com.simplehearing.activity.repository.LanguageRepository;
 import com.simplehearing.auth.security.UserPrincipal;
@@ -69,19 +70,22 @@ public class UserController {
     private final LanguageRepository languageRepository;
     private final UserLanguageRepository userLanguageRepository;
     private final AuditLogService auditLog;
+    private final OrgCustomRoleService customRoleService;
 
     public UserController(UserRepository userRepository,
                           TherapistPatientRepository therapistPatientRepository,
                           ClinicRepository clinicRepository,
                           LanguageRepository languageRepository,
                           UserLanguageRepository userLanguageRepository,
-                          AuditLogService auditLog) {
+                          AuditLogService auditLog,
+                          OrgCustomRoleService customRoleService) {
         this.userRepository = userRepository;
         this.therapistPatientRepository = therapistPatientRepository;
         this.clinicRepository = clinicRepository;
         this.languageRepository = languageRepository;
         this.userLanguageRepository = userLanguageRepository;
         this.auditLog = auditLog;
+        this.customRoleService = customRoleService;
     }
 
     /** "CLINIC_HEAD" → "Clinic Head". */
@@ -321,7 +325,12 @@ public class UserController {
         user.setPhone(request.phone());
         user.setClinicId(request.clinicId());
         user.setQualification(request.qualification());
-        user.setSpecialization(request.specialization());
+        // The Custom Role: a name typed here that isn't on the organisation's list yet is added to it,
+        // so it shows up in the picker next time. Blank clears it.
+        String customRole = OrgCustomRoleService.clean(request.specialization());
+        user.setSpecialization(customRole.isEmpty()
+                ? null
+                : customRoleService.findOrCreate(principal.getOrgId(), customRole, principal.getId()).getName());
         userRepository.save(user);
 
         userLanguageRepository.deleteById_UserId(id);
@@ -337,7 +346,7 @@ public class UserController {
             AuditLogService.addIfChanged(changes, "Clinic", clinicName(clinicBefore), clinicName(user.getClinicId()));
         }
         AuditLogService.addIfChanged(changes, "Qualification", qualificationBefore, user.getQualification());
-        AuditLogService.addIfChanged(changes, "Specialization", specializationBefore, user.getSpecialization());
+        AuditLogService.addIfChanged(changes, "Custom Role", specializationBefore, user.getSpecialization());
         Set<UUID> languagesAfter = new HashSet<>(languageIds);
         if (!languagesBefore.equals(languagesAfter)) {
             AuditLogService.addIfChanged(changes, "Languages", languageNames(languagesBefore), languageNames(languagesAfter));

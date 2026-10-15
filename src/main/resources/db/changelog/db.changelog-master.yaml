@@ -374,3 +374,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/125-audit-log.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/126-org-custom-roles.sql
+      relativeToChangelogFile: false
