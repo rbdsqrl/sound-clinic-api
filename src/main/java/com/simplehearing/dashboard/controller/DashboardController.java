@@ -82,7 +82,8 @@ public class DashboardController {
             throw new ApiException(HttpStatus.FORBIDDEN, "No organisation on the current account");
         }
         return ResponseEntity.ok(ApiResponse.success(new AttentionCountsResponse(
-                (int) sessionRepository.countByOrgIdAndStatus(orgId, TherapySessionStatus.PENDING_RESCHEDULE),
+                (int) sessionRepository.countByOrgIdAndStatusAndSessionDateGreaterThanEqual(
+                        orgId, TherapySessionStatus.PENDING_RESCHEDULE, java.time.LocalDate.now()),
                 (int) sessionRepository.countByOrgIdAndStatus(orgId, TherapySessionStatus.CANCELLATION_REQUESTED),
                 concernRepository.countByOrgIdAndStatus(orgId, ConcernStatus.OPEN))));
     }

@@ -158,11 +158,17 @@ public interface TherapySessionRepository extends JpaRepository<TherapySession, 
 
     long countByOrgIdAndStatus(UUID orgId, TherapySessionStatus status);
 
-    /** All PENDING_RESCHEDULE sessions for the dashboard (covers leave, holiday, and parent requests) */
+    /** PENDING_RESCHEDULE sessions dated today or later for the dashboard (covers leave, holiday,
+     *  and parent requests). A past-dated one was never held and is left to the daily auto-cancel
+     *  sweep (MissedRescheduleCancelJob), so it isn't offered for rescheduling here. */
     @Query("SELECT s FROM TherapySession s WHERE s.orgId = :orgId " +
            "AND s.status = com.simplehearing.session.enums.TherapySessionStatus.PENDING_RESCHEDULE " +
+           "AND s.sessionDate >= :today " +
            "ORDER BY s.sessionDate ASC, s.startTime ASC")
-    List<TherapySession> findAllPendingReschedule(@Param("orgId") UUID orgId);
+    List<TherapySession> findAllPendingReschedule(@Param("orgId") UUID orgId, @Param("today") LocalDate today);
+
+    /** Count behind the dashboard's "Needs Rescheduling" card — same today-or-later scope as the list. */
+    long countByOrgIdAndStatusAndSessionDateGreaterThanEqual(UUID orgId, TherapySessionStatus status, LocalDate date);
 
     /** Sessions on a specific date in a given status (used when creating public holidays) */
     @Query("SELECT s FROM TherapySession s WHERE s.orgId = :orgId " +
