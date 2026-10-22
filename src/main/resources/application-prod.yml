@@ -38,7 +38,8 @@ server:
       # concurrent requests could reserve 200MB+ on top of the heap on Render's 512MB instance.
       # This org's traffic doesn't need anywhere near that; lowered to a figure a small clinic
       # deployment won't realistically exceed, bounding the worst case instead of leaving it open.
-      max: 50
+      # 20 against Hikari's 10 connections: a request only holds a connection while its query runs.
+      max: 20
       min-spare: 5
 
 management:

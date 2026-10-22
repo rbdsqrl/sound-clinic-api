@@ -34,5 +34,9 @@ ENTRYPOINT ["java", \
   "-XX:+UseContainerSupport", \
   "-XX:MaxRAMPercentage=50.0", \
   "-XX:MaxMetaspaceSize=192m", \
+  "-Xss512k", \
+  "-XX:ReservedCodeCacheSize=64m", \
+  "-XX:MaxDirectMemorySize=64m", \
+  "-XX:TieredStopAtLevel=1", \
   "-Djava.security.egd=file:/dev/./urandom", \
   "-jar", "app.jar"]
