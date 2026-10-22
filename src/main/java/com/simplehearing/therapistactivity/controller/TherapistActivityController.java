@@ -32,7 +32,7 @@ public class TherapistActivityController {
     @Operation(summary = "One therapist's session notes, free-text notes and media over a date range, broken down per child",
                description = "A single day is just from == to. Range capped at 63 days.")
     @GetMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasAnyRole('CLINIC_HEAD', 'BUSINESS_OWNER', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<TherapistActivityResponse>> getActivity(
             @RequestParam UUID therapistId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
