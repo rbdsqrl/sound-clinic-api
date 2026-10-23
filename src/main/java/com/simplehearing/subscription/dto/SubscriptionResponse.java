@@ -23,19 +23,14 @@ public record SubscriptionResponse(
         SubscriptionStatus status,
         String paymentNotes,
         String notes,
-        Instant createdAt
+        Instant createdAt,
+        /** Set when an admin agreed a total for the whole plan (an ad hoc discount) — totalAmount is then this figure. */
+        BigDecimal totalOverride
 ) {
     public static SubscriptionResponse from(Subscription sub, String programName) {
-        // totalAmount = numSessions × perSessionCost × (1 - discountPercent / 100), rounded to
-        // whole rupees to match the payment-status comparison in SubscriptionController and the
-        // whole-rupee amounts the UI actually shows/collects.
-        BigDecimal discount = sub.getDiscountPercent()
-                .divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP);
-        BigDecimal total = sub.getPerSessionCost()
-                .multiply(BigDecimal.valueOf(sub.getNumSessions()))
-                .multiply(BigDecimal.ONE.subtract(discount))
-                .setScale(0, RoundingMode.HALF_UP);
-
+        // totalAmount: the admin-agreed total if there is one, else sessions × per-session cost less the
+        // discount percentage, rounded to whole rupees — the same figure the payment status is judged against.
+        BigDecimal total = com.simplehearing.subscription.service.SubscriptionPaymentService.totalDue(sub);
         return new SubscriptionResponse(
                 sub.getId(),
                 sub.getPatientId(),
@@ -50,7 +45,8 @@ public record SubscriptionResponse(
                 sub.getStatus(),
                 sub.getPaymentNotes(),
                 sub.getNotes(),
-                sub.getCreatedAt()
+                sub.getCreatedAt(),
+                sub.getTotalOverride()
         );
     }
 }

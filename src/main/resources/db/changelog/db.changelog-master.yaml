@@ -380,3 +380,9 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/127-shared-media-read-receipts.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/128-subscription-payments.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/129-subscription-total-override.sql
+      relativeToChangelogFile: false

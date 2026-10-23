@@ -45,6 +45,21 @@ public class SessionGenerationService {
      * @return the saved sessions in date order — the last one's date is the plan's real end
      */
     public List<TherapySession> generateSessions(Enrollment enrollment, int numSessions, boolean awaitingPayment) {
+        return generate(enrollment, 1, enrollment.getStartDate(), numSessions, awaitingPayment);
+    }
+
+    /**
+     * Adds {@code count} more sessions to an existing plan (a renewal): numbered from
+     * {@code firstNumber}, placed from {@code fromDate} onwards by the same rules as the original
+     * schedule, with the enrollment's own therapist, time and weekdays.
+     */
+    public List<TherapySession> generateAdditionalSessions(
+            Enrollment enrollment, int firstNumber, LocalDate fromDate, int count, boolean awaitingPayment) {
+        return generate(enrollment, firstNumber, fromDate, count, awaitingPayment);
+    }
+
+    private List<TherapySession> generate(
+            Enrollment enrollment, int firstNumber, LocalDate fromDate, int numSessions, boolean awaitingPayment) {
         LocalTime startTime = enrollment.getStartTime();
         LocalTime endTime   = startTime.plusMinutes(enrollment.getSessionDurationMinutes());
 
@@ -72,7 +87,7 @@ public class SessionGenerationService {
         }
 
         List<TherapySession> sessions = new ArrayList<>(numSessions);
-        LocalDate date = enrollment.getStartDate();
+        LocalDate date = fromDate;
         for (int i = 0; i < numSessions; i++) {
             // Bounded to just over two years out — long enough that a real schedule never hits
             // it, but finite so a bad combination can't hang the request.
@@ -82,7 +97,7 @@ public class SessionGenerationService {
             s.setEnrollmentId(enrollment.getId());
             s.setPatientId(enrollment.getPatientId());
             s.setTherapistId(enrollment.getTherapistId());
-            s.setSessionNumber(i + 1);
+            s.setSessionNumber(firstNumber + i);
             s.setSessionDate(date);
             s.setStartTime(startTime);
             s.setEndTime(endTime);

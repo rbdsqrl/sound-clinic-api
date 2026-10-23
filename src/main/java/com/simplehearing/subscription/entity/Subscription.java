@@ -36,6 +36,10 @@ public class Subscription {
     @Column(name = "discount_percent", nullable = false, precision = 5, scale = 2)
     private BigDecimal discountPercent = BigDecimal.ZERO;
 
+    /** Admin-agreed total for the whole plan — when set it is the amount due, replacing the computed figure. */
+    @Column(name = "total_override", precision = 12, scale = 2)
+    private BigDecimal totalOverride;
+
     @Column(name = "amount_paid", nullable = false, precision = 10, scale = 2)
     private BigDecimal amountPaid = BigDecimal.ZERO;
 
@@ -82,6 +86,8 @@ public class Subscription {
     public void setNumSessions(int numSessions) { this.numSessions = numSessions; }
     public BigDecimal getPerSessionCost() { return perSessionCost; }
     public void setPerSessionCost(BigDecimal perSessionCost) { this.perSessionCost = perSessionCost; }
+    public BigDecimal getTotalOverride() { return totalOverride; }
+    public void setTotalOverride(BigDecimal totalOverride) { this.totalOverride = totalOverride; }
     public BigDecimal getDiscountPercent() { return discountPercent; }
     public void setDiscountPercent(BigDecimal discountPercent) { this.discountPercent = discountPercent; }
     public BigDecimal getAmountPaid() { return amountPaid; }

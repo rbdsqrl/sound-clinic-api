@@ -16,6 +16,7 @@ import com.simplehearing.common.exception.ApiException;
 import com.simplehearing.common.exception.ResourceNotFoundException;
 import com.simplehearing.enrollment.dto.AvailableTherapistResponse;
 import com.simplehearing.enrollment.dto.CreateEnrollmentRequest;
+import com.simplehearing.enrollment.dto.RenewEnrollmentRequest;
 import com.simplehearing.enrollment.dto.EnrollmentResponse;
 import com.simplehearing.enrollment.dto.TherapistSignoffRequest;
 import com.simplehearing.enrollment.dto.UpdateCareStatusRequest;
@@ -24,6 +25,7 @@ import com.simplehearing.enrollment.entity.Enrollment;
 import com.simplehearing.enrollment.enums.EnrollmentCareStatus;
 import com.simplehearing.enrollment.enums.EnrollmentStatus;
 import com.simplehearing.enrollment.repository.EnrollmentRepository;
+import java.math.BigDecimal;
 import java.time.Instant;
 import com.simplehearing.leave.entity.Leave;
 import com.simplehearing.leave.enums.LeaveStatus;
@@ -38,6 +40,8 @@ import com.simplehearing.review.service.ReviewMeetingService;
 import com.simplehearing.session.entity.TherapySession;
 import com.simplehearing.session.service.SessionGenerationService;
 import com.simplehearing.subscription.entity.Subscription;
+import com.simplehearing.subscription.enums.SubscriptionStatus;
+import com.simplehearing.subscription.service.SubscriptionPaymentService;
 import com.simplehearing.subscription.enums.SubscriptionPaymentStatus;
 import com.simplehearing.subscription.repository.SubscriptionRepository;
 import com.simplehearing.user.entity.User;
@@ -50,6 +54,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -77,6 +82,7 @@ public class EnrollmentController {
     private final TherapySessionRepository therapySessionRepository;
     private final ReviewMeetingRepository reviewMeetingRepository;
     private final AuditLogService auditLog;
+    private final SubscriptionPaymentService paymentService;
 
     public EnrollmentController(
             EnrollmentRepository enrollmentRepository,
@@ -91,7 +97,8 @@ public class EnrollmentController {
             ReviewMeetingService reviewMeetingService,
             TherapySessionRepository therapySessionRepository,
             ReviewMeetingRepository reviewMeetingRepository,
-            AuditLogService auditLog) {
+            AuditLogService auditLog,
+            SubscriptionPaymentService paymentService) {
         this.enrollmentRepository = enrollmentRepository;
         this.subscriptionRepository = subscriptionRepository;
         this.programRepository = programRepository;
@@ -105,6 +112,7 @@ public class EnrollmentController {
         this.therapySessionRepository = therapySessionRepository;
         this.reviewMeetingRepository = reviewMeetingRepository;
         this.auditLog = auditLog;
+        this.paymentService = paymentService;
     }
 
     private String programNameOf(Enrollment e) {
@@ -695,6 +703,102 @@ public class EnrollmentController {
 
         List<EnrollmentResponse> enriched = enrichEnrollments(List.of(saved));
         return ResponseEntity.ok(ApiResponse.success(enriched.get(0)));
+    }
+
+    // ── Renew (add more sessions) ─────────────────────────────────────────────
+
+    @Operation(
+        summary = "Renew a program — add more sessions to the same plan",
+        description = "Extends the plan in place: the subscription's session total goes up, the new sessions are "
+                    + "numbered after the existing ones and placed after the last session (or from the given date) "
+                    + "with the same therapist, time and weekdays. A program that was marked completed is reopened. "
+                    + "An optional payment is added to what has already been paid; the payment status is "
+                    + "recalculated against the larger total. Not available for a cancelled plan or one closed by discharge."
+    )
+    @PostMapping("/{id}/renew")
+    @PreAuthorize("hasAnyRole('CLINIC_HEAD', 'BUSINESS_OWNER', 'OFFICE_ADMIN')")
+    @Transactional
+    public ResponseEntity<ApiResponse<EnrollmentResponse>> renew(
+            @PathVariable UUID id,
+            @Valid @RequestBody RenewEnrollmentRequest request,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        Enrollment enrollment = enrollmentRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Enrollment not found"));
+        if (!enrollment.getOrgId().equals(principal.getOrgId())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Access denied");
+        }
+        if (enrollment.getStatus() == EnrollmentStatus.CANCELLED) {
+            throw new ApiException(HttpStatus.CONFLICT, "A cancelled program can't be renewed");
+        }
+        if (enrollment.getDischargedInRecordId() != null) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "This program was closed by a patient discharge — start a new program instead");
+        }
+        Subscription sub = subscriptionRepository.findById(enrollment.getSubscriptionId())
+                .orElseThrow(() -> new ResourceNotFoundException("Subscription not found"));
+        if (sub.getStatus() == SubscriptionStatus.CANCELLED) {
+            throw new ApiException(HttpStatus.CONFLICT, "A cancelled plan can't be renewed");
+        }
+
+        LocalDate today = LocalDate.now();
+        if (request.startDate() != null && request.startDate().isBefore(today)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "The new sessions can't start in the past");
+        }
+
+        List<TherapySession> existing = therapySessionRepository.findByEnrollmentIdOrderBySessionNumberAsc(id);
+        int lastNumber = existing.stream().mapToInt(TherapySession::getSessionNumber).max().orElse(0);
+        LocalDate lastDate = existing.stream().map(TherapySession::getSessionDate).max(LocalDate::compareTo).orElse(null);
+        LocalDate from = request.startDate() != null ? request.startDate()
+                : (lastDate != null && !lastDate.plusDays(1).isBefore(today) ? lastDate.plusDays(1) : today);
+
+        // A program marked completed is reopened — same reset as the reactivate override, except the
+        // sessions that override auto-cancelled stay cancelled (the new ones replace them).
+        if (enrollment.getStatus() == EnrollmentStatus.COMPLETED) {
+            enrollment.setStatus(EnrollmentStatus.ACTIVE);
+            enrollment.setCareStatus(EnrollmentCareStatus.ON_TRACK);
+            enrollment.setCareStatusNote(null);
+            enrollment.setCareStatusUpdatedBy(principal.getId());
+            enrollment.setCareStatusUpdatedAt(Instant.now());
+            enrollment.setManualGoalMasteryPct(null);
+            enrollment.setManualParentSatisfactionPct(null);
+        }
+        if (sub.getStatus() == SubscriptionStatus.COMPLETED) {
+            sub.setStatus(SubscriptionStatus.ACTIVE);
+        }
+
+        // New sessions follow the plan's own hold state — a renewal never adds a hold of its own.
+        List<TherapySession> added = sessionGenerationService.generateAdditionalSessions(
+                enrollment, lastNumber + 1, from, request.additionalSessions(), enrollment.isAwaitingPayment());
+
+        enrollment.setEndDate(added.get(added.size() - 1).getSessionDate());
+        Enrollment saved = enrollmentRepository.save(enrollment);
+
+        // More sessions means a larger total due, so the payment status is re-derived — a fully paid
+        // plan becomes partly paid until the extra is covered.
+        BigDecimal totalBefore = SubscriptionPaymentService.totalDue(sub);
+        sub.setNumSessions(sub.getNumSessions() + request.additionalSessions());
+        // The new total is what the caller agreed, else the old total plus the added sessions at the usual
+        // rate. It is stored as an agreed total only when it differs from what the rate and discount give.
+        BigDecimal newTotal = request.planTotal() != null
+                ? request.planTotal().setScale(0, java.math.RoundingMode.HALF_UP)
+                : totalBefore.add(SubscriptionPaymentService.formulaTotalFor(sub, request.additionalSessions()));
+        sub.setTotalOverride(newTotal.compareTo(SubscriptionPaymentService.formulaTotal(sub)) == 0 ? null : newTotal);
+        var pay = request.payment();
+        if (pay != null) {
+            sub = paymentService.addPayment(sub, pay.amount(), pay.paidOn(), pay.mode(), pay.note(), principal.getId());
+        } else {
+            sub = paymentService.refreshStatus(sub);
+        }
+
+        String programName = programNameOf(saved);
+        auditLog.recordCase(principal.getOrgId(), saved.getPatientId(), principal.getId(), "PROGRAM_RENEWED",
+                "Program renewed: " + programName + " — " + request.additionalSessions() + " more session"
+                        + (request.additionalSessions() == 1 ? "" : "s") + " (" + sub.getNumSessions() + " in total)"
+                        + (pay != null ? ", payment of ₹" + pay.amount().stripTrailingZeros().toPlainString() + " recorded" : ""),
+                null);
+
+        return ResponseEntity.ok(ApiResponse.success(enrichEnrollments(List.of(saved)).get(0)));
     }
 
     // ── Therapist sign-off ────────────────────────────────────────────────────

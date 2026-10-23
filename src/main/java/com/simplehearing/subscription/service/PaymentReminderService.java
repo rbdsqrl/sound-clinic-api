@@ -83,12 +83,7 @@ public class PaymentReminderService {
         Organisation org = organisationRepository.findById(sub.getOrgId()).orElse(null);
         String orgName = org != null ? org.getName() : "";
 
-        BigDecimal discount = sub.getDiscountPercent()
-                .divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP);
-        BigDecimal totalDue = sub.getPerSessionCost()
-                .multiply(BigDecimal.valueOf(sub.getNumSessions()))
-                .multiply(BigDecimal.ONE.subtract(discount))
-                .setScale(0, RoundingMode.HALF_UP);
+        BigDecimal totalDue = SubscriptionPaymentService.totalDue(sub);
         BigDecimal remaining = totalDue.subtract(sub.getAmountPaid().setScale(0, RoundingMode.HALF_UP));
 
         for (User parent : parents) {
