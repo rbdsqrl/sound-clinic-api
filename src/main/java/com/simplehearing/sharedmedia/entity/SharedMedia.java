@@ -47,6 +47,13 @@ public class SharedMedia {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    /** When the intended recipient first opened this, and who — null until then. */
+    @Column(name = "read_at")
+    private Instant readAt;
+
+    @Column(name = "read_by")
+    private UUID readBy;
+
     public SharedMedia() {}
 
     public UUID getId()                                        { return id; }
@@ -69,4 +76,8 @@ public class SharedMedia {
     public String getNote()                                    { return note; }
     public void setNote(String v)                              { this.note = v; }
     public Instant getCreatedAt()                              { return createdAt; }
+    public Instant getReadAt()                                 { return readAt; }
+    public void setReadAt(Instant v)                           { this.readAt = v; }
+    public UUID getReadBy()                                    { return readBy; }
+    public void setReadBy(UUID v)                              { this.readBy = v; }
 }

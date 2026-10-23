@@ -7,6 +7,11 @@ import com.simplehearing.user.enums.Role;
 import java.time.Instant;
 import java.util.UUID;
 
+/**
+ * {@code readAt}/{@code readById}/{@code readByName} say when the intended recipient first opened
+ * the post (null = unread). {@code patientName} is filled only for the dashboard inbox, where posts
+ * from several children are listed together.
+ */
 public record SharedMediaResponse(
         UUID id,
         UUID patientId,
@@ -20,9 +25,14 @@ public record SharedMediaResponse(
         String uploadedByName,
         Role uploadedByRole,
         String uploadedByCustomRole,
-        Instant createdAt
+        Instant createdAt,
+        Instant readAt,
+        UUID readById,
+        String readByName,
+        String patientName
 ) {
-    public static SharedMediaResponse from(SharedMedia m, String uploaderName, Role uploaderRole, String uploaderCustomRole, String presignedUrl) {
+    public static SharedMediaResponse from(SharedMedia m, String uploaderName, Role uploaderRole, String uploaderCustomRole,
+                                           String presignedUrl, String readByName, String patientName) {
         return new SharedMediaResponse(
                 m.getId(),
                 m.getPatientId(),
@@ -36,7 +46,11 @@ public record SharedMediaResponse(
                 uploaderName,
                 uploaderRole,
                 uploaderCustomRole,
-                m.getCreatedAt()
+                m.getCreatedAt(),
+                m.getReadAt(),
+                m.getReadBy(),
+                readByName,
+                patientName
         );
     }
 }

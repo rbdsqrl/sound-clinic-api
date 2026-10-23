@@ -8,6 +8,7 @@ import com.simplehearing.patient.entity.Patient;
 import com.simplehearing.patient.repository.PatientParentRepository;
 import com.simplehearing.patient.repository.PatientRepository;
 import com.simplehearing.patient.repository.TherapistPatientRepository;
+import com.simplehearing.sharedmedia.SharedMediaMapper;
 import com.simplehearing.sharedmedia.dto.SharedMediaResponse;
 import com.simplehearing.sharedmedia.entity.SharedMedia;
 import com.simplehearing.sharedmedia.enums.SharedMediaDirection;
@@ -28,6 +29,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -44,19 +46,22 @@ public class SharedMediaController {
     private final TherapistPatientRepository therapistPatientRepository;
     private final UserRepository userRepository;
     private final StorageService storageService;
+    private final SharedMediaMapper mapper;
 
     public SharedMediaController(SharedMediaRepository sharedMediaRepository,
                                   PatientRepository patientRepository,
                                   PatientParentRepository patientParentRepository,
                                   TherapistPatientRepository therapistPatientRepository,
                                   UserRepository userRepository,
-                                  StorageService storageService) {
+                                  StorageService storageService,
+                                  SharedMediaMapper mapper) {
         this.sharedMediaRepository = sharedMediaRepository;
         this.patientRepository = patientRepository;
         this.patientParentRepository = patientParentRepository;
         this.therapistPatientRepository = therapistPatientRepository;
         this.userRepository = userRepository;
         this.storageService = storageService;
+        this.mapper = mapper;
     }
 
     @Operation(summary = "List files/notes shared between the parent and the care team for a patient")
@@ -70,18 +75,7 @@ public class SharedMediaController {
 
         List<SharedMedia> items = sharedMediaRepository.findByPatientIdOrderByCreatedAtDesc(patient.getId());
 
-        Map<UUID, User> uploaders = userRepository
-                .findAllById(items.stream().map(SharedMedia::getUploadedBy).collect(Collectors.toSet()))
-                .stream().collect(Collectors.toMap(User::getId, u -> u));
-
-        List<SharedMediaResponse> result = items.stream().map(m -> {
-            User uploader = uploaders.get(m.getUploadedBy());
-            String uploaderName = uploader != null ? uploader.getFirstName() + " " + uploader.getLastName() : "Unknown";
-            Role uploaderRole = uploader != null ? uploader.getRole() : null;
-            String uploaderCustomRole = uploader != null ? uploader.customRoleOrNull() : null;
-            String presignedUrl = m.getFileUrl() != null ? storageService.presign(m.getFileUrl(), Duration.ofHours(1)) : null;
-            return SharedMediaResponse.from(m, uploaderName, uploaderRole, uploaderCustomRole, presignedUrl);
-        }).toList();
+        List<SharedMediaResponse> result = mapper.toResponses(items, Map.of());
 
         return ResponseEntity.ok(ApiResponse.success(result));
     }
@@ -130,7 +124,36 @@ public class SharedMediaController {
         String presignedUrl = saved.getFileUrl() != null ? storageService.presign(saved.getFileUrl(), Duration.ofHours(1)) : null;
 
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(
-                SharedMediaResponse.from(saved, actor.getFirstName() + " " + actor.getLastName(), actor.getRole(), actor.customRoleOrNull(), presignedUrl)));
+                SharedMediaResponse.from(saved, actor.getFirstName() + " " + actor.getLastName(), actor.getRole(), actor.customRoleOrNull(), presignedUrl, null, null)));
+    }
+
+    @Operation(summary = "Mark a shared post as read — only counts when the caller is its intended recipient (the parent for a clinic post, an assigned therapist for a family post); anyone else just gets the post back unchanged")
+    @PostMapping("/{id}/read")
+    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD', 'THERAPIST', 'PARENT')")
+    public ResponseEntity<ApiResponse<SharedMediaResponse>> markRead(
+            @PathVariable UUID patientId,
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        requireAccessible(patientId, principal);
+
+        SharedMedia media = sharedMediaRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Shared media not found"));
+        if (!media.getPatientId().equals(patientId)) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Access denied");
+        }
+
+        Role active = principal.getActiveRole();
+        boolean isRecipient =
+                (media.getDirection() == SharedMediaDirection.CLINIC_TO_PARENT && active == Role.PARENT)
+             || (media.getDirection() == SharedMediaDirection.PARENT_TO_CLINIC && active == Role.THERAPIST);
+        if (isRecipient && media.getReadAt() == null && !media.getUploadedBy().equals(principal.getId())) {
+            media.setReadAt(Instant.now());
+            media.setReadBy(principal.getId());
+            media = sharedMediaRepository.save(media);
+        }
+
+        return ResponseEntity.ok(ApiResponse.success(mapper.toResponses(List.of(media), Map.of()).get(0)));
     }
 
     @Operation(summary = "Delete a shared file/note — the uploader, or BUSINESS_OWNER/CLINIC_HEAD")
