@@ -1,5 +1,7 @@
 package com.simplehearing.therapistactivity.dto;
 
+import com.simplehearing.sharedmedia.enums.SharedMediaDirection;
+
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -51,7 +53,10 @@ public record TherapistActivityResponse(
 
     public record ChildFreeTextNotes(UUID patientId, String patientName, List<FreeTextNoteEntry> entries) {}
 
-    public record FreeTextNoteEntry(UUID id, Instant createdAt, String note) {}
+    /** {@code direction}, {@code readAt} and {@code readByName} let the page open the entry in the same note
+     *  popup the Media & Notes tab uses, read status included. */
+    public record FreeTextNoteEntry(UUID id, Instant createdAt, String note,
+                                    SharedMediaDirection direction, Instant readAt, String readByName) {}
 
     public record ChildMedia(UUID patientId, String patientName, List<MediaEntry> entries) {}
 
@@ -62,6 +67,10 @@ public record TherapistActivityResponse(
             String fileName,
             String contentType,
             /** The same entry's note, if it also carries one (shown for context, not counted here). */
-            String note
+            String note,
+            Long fileSizeBytes,
+            SharedMediaDirection direction,
+            Instant readAt,
+            String readByName
     ) {}
 }

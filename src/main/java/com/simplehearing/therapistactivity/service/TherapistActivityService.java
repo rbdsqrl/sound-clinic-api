@@ -8,6 +8,7 @@ import com.simplehearing.session.entity.TherapySession;
 import com.simplehearing.session.repository.TherapySessionRepository;
 import com.simplehearing.sharedmedia.entity.SharedMedia;
 import com.simplehearing.sharedmedia.repository.SharedMediaRepository;
+import com.simplehearing.storage.StorageService;
 import com.simplehearing.therapistactivity.dto.TherapistActivityResponse;
 import com.simplehearing.therapistactivity.dto.TherapistActivityResponse.ChildFreeTextNotes;
 import com.simplehearing.therapistactivity.dto.TherapistActivityResponse.ChildMedia;
@@ -40,15 +41,18 @@ public class TherapistActivityService {
     private final PatientRepository patientRepository;
     private final TherapySessionRepository therapySessionRepository;
     private final SharedMediaRepository sharedMediaRepository;
+    private final StorageService storageService;
 
     public TherapistActivityService(UserRepository userRepository,
                                      PatientRepository patientRepository,
                                      TherapySessionRepository therapySessionRepository,
-                                     SharedMediaRepository sharedMediaRepository) {
+                                     SharedMediaRepository sharedMediaRepository,
+                                     StorageService storageService) {
         this.userRepository = userRepository;
         this.patientRepository = patientRepository;
         this.therapySessionRepository = therapySessionRepository;
         this.sharedMediaRepository = sharedMediaRepository;
+        this.storageService = storageService;
     }
 
     private static final int MAX_RANGE_DAYS = 62;
@@ -98,6 +102,11 @@ public class TherapistActivityService {
                                 s.getFeedback(), s.getPerformanceScore())).toList()))
                 .toList();
 
+        Set<UUID> readerIds = uploads.stream().map(SharedMedia::getReadBy).filter(java.util.Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<UUID, String> readerNames = userRepository.findAllById(readerIds).stream()
+                .collect(Collectors.toMap(User::getId, u -> u.getFirstName() + " " + u.getLastName()));
+
         List<ChildFreeTextNotes> freeTextGroups = freeTextEntries.stream()
                 .collect(Collectors.groupingBy(SharedMedia::getPatientId, LinkedHashMap::new, Collectors.toList()))
                 .entrySet().stream()
@@ -105,7 +114,8 @@ public class TherapistActivityService {
                         e.getKey(),
                         patientNames.getOrDefault(e.getKey(), ""),
                         e.getValue().stream().map(m -> new FreeTextNoteEntry(
-                                m.getId(), m.getCreatedAt(), m.getNote())).toList()))
+                                m.getId(), m.getCreatedAt(), m.getNote(),
+                                m.getDirection(), m.getReadAt(), readerNames.get(m.getReadBy()))).toList()))
                 .toList();
 
         List<ChildMedia> mediaGroups = mediaEntries.stream()
@@ -115,8 +125,11 @@ public class TherapistActivityService {
                         e.getKey(),
                         patientNames.getOrDefault(e.getKey(), ""),
                         e.getValue().stream().map(m -> new MediaEntry(
-                                m.getId(), m.getCreatedAt(), m.getFileUrl(), m.getFileName(),
-                                m.getContentType(), m.getNote())).toList()))
+                                m.getId(), m.getCreatedAt(),
+                                // A link that opens: the stored file is private, so it has to be a short-lived signed one.
+                                storageService.presign(m.getFileUrl(), java.time.Duration.ofHours(1)),
+                                m.getFileName(), m.getContentType(), m.getNote(), m.getFileSizeBytes(),
+                                m.getDirection(), m.getReadAt(), readerNames.get(m.getReadBy()))).toList()))
                 .toList();
 
         return new TherapistActivityResponse(
