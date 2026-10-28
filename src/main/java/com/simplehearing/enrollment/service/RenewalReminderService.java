@@ -2,7 +2,6 @@ package com.simplehearing.enrollment.service;
 
 import com.simplehearing.enrollment.entity.Enrollment;
 import com.simplehearing.enrollment.enums.EnrollmentCareStatus;
-import com.simplehearing.enrollment.enums.ProgramStatus;
 import com.simplehearing.enrollment.repository.EnrollmentRepository;
 import com.simplehearing.notification.EmailService;
 import com.simplehearing.organisation.entity.Organisation;
@@ -37,7 +36,8 @@ import java.util.UUID;
  * Emails a child's parents a renewal reminder twice a day — a morning one ({@value #MORNING_HOUR}:00) and an
  * evening one ({@value #EVENING_HOUR}:00), in the organisation's own timezone — starting
  * {@value #LEAD_DAYS} days before the program's last session and continuing until it is renewed, or an admin
- * marks the program Completed/Discontinued.
+ * marks the program Completed/Discontinued. Only programs an admin has marked Needs Renewal (status Renewal Due)
+ * get reminders — nothing switches a program into that state automatically.
  */
 @Service
 public class RenewalReminderService {
@@ -103,7 +103,6 @@ public class RenewalReminderService {
 
             if (sendOne(e, org, daysLeft)) sent++;
             e.setRenewalReminderLastSlot(slot);
-            if (e.getProgramStatus() == ProgramStatus.ACTIVE) e.setProgramStatus(ProgramStatus.RENEWAL_DUE);
         }
         enrollmentRepository.saveAll(candidates);
         if (sent > 0) log.info("Sent {} renewal reminder(s)", sent);

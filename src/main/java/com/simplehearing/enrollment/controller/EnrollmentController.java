@@ -820,12 +820,12 @@ public class EnrollmentController {
 
     /** Programs this many days (or fewer) from their last session are asked about on the Renewals task list. */
     public static final int RENEWAL_TASK_DAYS = 5;
-    /** A program that ended longer ago than this is treated as lapsed history, not a task. */
-    public static final int RENEWAL_TASK_OVERDUE_DAYS = 30;
+    /** A program stays on the list this many days after its last session; after that it is off the list (the Case page still offers Renew and status changes). */
+    public static final int RENEWAL_TASK_OVERDUE_DAYS = 5;
 
     @Operation(
         summary = "Programs in their last week that still need a decision",
-        description = "Running programs ending within 5 days (or just ended) that no admin has marked Completed, "
+        description = "Running programs ending within 5 days, or that ended in the last 5 days, that no admin has marked Completed, "
                     + "Discontinued or Needs Renewal yet. Acting on one removes it from this list."
     )
     @GetMapping("/renewals-due")
