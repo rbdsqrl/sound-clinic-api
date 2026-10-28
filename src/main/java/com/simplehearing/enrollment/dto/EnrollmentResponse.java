@@ -83,9 +83,17 @@ public record EnrollmentResponse(
                 month.month().toString(),
                 month.completed(),
                 month.total(),
-                enrollment.getProgramStatus(),
+                effectiveProgramStatus(enrollment),
                 enrollment.getCreatedAt(),
                 enrollment.getDischargedInRecordId()
         );
+    }
+
+    /** A program an admin marked Completed stays Active until its last session date has passed — it is never shown as
+     *  completed before its real end date. Every other status is shown as stored. */
+    private static ProgramStatus effectiveProgramStatus(Enrollment e) {
+        boolean completedDecision = e.getRenewalOutcome() == com.simplehearing.enrollment.enums.RenewalOutcome.COMPLETED;
+        boolean ended = e.getEndDate() != null && e.getEndDate().isBefore(LocalDate.now());
+        return completedDecision && ended ? ProgramStatus.COMPLETED_DISCONTINUED : e.getProgramStatus();
     }
 }

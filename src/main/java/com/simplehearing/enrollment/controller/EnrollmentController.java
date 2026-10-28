@@ -873,8 +873,8 @@ public class EnrollmentController {
 
     @Operation(
         summary = "Record the decision on a program in its last week — Completed, Discontinued or Needs Renewal",
-        description = "Takes the program off the Renewals task list. Completed and Discontinued set the program status "
-                    + "to Completed/Discontinued, which stops the renewal reminder emails; Needs Renewal sets it to "
+        description = "Takes the program off the Renewals task list. Discontinued sets the program status "
+                    + "to Completed/Discontinued straight away; Completed keeps it Active until its last session date has passed, then it shows as Completed. Both stop the renewal reminder emails; Needs Renewal sets it to "
                     + "Renewal Due and the reminders carry on until the program is renewed. Sessions are not changed. "
                     + "Renewing the program clears the decision."
     )
@@ -891,8 +891,15 @@ public class EnrollmentController {
         if (!enrollment.getOrgId().equals(principal.getOrgId())) {
             throw new ApiException(HttpStatus.FORBIDDEN, "Access denied");
         }
-        ProgramStatus status = request.outcome() == RenewalOutcome.NEEDS_RENEWAL
-                ? ProgramStatus.RENEWAL_DUE : ProgramStatus.COMPLETED_DISCONTINUED;
+        // Completed is only a decision until the last session date has passed — the program stays Active (reminders
+        // stop) and shows as Completed from the day after. Discontinued (the family is stopping) and Needs Renewal
+        // take effect straight away.
+        boolean ended = enrollment.getEndDate() != null && enrollment.getEndDate().isBefore(LocalDate.now());
+        ProgramStatus status = switch (request.outcome()) {
+            case NEEDS_RENEWAL -> ProgramStatus.RENEWAL_DUE;
+            case DISCONTINUED  -> ProgramStatus.COMPLETED_DISCONTINUED;
+            case COMPLETED     -> ended ? ProgramStatus.COMPLETED_DISCONTINUED : ProgramStatus.ACTIVE;
+        };
         enrollment.setRenewalOutcome(request.outcome());
         enrollment.setRenewalOutcomeAt(Instant.now());
         enrollment.setRenewalOutcomeBy(principal.getId());
@@ -902,7 +909,9 @@ public class EnrollmentController {
 
         auditLog.recordCase(principal.getOrgId(), enrollment.getPatientId(), principal.getId(), "PROGRAM_RENEWAL_DECISION",
                 "End of program decision for " + programNameOf(enrollment) + ": "
-                        + request.outcome().name().toLowerCase().replace('_', ' '), null);
+                        + request.outcome().name().toLowerCase().replace('_', ' ')
+                        + (request.outcome() == RenewalOutcome.COMPLETED && !ended
+                            ? " (shows as completed after its last session on " + enrollment.getEndDate() + ")" : ""), null);
         return ResponseEntity.ok(ApiResponse.success(enrichEnrollments(List.of(enrollment)).get(0)));
     }
 
