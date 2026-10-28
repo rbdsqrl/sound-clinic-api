@@ -6,6 +6,8 @@ import com.simplehearing.common.exception.ApiException;
 import com.simplehearing.concern.enums.ConcernStatus;
 import com.simplehearing.concern.repository.ConcernRepository;
 import com.simplehearing.dashboard.dto.AttentionCountsResponse;
+import com.simplehearing.enrollment.controller.EnrollmentController;
+import com.simplehearing.enrollment.repository.EnrollmentRepository;
 import com.simplehearing.dashboard.dto.OrgOverviewResponse;
 import com.simplehearing.invitation.entity.Invitation;
 import com.simplehearing.invitation.repository.InvitationRepository;
@@ -42,12 +44,15 @@ public class DashboardController {
     private final InvitationRepository invitationRepository;
     private final TherapySessionRepository sessionRepository;
     private final ConcernRepository concernRepository;
+    private final EnrollmentRepository enrollmentRepository;
 
     public DashboardController(PatientRepository patientRepository,
                                UserRepository userRepository,
                                InvitationRepository invitationRepository,
                                TherapySessionRepository sessionRepository,
-                               ConcernRepository concernRepository) {
+                               ConcernRepository concernRepository,
+                               EnrollmentRepository enrollmentRepository) {
+        this.enrollmentRepository = enrollmentRepository;
         this.sessionRepository = sessionRepository;
         this.concernRepository = concernRepository;
         this.patientRepository = patientRepository;
@@ -81,10 +86,14 @@ public class DashboardController {
         if (orgId == null) {
             throw new ApiException(HttpStatus.FORBIDDEN, "No organisation on the current account");
         }
+        java.time.LocalDate today = java.time.LocalDate.now();
         return ResponseEntity.ok(ApiResponse.success(new AttentionCountsResponse(
                 (int) sessionRepository.countByOrgIdAndStatusAndSessionDateGreaterThanEqual(
                         orgId, TherapySessionStatus.PENDING_RESCHEDULE, java.time.LocalDate.now()),
                 (int) sessionRepository.countByOrgIdAndStatus(orgId, TherapySessionStatus.CANCELLATION_REQUESTED),
-                concernRepository.countByOrgIdAndStatus(orgId, ConcernStatus.OPEN))));
+                concernRepository.countByOrgIdAndStatus(orgId, ConcernStatus.OPEN),
+                enrollmentRepository.findAwaitingRenewalDecision(orgId,
+                        today.minusDays(EnrollmentController.RENEWAL_TASK_OVERDUE_DAYS),
+                        today.plusDays(EnrollmentController.RENEWAL_TASK_DAYS)).size())));
     }
 }

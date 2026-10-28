@@ -62,4 +62,14 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, UUID> {
          + "AND e.programStatus <> com.simplehearing.enrollment.enums.ProgramStatus.COMPLETED_DISCONTINUED "
          + "AND e.dischargedInRecordId IS NULL AND e.endDate IS NOT NULL AND e.endDate <= :cutoff")
     List<Enrollment> findDueForRenewalReminder(@Param("cutoff") java.time.LocalDate cutoff);
+
+    /** Running programs in their last days that no admin has decided on yet — the Renewals task list. Programs that
+     *  lapsed long ago (before {@code from}) are left out so old data doesn't flood the list. */
+    @Query("SELECT e FROM Enrollment e WHERE e.orgId = :orgId AND e.status = com.simplehearing.enrollment.enums.EnrollmentStatus.ACTIVE "
+         + "AND e.programStatus <> com.simplehearing.enrollment.enums.ProgramStatus.COMPLETED_DISCONTINUED "
+         + "AND e.renewalOutcome IS NULL AND e.dischargedInRecordId IS NULL "
+         + "AND e.endDate IS NOT NULL AND e.endDate >= :from AND e.endDate <= :to ORDER BY e.endDate ASC")
+    List<Enrollment> findAwaitingRenewalDecision(@Param("orgId") java.util.UUID orgId,
+                                                 @Param("from") java.time.LocalDate from,
+                                                 @Param("to") java.time.LocalDate to);
 }

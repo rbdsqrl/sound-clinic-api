@@ -389,3 +389,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/130-program-status.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/131-renewal-outcome.sql
+      relativeToChangelogFile: false

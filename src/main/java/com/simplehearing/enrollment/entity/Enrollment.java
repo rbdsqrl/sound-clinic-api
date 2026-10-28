@@ -3,6 +3,7 @@ package com.simplehearing.enrollment.entity;
 import com.simplehearing.enrollment.enums.EnrollmentCareStatus;
 import com.simplehearing.enrollment.enums.EnrollmentStatus;
 import com.simplehearing.enrollment.enums.ProgramStatus;
+import com.simplehearing.enrollment.enums.RenewalOutcome;
 import jakarta.persistence.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
@@ -132,6 +133,17 @@ public class Enrollment {
     @Column(name = "renewal_reminder_last_slot", length = 20)
     private String renewalReminderLastSlot;
 
+    /** The admin's decision once the program reached its last week; null until then (and again after a renewal). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "renewal_outcome", length = 30)
+    private RenewalOutcome renewalOutcome;
+
+    @Column(name = "renewal_outcome_at")
+    private Instant renewalOutcomeAt;
+
+    @Column(name = "renewal_outcome_by")
+    private UUID renewalOutcomeBy;
+
     @Column(name = "created_by")
     private UUID createdBy;
 
@@ -174,6 +186,12 @@ public class Enrollment {
     public void setProgramStatus(ProgramStatus programStatus) { this.programStatus = programStatus; }
     public String getRenewalReminderLastSlot() { return renewalReminderLastSlot; }
     public void setRenewalReminderLastSlot(String slot) { this.renewalReminderLastSlot = slot; }
+    public RenewalOutcome getRenewalOutcome() { return renewalOutcome; }
+    public void setRenewalOutcome(RenewalOutcome renewalOutcome) { this.renewalOutcome = renewalOutcome; }
+    public Instant getRenewalOutcomeAt() { return renewalOutcomeAt; }
+    public void setRenewalOutcomeAt(Instant at) { this.renewalOutcomeAt = at; }
+    public UUID getRenewalOutcomeBy() { return renewalOutcomeBy; }
+    public void setRenewalOutcomeBy(UUID by) { this.renewalOutcomeBy = by; }
     public boolean isAwaitingPayment() { return awaitingPayment; }
     public void setAwaitingPayment(boolean awaitingPayment) { this.awaitingPayment = awaitingPayment; }
     public EnrollmentCareStatus getCareStatus() { return careStatus; }

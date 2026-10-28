@@ -18,7 +18,11 @@ import com.simplehearing.enrollment.dto.AvailableTherapistResponse;
 import com.simplehearing.enrollment.dto.CreateEnrollmentRequest;
 import com.simplehearing.enrollment.ProgramMonths;
 import com.simplehearing.enrollment.dto.RenewEnrollmentRequest;
+import com.simplehearing.enrollment.dto.RenewalDueResponse;
+import com.simplehearing.enrollment.dto.RenewalOutcomeRequest;
 import com.simplehearing.enrollment.dto.UpdateProgramStatusRequest;
+import com.simplehearing.enrollment.enums.RenewalOutcome;
+import com.simplehearing.patient.entity.Patient;
 import com.simplehearing.enrollment.enums.ProgramStatus;
 import com.simplehearing.enrollment.dto.EnrollmentResponse;
 import com.simplehearing.enrollment.dto.TherapistSignoffRequest;
@@ -780,6 +784,9 @@ public class EnrollmentController {
         // Renewing completes the renewal — the reminders stop and the label goes back to Active.
         enrollment.setProgramStatus(ProgramStatus.ACTIVE);
         enrollment.setRenewalReminderLastSlot(null);
+        enrollment.setRenewalOutcome(null);
+        enrollment.setRenewalOutcomeAt(null);
+        enrollment.setRenewalOutcomeBy(null);
         Enrollment saved = enrollmentRepository.save(enrollment);
 
         // More sessions means a larger total due, so the payment status is re-derived — a fully paid
@@ -807,6 +814,96 @@ public class EnrollmentController {
                 null);
 
         return ResponseEntity.ok(ApiResponse.success(enrichEnrollments(List.of(saved)).get(0)));
+    }
+
+    // ── Renewals task list ────────────────────────────────────────────────────
+
+    /** Programs this many days (or fewer) from their last session are asked about on the Renewals task list. */
+    public static final int RENEWAL_TASK_DAYS = 5;
+    /** A program that ended longer ago than this is treated as lapsed history, not a task. */
+    public static final int RENEWAL_TASK_OVERDUE_DAYS = 30;
+
+    @Operation(
+        summary = "Programs in their last week that still need a decision",
+        description = "Running programs ending within 5 days (or just ended) that no admin has marked Completed, "
+                    + "Discontinued or Needs Renewal yet. Acting on one removes it from this list."
+    )
+    @GetMapping("/renewals-due")
+    @PreAuthorize("hasAnyRole('CLINIC_HEAD', 'BUSINESS_OWNER', 'OFFICE_ADMIN')")
+    @Transactional(readOnly = true)
+    public ResponseEntity<ApiResponse<List<RenewalDueResponse>>> renewalsDue(
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(renewalsDueFor(principal.getOrgId())));
+    }
+
+    /** Also used by the dashboard's attention counts. */
+    public List<RenewalDueResponse> renewalsDueFor(UUID orgId) {
+        LocalDate today = LocalDate.now();
+        List<Enrollment> due = enrollmentRepository.findAwaitingRenewalDecision(
+                orgId, today.minusDays(RENEWAL_TASK_OVERDUE_DAYS), today.plusDays(RENEWAL_TASK_DAYS));
+        if (due.isEmpty()) return List.of();
+
+        Map<UUID, Patient> patients = patientRepository.findAllById(
+                due.stream().map(Enrollment::getPatientId).collect(Collectors.toSet())).stream()
+                .collect(Collectors.toMap(Patient::getId, p -> p));
+        Map<UUID, User> therapists = userRepository.findAllById(
+                due.stream().map(Enrollment::getTherapistId).collect(Collectors.toSet())).stream()
+                .collect(Collectors.toMap(User::getId, u -> u));
+        Map<UUID, List<TherapySession>> sessions = therapySessionRepository
+                .findByEnrollmentIdIn(due.stream().map(Enrollment::getId).toList()).stream()
+                .collect(Collectors.groupingBy(TherapySession::getEnrollmentId));
+
+        return due.stream().map(e -> {
+            Patient p = patients.get(e.getPatientId());
+            User t = therapists.get(e.getTherapistId());
+            int left = (int) sessions.getOrDefault(e.getId(), List.of()).stream()
+                    .filter(s -> s.isCountsTowardPlan() && !s.getSessionDate().isBefore(today)
+                            && (s.getStatus() == TherapySessionStatus.SCHEDULED
+                                || s.getStatus() == TherapySessionStatus.PENDING_RESCHEDULE
+                                || s.getStatus() == TherapySessionStatus.CANCELLATION_REQUESTED))
+                    .count();
+            return new RenewalDueResponse(
+                    e.getId(), e.getPatientId(),
+                    p != null ? p.getFirstName() : "", p != null ? p.getLastName() : "",
+                    programNameOf(e),
+                    t != null ? t.getFirstName() : "", t != null ? t.getLastName() : "",
+                    e.getEndDate(), (int) java.time.temporal.ChronoUnit.DAYS.between(today, e.getEndDate()), left);
+        }).toList();
+    }
+
+    @Operation(
+        summary = "Record the decision on a program in its last week — Completed, Discontinued or Needs Renewal",
+        description = "Takes the program off the Renewals task list. Completed and Discontinued set the program status "
+                    + "to Completed/Discontinued, which stops the renewal reminder emails; Needs Renewal sets it to "
+                    + "Renewal Due and the reminders carry on until the program is renewed. Sessions are not changed. "
+                    + "Renewing the program clears the decision."
+    )
+    @PostMapping("/{id}/renewal-outcome")
+    @PreAuthorize("hasAnyRole('CLINIC_HEAD', 'BUSINESS_OWNER', 'OFFICE_ADMIN')")
+    @Transactional
+    public ResponseEntity<ApiResponse<EnrollmentResponse>> recordRenewalOutcome(
+            @PathVariable UUID id,
+            @Valid @RequestBody RenewalOutcomeRequest request,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        Enrollment enrollment = enrollmentRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Enrollment not found"));
+        if (!enrollment.getOrgId().equals(principal.getOrgId())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Access denied");
+        }
+        ProgramStatus status = request.outcome() == RenewalOutcome.NEEDS_RENEWAL
+                ? ProgramStatus.RENEWAL_DUE : ProgramStatus.COMPLETED_DISCONTINUED;
+        enrollment.setRenewalOutcome(request.outcome());
+        enrollment.setRenewalOutcomeAt(Instant.now());
+        enrollment.setRenewalOutcomeBy(principal.getId());
+        enrollment.setProgramStatus(status);
+        enrollment.setRenewalReminderLastSlot(null);
+        enrollmentRepository.save(enrollment);
+
+        auditLog.recordCase(principal.getOrgId(), enrollment.getPatientId(), principal.getId(), "PROGRAM_RENEWAL_DECISION",
+                "End of program decision for " + programNameOf(enrollment) + ": "
+                        + request.outcome().name().toLowerCase().replace('_', ' '), null);
+        return ResponseEntity.ok(ApiResponse.success(enrichEnrollments(List.of(enrollment)).get(0)));
     }
 
     // ── Program status ────────────────────────────────────────────────────────

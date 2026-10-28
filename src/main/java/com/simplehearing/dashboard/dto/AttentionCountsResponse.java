@@ -7,5 +7,7 @@ package com.simplehearing.dashboard.dto;
 public record AttentionCountsResponse(
         int pendingReschedule,
         int cancellationRequests,
-        int openConcerns
+        int openConcerns,
+        /** Programs in their last week still waiting for a Completed / Discontinued / Needs Renewal decision. */
+        int renewalsDue
 ) {}
