@@ -54,4 +54,12 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, UUID> {
     /** Ids of enrollments running a given program (via their subscription). */
     @Query("SELECT e.id FROM Enrollment e, Subscription s WHERE e.orgId = :orgId AND s.id = e.subscriptionId AND s.programId = :programId")
     List<UUID> findIdsByProgram(@Param("orgId") UUID orgId, @Param("programId") UUID programId);
+
+    /** Programs whose renewal reminders may be due: still running (or just finished), not discontinued, and
+     *  ending on or before the cut-off (3 days from today). */
+    @Query("SELECT e FROM Enrollment e WHERE e.status IN (com.simplehearing.enrollment.enums.EnrollmentStatus.ACTIVE, "
+         + "com.simplehearing.enrollment.enums.EnrollmentStatus.COMPLETED) "
+         + "AND e.programStatus <> com.simplehearing.enrollment.enums.ProgramStatus.COMPLETED_DISCONTINUED "
+         + "AND e.dischargedInRecordId IS NULL AND e.endDate IS NOT NULL AND e.endDate <= :cutoff")
+    List<Enrollment> findDueForRenewalReminder(@Param("cutoff") java.time.LocalDate cutoff);
 }

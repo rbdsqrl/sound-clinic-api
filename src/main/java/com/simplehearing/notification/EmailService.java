@@ -296,6 +296,23 @@ public class EmailService {
     }
 
     @Async
+    public void sendRenewalReminderEmail(String to, String parentFirstName, String childName,
+                                         String programName, String endDate, String duePhrase,
+                                         String orgName, String patientId) {
+        Map<String, String> vars = new java.util.HashMap<>();
+        vars.put("ORG_NAME", orgName);
+        vars.put("LOGO_URL", props.getBaseUrl() + "/logo.png");
+        vars.put("PARENT_NAME", parentFirstName);
+        vars.put("CHILD_NAME", childName);
+        vars.put("PROGRAM_NAME", programName);
+        vars.put("END_DATE", endDate);
+        vars.put("DUE_PHRASE", duePhrase);
+        vars.put("VIEW_URL", props.getBaseUrl() + "/my-children");
+        String html = fillStubs(loadTemplate("renewal-reminder"), vars);
+        send(to, "Renewal due — " + childName + "'s " + programName, html);
+    }
+
+    @Async
     public void sendTaskAssignmentEmail(String to, String assigneeName, String assignerName,
                                         String taskTitle, String description, String dueDate,
                                         String priority, String orgName) {

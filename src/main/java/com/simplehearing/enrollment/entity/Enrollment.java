@@ -2,6 +2,7 @@ package com.simplehearing.enrollment.entity;
 
 import com.simplehearing.enrollment.enums.EnrollmentCareStatus;
 import com.simplehearing.enrollment.enums.EnrollmentStatus;
+import com.simplehearing.enrollment.enums.ProgramStatus;
 import jakarta.persistence.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
@@ -121,6 +122,16 @@ public class Enrollment {
     @Column(name = "awaiting_payment", nullable = false)
     private boolean awaitingPayment = false;
 
+    /** Admin-managed lifecycle label. COMPLETED_DISCONTINUED stops the renewal reminders; RENEWAL_DUE is set
+     *  automatically when they start. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "program_status", nullable = false)
+    private ProgramStatus programStatus = ProgramStatus.ACTIVE;
+
+    /** "yyyy-MM-dd-AM" / "-PM" of the last renewal reminder sent — guards against sending a slot twice. */
+    @Column(name = "renewal_reminder_last_slot", length = 20)
+    private String renewalReminderLastSlot;
+
     @Column(name = "created_by")
     private UUID createdBy;
 
@@ -159,6 +170,10 @@ public class Enrollment {
     public void setStatus(EnrollmentStatus status) { this.status = status; }
     public boolean isCancelledByCaseInactive() { return cancelledByCaseInactive; }
     public void setCancelledByCaseInactive(boolean cancelledByCaseInactive) { this.cancelledByCaseInactive = cancelledByCaseInactive; }
+    public ProgramStatus getProgramStatus() { return programStatus; }
+    public void setProgramStatus(ProgramStatus programStatus) { this.programStatus = programStatus; }
+    public String getRenewalReminderLastSlot() { return renewalReminderLastSlot; }
+    public void setRenewalReminderLastSlot(String slot) { this.renewalReminderLastSlot = slot; }
     public boolean isAwaitingPayment() { return awaitingPayment; }
     public void setAwaitingPayment(boolean awaitingPayment) { this.awaitingPayment = awaitingPayment; }
     public EnrollmentCareStatus getCareStatus() { return careStatus; }

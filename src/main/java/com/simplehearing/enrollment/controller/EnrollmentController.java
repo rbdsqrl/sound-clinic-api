@@ -16,7 +16,10 @@ import com.simplehearing.common.exception.ApiException;
 import com.simplehearing.common.exception.ResourceNotFoundException;
 import com.simplehearing.enrollment.dto.AvailableTherapistResponse;
 import com.simplehearing.enrollment.dto.CreateEnrollmentRequest;
+import com.simplehearing.enrollment.ProgramMonths;
 import com.simplehearing.enrollment.dto.RenewEnrollmentRequest;
+import com.simplehearing.enrollment.dto.UpdateProgramStatusRequest;
+import com.simplehearing.enrollment.enums.ProgramStatus;
 import com.simplehearing.enrollment.dto.EnrollmentResponse;
 import com.simplehearing.enrollment.dto.TherapistSignoffRequest;
 import com.simplehearing.enrollment.dto.UpdateCareStatusRequest;
@@ -314,7 +317,9 @@ public class EnrollmentController {
                 therapist.getLastName(),
                 programName,
                 0, // freshly created — no sessions can be completed yet
-                sub.getNumSessions());
+                sub.getNumSessions(),
+                ProgramMonths.current(therapySessionRepository.findByEnrollmentIdOrderBySessionNumberAsc(saved.getId()),
+                        LocalDate.now()));
 
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
     }
@@ -772,6 +777,9 @@ public class EnrollmentController {
                 enrollment, lastNumber + 1, from, request.additionalSessions(), enrollment.isAwaitingPayment());
 
         enrollment.setEndDate(added.get(added.size() - 1).getSessionDate());
+        // Renewing completes the renewal — the reminders stop and the label goes back to Active.
+        enrollment.setProgramStatus(ProgramStatus.ACTIVE);
+        enrollment.setRenewalReminderLastSlot(null);
         Enrollment saved = enrollmentRepository.save(enrollment);
 
         // More sessions means a larger total due, so the payment status is re-derived — a fully paid
@@ -799,6 +807,38 @@ public class EnrollmentController {
                 null);
 
         return ResponseEntity.ok(ApiResponse.success(enrichEnrollments(List.of(saved)).get(0)));
+    }
+
+    // ── Program status ────────────────────────────────────────────────────────
+
+    @Operation(
+        summary = "Set a program's status — Active, Renewal Due or Completed/Discontinued",
+        description = "Completed/Discontinued stops the renewal reminder emails to the parents. Renewing a program "
+                    + "puts it back to Active. Does not change the program's sessions."
+    )
+    @PatchMapping("/{id}/program-status")
+    @PreAuthorize("hasAnyRole('CLINIC_HEAD', 'BUSINESS_OWNER', 'OFFICE_ADMIN')")
+    @Transactional
+    public ResponseEntity<ApiResponse<EnrollmentResponse>> updateProgramStatus(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateProgramStatusRequest request,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        Enrollment enrollment = enrollmentRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Enrollment not found"));
+        if (!enrollment.getOrgId().equals(principal.getOrgId())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Access denied");
+        }
+        ProgramStatus before = enrollment.getProgramStatus();
+        if (before != request.status()) {
+            enrollment.setProgramStatus(request.status());
+            enrollment.setRenewalReminderLastSlot(null);
+            enrollmentRepository.save(enrollment);
+            auditLog.recordCase(principal.getOrgId(), enrollment.getPatientId(), principal.getId(),
+                    "PROGRAM_STATUS_CHANGED",
+                    "Program status of " + programNameOf(enrollment) + ": " + before + " → " + request.status(), null);
+        }
+        return ResponseEntity.ok(ApiResponse.success(enrichEnrollments(List.of(enrollment)).get(0)));
     }
 
     // ── Therapist sign-off ────────────────────────────────────────────────────
@@ -866,6 +906,12 @@ public class EnrollmentController {
                     totalSessions.put(subId, sub.getNumSessions()));
         }
 
+        // One batched read of every session, folded into each plan's current-month counts.
+        Map<UUID, List<TherapySession>> sessionsByEnrollment = therapySessionRepository
+                .findByEnrollmentIdIn(enrollments.stream().map(Enrollment::getId).toList()).stream()
+                .collect(Collectors.groupingBy(TherapySession::getEnrollmentId));
+        LocalDate today = LocalDate.now();
+
         return enrollments.stream().map(e -> {
             User therapist = userMap.get(e.getTherapistId());
             String fn = therapist != null ? therapist.getFirstName() : "";
@@ -874,7 +920,8 @@ public class EnrollmentController {
             int total = totalSessions.getOrDefault(e.getSubscriptionId(), 0);
             int completed = therapySessionRepository.countByEnrollmentIdAndStatusAndCountsTowardPlanTrue(
                     e.getId(), TherapySessionStatus.COMPLETED);
-            return EnrollmentResponse.from(e, fn, ln, prog, completed, total);
+            return EnrollmentResponse.from(e, fn, ln, prog, completed, total,
+                    ProgramMonths.current(sessionsByEnrollment.getOrDefault(e.getId(), List.of()), today));
         }).toList();
     }
 }

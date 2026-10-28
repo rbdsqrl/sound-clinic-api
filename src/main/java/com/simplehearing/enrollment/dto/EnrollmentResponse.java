@@ -2,7 +2,9 @@ package com.simplehearing.enrollment.dto;
 
 import com.simplehearing.enrollment.entity.Enrollment;
 import com.simplehearing.enrollment.enums.EnrollmentCareStatus;
+import com.simplehearing.enrollment.ProgramMonths;
 import com.simplehearing.enrollment.enums.EnrollmentStatus;
+import com.simplehearing.enrollment.enums.ProgramStatus;
 
 import java.time.DayOfWeek;
 import java.time.Instant;
@@ -36,6 +38,12 @@ public record EnrollmentResponse(
         String therapistSignoffNotes,
         int sessionsCompleted,
         int totalSessions,
+        /** The calendar month ("yyyy-MM") the program is in now, and that month's own counts — what every
+         *  screen quotes instead of a running total across renewals. */
+        String currentMonth,
+        int currentMonthCompleted,
+        int currentMonthTotal,
+        ProgramStatus programStatus,
         Instant createdAt,
         /** Set only when this enrollment was closed by a patient discharge — a force-completed
          *  one (via the care-status override) stays null, which is how the frontend knows
@@ -48,7 +56,8 @@ public record EnrollmentResponse(
             String therapistLastName,
             String programName,
             int sessionsCompleted,
-            int totalSessions) {
+            int totalSessions,
+            ProgramMonths.Summary month) {
         return new EnrollmentResponse(
                 enrollment.getId(),
                 enrollment.getSubscriptionId(),
@@ -71,6 +80,10 @@ public record EnrollmentResponse(
                 enrollment.getTherapistSignoffNotes(),
                 sessionsCompleted,
                 totalSessions,
+                month.month().toString(),
+                month.completed(),
+                month.total(),
+                enrollment.getProgramStatus(),
                 enrollment.getCreatedAt(),
                 enrollment.getDischargedInRecordId()
         );

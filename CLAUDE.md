@@ -302,6 +302,7 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | GET      | `/api/v1/therapist-reassignments`       | Admin Roles                                     | List reassignment batches a therapist appears in (either side); optional `status` filter |
 | PATCH    | `/api/v1/therapist-reassignments/{id}/cancel` | Admin Roles                               | End a TEMPORARY batch early — reverts still-`SCHEDULED`/`ACTIVE` rows; not available for PERMANENT batches |
 | PATCH    | `/api/v1/enrollments/{id}/care-status`  | THERAPIST (own, not PROGRAM_COMPLETED), CLINIC_HEAD, BUSINESS_OWNER, OFFICE_ADMIN | Set clinical-health signal; PROGRAM_COMPLETED also completes the enrollment and cancels its still-upcoming sessions (admin tier only — overrides the normal all-sessions-attended completion path), and optionally accepts `manualGoalMasteryPct`/`manualParentSatisfactionPct`/`therapistSignedOff` to fill in the discharge success criteria by hand |
+| PATCH    | `/api/v1/enrollments/{id}/program-status` | CLINIC_HEAD, BUSINESS_OWNER, OFFICE_ADMIN | Set a program's status — ACTIVE, RENEWAL_DUE or COMPLETED_DISCONTINUED (stops the renewal reminder emails); renewing resets it to ACTIVE |
 | PATCH    | `/api/v1/enrollments/{id}/reactivate`   | CLINIC_HEAD, BUSINESS_OWNER, OFFICE_ADMIN | Undo a force-complete override — back to ACTIVE/ON_TRACK, clears the manual success-criteria overrides, restores exactly the sessions that override auto-cancelled; refused if the enrollment was closed by a discharge instead |
 | POST     | `/api/v1/enrollment-concerns`           | PARENT (own child)                                      | Raise a concern about an active program |
 | GET      | `/api/v1/enrollment-concerns`           | All staff + PARENT (own child)                          | List concerns by `enrollmentId`, `patientId`, or org-wide `status` |
@@ -451,6 +452,7 @@ Master file: `db.changelog-master.yaml` — lists migrations in order.
 | 124-attendance-at-organisation.sql   | `attendance.clinic_id` becomes optional + `attendance.at_organisation` — a Business Owner can check in at the organisation's own location instead of a clinic (geo-fence measured against the organisation; a clinic choice is measured against that clinic) |
 | 125-audit-log.sql                    | `audit_log_entries` — one row per change to a member, parent or case profile (subject type/id, actor, event type, summary, before/after JSON); powers the Business-Owner-only Activity Log tab |
 | 126-org-custom-roles.sql             | `org_custom_roles` — an organisation's Custom Role picker list (name unique per org, case-insensitive); a member's own value lives in `users.specialization` |
+| 130-program-status.sql               | `enrollments.program_status` (ACTIVE / RENEWAL_DUE / COMPLETED_DISCONTINUED; finished programs backfilled to COMPLETED_DISCONTINUED) + `renewal_reminder_last_slot` — drives `RenewalReminderJob` (hourly; emails parents at 9:00 and 21:00 org time from 3 days before `end_date` until renewed or discontinued) |
 | 113-phone-uniqueness.sql             | Normalises existing `users.phone` values (digits + leading `+` only) and adds `uq_users_phone` — a second login identity alongside email, so it must be unique too |
 
 **To add a migration:** create `NNN-description.sql` with the Liquibase header, then add it to the master YAML.
@@ -526,6 +528,9 @@ CREATE TABLE ... ;
 ### IEP custom domains
 - A goal's domain is a built-in `IEPGoalDomain`, or `CUSTOM` with the name in `customDomain`. Saving a goal (or template goal) with a CUSTOM domain adds the name to the organisation's `iep_custom_domains` list via `IEPCustomDomainService.resolve` — so typing one new domain while creating a goal both defines and uses it. Names are tidied (trimmed, whitespace collapsed, 60 chars max), matched case-insensitively against the existing list, and a name that is really a built-in ("speech") resolves to the built-in.
 - Anything that groups or filters by domain (analytics series, the analytics domain filter, discharge snapshots) must use `IEPGoal.domainKey()` — the custom name or the built-in's name — never `getDomain().name()`, which would lump every custom domain under "CUSTOM". CSV import still accepts built-in domains only.
+
+### Program months
+- `ProgramMonths.current` folds a plan's sessions into calendar-month counts (plan sessions only, cancelled excluded); `EnrollmentResponse.currentMonth*` carries them so every role quotes the same figure. The website's `lib/sessionMonths.ts` applies the same rule to the session list — change both together.
 
 ### Multi-Tenancy
 - Every query must filter by `orgId` from `principal.getOrgId()`
