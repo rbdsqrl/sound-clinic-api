@@ -4,6 +4,8 @@ import com.simplehearing.session.entity.TherapySession;
 import com.simplehearing.session.enums.RescheduleReason;
 import com.simplehearing.session.enums.TherapySessionStatus;
 
+import com.simplehearing.user.entity.User;
+
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -52,7 +54,10 @@ public record TherapySessionResponse(
         /** True until the plan's subscription is paid in full — session is real and scheduled,
          *  just locked from completion/notes/reschedule-request until then. Status stays
          *  SCHEDULED throughout; this flag alone drives the "Payment pending" badge/lock. */
-        boolean awaitingPayment
+        boolean awaitingPayment,
+        /** Who raised the open cancellation or reschedule request, with their role — null when none is open. */
+        String requestedByName,
+        String requestedByRole
 ) {
     public static TherapySessionResponse from(
             TherapySession session,
@@ -61,7 +66,8 @@ public record TherapySessionResponse(
             String therapistFirstName,
             String therapistLastName,
             String programName,
-            int totalSessions) {
+            int totalSessions,
+            User requestedBy) {
         return new TherapySessionResponse(
                 session.getId(),
                 session.getEnrollmentId(),
@@ -91,6 +97,8 @@ public record TherapySessionResponse(
                 session.isCountsTowardPlan(),
                 session.isRequiresPayment(),
                 session.isCancelledByCaseInactive(),
-                session.isAwaitingPayment());
+                session.isAwaitingPayment(),
+                requestedBy != null ? (requestedBy.getFirstName() + " " + requestedBy.getLastName()).trim() : null,
+                requestedBy != null && requestedBy.getRole() != null ? requestedBy.getRole().name() : null);
     }
 }

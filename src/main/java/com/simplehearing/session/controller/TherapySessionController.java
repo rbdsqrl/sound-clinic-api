@@ -1003,6 +1003,11 @@ public class TherapySessionController {
                 .collect(Collectors.toMap(Patient::getId, p -> p));
         Map<UUID, User>    therapistMap = userRepository.findAllById(therapistIds).stream()
                 .collect(Collectors.toMap(User::getId, u -> u));
+        // Whoever raised an open cancellation / reschedule request — shown so an approver knows who asked.
+        Set<UUID> requesterIds = sessions.stream().map(TherapySession::getRescheduleRequestedBy)
+                .filter(Objects::nonNull).collect(Collectors.toSet());
+        Map<UUID, User> requesterMap = requesterIds.isEmpty() ? Map.of()
+                : userRepository.findAllById(requesterIds).stream().collect(Collectors.toMap(User::getId, u -> u));
 
         // Same batching for enrollment -> subscription -> program — was up to three queries per
         // enrollment (findById chained three deep), now three findAllById calls total.
@@ -1039,7 +1044,8 @@ public class TherapySessionController {
                     therapist != null ? therapist.getFirstName() : "",
                     therapist != null ? therapist.getLastName()  : "",
                     programNameMap.getOrDefault(s.getEnrollmentId(), "Unknown Program"),
-                    totalSessionsMap.getOrDefault(s.getEnrollmentId(), 0));
+                    totalSessionsMap.getOrDefault(s.getEnrollmentId(), 0),
+                    s.getRescheduleRequestedBy() != null ? requesterMap.get(s.getRescheduleRequestedBy()) : null);
         }).toList();
     }
 }
