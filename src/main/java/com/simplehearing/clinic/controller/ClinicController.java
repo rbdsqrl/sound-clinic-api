@@ -43,7 +43,9 @@ public class ClinicController {
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<List<ClinicResponse>>> list(
             @AuthenticationPrincipal UserPrincipal principal) {
-        return ResponseEntity.ok(ApiResponse.success(clinicService.listForOrg(principal)));
+        List<ClinicResponse> clinics = clinicService.listForOrg(principal);
+        return ResponseEntity.ok(ApiResponse.success(isTherapistView(principal)
+                ? clinics.stream().map(ClinicResponse::withoutGeoFence).toList() : clinics));
     }
 
     @Operation(summary = "Get a clinic by ID")
@@ -52,7 +54,13 @@ public class ClinicController {
     public ResponseEntity<ApiResponse<ClinicResponse>> get(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
-        return ResponseEntity.ok(ApiResponse.success(clinicService.get(id, principal)));
+        ClinicResponse clinic = clinicService.get(id, principal);
+        return ResponseEntity.ok(ApiResponse.success(isTherapistView(principal) ? clinic.withoutGeoFence() : clinic));
+    }
+
+    /** A therapist reads clinics for reference only — the geo-fence used for attendance checks is not theirs to see. */
+    private static boolean isTherapistView(UserPrincipal principal) {
+        return principal.getActiveRole() == com.simplehearing.user.enums.Role.THERAPIST;
     }
 
     @Operation(summary = "Update a clinic")

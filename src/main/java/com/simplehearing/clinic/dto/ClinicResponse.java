@@ -19,6 +19,11 @@ public record ClinicResponse(
         boolean isActive,
         Instant createdAt
 ) {
+    /** The same clinic without its attendance geo-fence (coordinates and radius) — what a therapist is sent. */
+    public ClinicResponse withoutGeoFence() {
+        return new ClinicResponse(id, orgId, name, address, phone, email, timezone, null, null, null, isActive, createdAt);
+    }
+
     public static ClinicResponse from(Clinic clinic) {
         return new ClinicResponse(
                 clinic.getId(),
