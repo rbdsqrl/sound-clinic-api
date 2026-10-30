@@ -8,6 +8,7 @@ import com.simplehearing.concern.repository.ConcernRepository;
 import com.simplehearing.dashboard.dto.AttentionCountsResponse;
 import com.simplehearing.enrollment.controller.EnrollmentController;
 import com.simplehearing.enrollment.repository.EnrollmentRepository;
+import com.simplehearing.parentfeedback.repository.ParentSessionFeedbackRepository;
 import com.simplehearing.dashboard.dto.OrgOverviewResponse;
 import com.simplehearing.invitation.entity.Invitation;
 import com.simplehearing.invitation.repository.InvitationRepository;
@@ -45,13 +46,16 @@ public class DashboardController {
     private final TherapySessionRepository sessionRepository;
     private final ConcernRepository concernRepository;
     private final EnrollmentRepository enrollmentRepository;
+    private final ParentSessionFeedbackRepository parentFeedbackRepository;
 
     public DashboardController(PatientRepository patientRepository,
                                UserRepository userRepository,
                                InvitationRepository invitationRepository,
                                TherapySessionRepository sessionRepository,
                                ConcernRepository concernRepository,
-                               EnrollmentRepository enrollmentRepository) {
+                               EnrollmentRepository enrollmentRepository,
+                               ParentSessionFeedbackRepository parentFeedbackRepository) {
+        this.parentFeedbackRepository = parentFeedbackRepository;
         this.enrollmentRepository = enrollmentRepository;
         this.sessionRepository = sessionRepository;
         this.concernRepository = concernRepository;
@@ -94,6 +98,7 @@ public class DashboardController {
                 concernRepository.countByOrgIdAndStatus(orgId, ConcernStatus.OPEN),
                 enrollmentRepository.findAwaitingRenewalDecision(orgId,
                         today.minusDays(EnrollmentController.RENEWAL_TASK_OVERDUE_DAYS),
-                        today.plusDays(EnrollmentController.RENEWAL_TASK_DAYS)).size())));
+                        today.plusDays(EnrollmentController.RENEWAL_TASK_DAYS)).size(),
+                parentFeedbackRepository.countByOrgIdAndAdminReviewedAtIsNull(orgId))));
     }
 }

@@ -304,6 +304,13 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | PATCH    | `/api/v1/enrollments/{id}/care-status`  | THERAPIST (own, not PROGRAM_COMPLETED), CLINIC_HEAD, BUSINESS_OWNER, OFFICE_ADMIN | Set clinical-health signal; PROGRAM_COMPLETED also completes the enrollment and cancels its still-upcoming sessions (admin tier only — overrides the normal all-sessions-attended completion path), and optionally accepts `manualGoalMasteryPct`/`manualParentSatisfactionPct`/`therapistSignedOff` to fill in the discharge success criteria by hand |
 | GET      | `/api/v1/enrollments/renewals-due`      | CLINIC_HEAD, BUSINESS_OWNER, OFFICE_ADMIN | Running programs ending within 5 days or that ended in the last 5 days, with no decision yet — the Renewals task list |
 | POST     | `/api/v1/enrollments/{id}/renewal-outcome` | CLINIC_HEAD, BUSINESS_OWNER, OFFICE_ADMIN | Decide a program in its last week: COMPLETED (stays Active and shows as Completed only after `end_date` has passed; reminders stop) / DISCONTINUED (status → Completed/Discontinued at once, reminders stop) or NEEDS_RENEWAL (status → Renewal Due, reminders continue); removes it from the list; renewing clears the decision |
+| PUT      | `/api/v1/parent-feedback/sessions/{sessionId}` | PARENT (own child) | Give or edit feedback on a COMPLETED session (one per parent per session; an edit returns it to the admins' list) |
+| GET      | `/api/v1/parent-feedback/mine?enrollmentId=` | PARENT | The caller's own feedback on one plan's sessions |
+| GET      | `/api/v1/parent-feedback`               | CLINIC_HEAD, BUSINESS_OWNER, OFFICE_ADMIN | Feedback no admin has read yet — the dashboard card (count in `attention-counts.parentFeedback`) |
+| PATCH    | `/api/v1/parent-feedback/{id}/share`    | CLINIC_HEAD, BUSINESS_OWNER, OFFICE_ADMIN | Share with the session's therapist (also marks it read) |
+| PATCH    | `/api/v1/parent-feedback/{id}/review`   | CLINIC_HEAD, BUSINESS_OWNER, OFFICE_ADMIN | Mark read without sharing |
+| GET      | `/api/v1/parent-feedback/shared`        | THERAPIST | Feedback shared with the caller that they haven't marked seen |
+| PATCH    | `/api/v1/parent-feedback/{id}/seen`     | THERAPIST | Mark shared feedback as seen |
 | PATCH    | `/api/v1/enrollments/{id}/program-status` | CLINIC_HEAD, BUSINESS_OWNER, OFFICE_ADMIN | Set a program's status — ACTIVE, RENEWAL_DUE or COMPLETED_DISCONTINUED (stops the renewal reminder emails); renewing resets it to ACTIVE |
 | PATCH    | `/api/v1/enrollments/{id}/reactivate`   | CLINIC_HEAD, BUSINESS_OWNER, OFFICE_ADMIN | Undo a force-complete override — back to ACTIVE/ON_TRACK, clears the manual success-criteria overrides, restores exactly the sessions that override auto-cancelled; refused if the enrollment was closed by a discharge instead |
 | POST     | `/api/v1/enrollment-concerns`           | PARENT (own child)                                      | Raise a concern about an active program |
@@ -456,6 +463,7 @@ Master file: `db.changelog-master.yaml` — lists migrations in order.
 | 126-org-custom-roles.sql             | `org_custom_roles` — an organisation's Custom Role picker list (name unique per org, case-insensitive); a member's own value lives in `users.specialization` |
 | 130-program-status.sql               | `enrollments.program_status` (ACTIVE / RENEWAL_DUE / COMPLETED_DISCONTINUED; finished programs backfilled to COMPLETED_DISCONTINUED) + `renewal_reminder_last_slot` — drives `RenewalReminderJob` (hourly; emails parents at 9:00 and 21:00 org time, only for programs set to Renewal Due, from 3 days before `end_date` until renewed or discontinued) |
 | 131-renewal-outcome.sql              | `enrollments.renewal_outcome` (+ `_at`/`_by`) — the admin's end-of-program decision that takes a program off the Renewals task list |
+| 132-parent-session-feedback.sql      | `parent_session_feedback` — a parent's feedback on a completed session; `admin_reviewed_at` drives the admin card, `shared_with_therapist` / `therapist_seen_at` the therapist card |
 | 113-phone-uniqueness.sql             | Normalises existing `users.phone` values (digits + leading `+` only) and adds `uq_users_phone` — a second login identity alongside email, so it must be unique too |
 
 **To add a migration:** create `NNN-description.sql` with the Liquibase header, then add it to the master YAML.

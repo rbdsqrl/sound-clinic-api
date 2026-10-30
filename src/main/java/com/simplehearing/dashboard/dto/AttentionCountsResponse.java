@@ -9,5 +9,7 @@ public record AttentionCountsResponse(
         int cancellationRequests,
         int openConcerns,
         /** Programs in their last week still waiting for a Completed / Discontinued / Needs Renewal decision. */
-        int renewalsDue
+        int renewalsDue,
+        /** Parent feedback on sessions that no admin has read yet. */
+        int parentFeedback
 ) {}

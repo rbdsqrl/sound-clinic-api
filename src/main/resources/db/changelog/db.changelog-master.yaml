@@ -392,3 +392,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/131-renewal-outcome.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/132-parent-session-feedback.sql
+      relativeToChangelogFile: false
