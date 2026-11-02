@@ -545,13 +545,49 @@ public class TherapySessionController {
         TherapySession session = findOwned(id, principal);
         requireTherapistOwnership(session, principal);
 
+        // Snapshot before the write so the Activity Log can show what this save changed, by whom.
+        UUID programId = resolveProgramId(session);
+        var template = programId != null ? programFeedbackService.getTemplate(programId)
+                : List.<com.simplehearing.program.feedback.dto.ProgramFeedbackQuestionResponse>of();
+        var before = programFeedbackService.getSessionAnswers(session.getId());
+        String notesBefore = session.getChecklistNotes();
+        boolean hadPriorChecklist = (notesBefore != null && !notesBefore.isBlank())
+                || before.stream().anyMatch(a -> a.selectedOptionIds() != null && !a.selectedOptionIds().isEmpty());
+
         programFeedbackService.replaceSessionAnswers(session.getId(), request.answers());
         session.setChecklistNotes(request.checklistNotes());
         sessionRepository.save(session);
-        activityService.record(session, principal.getId(), SessionActivityType.CHECKLIST_SAVED,
-                "Feedback checklist saved", List.of());
+
+        var changes = SessionActivityService.list();
+        for (var question : template) {
+            String from = selectedOptionText(question, before.stream()
+                    .filter(a -> question.id().equals(a.questionId())).findFirst()
+                    .map(com.simplehearing.program.feedback.dto.SessionFeedbackAnswerResponse::selectedOptionIds).orElse(null));
+            String to = selectedOptionText(question, request.answers() == null ? null : request.answers().stream()
+                    .filter(a -> question.id().equals(a.questionId())).findFirst()
+                    .map(com.simplehearing.program.feedback.dto.SessionFeedbackAnswerInput::selectedOptionIds).orElse(null));
+            addIfChanged(changes, question.questionText(), from, to);
+        }
+        addIfChanged(changes, "Additional Notes", notesBefore, request.checklistNotes());
+
+        // The website saves the checklist alongside every notes save, so an untouched checklist is not logged.
+        if (!changes.isEmpty()) {
+            activityService.record(session, principal.getId(), SessionActivityType.CHECKLIST_SAVED,
+                    hadPriorChecklist ? "Feedback checklist edited" : "Feedback checklist saved", changes);
+        }
 
         return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    /** The chosen options' text in template order, comma-separated; null when nothing is chosen. */
+    private static String selectedOptionText(com.simplehearing.program.feedback.dto.ProgramFeedbackQuestionResponse question,
+                                             List<UUID> selectedIds) {
+        if (selectedIds == null || selectedIds.isEmpty()) return null;
+        String text = question.options().stream()
+                .filter(o -> selectedIds.contains(o.id()))
+                .map(com.simplehearing.program.feedback.dto.ProgramFeedbackOptionResponse::optionText)
+                .collect(Collectors.joining(", "));
+        return text.isBlank() ? null : text;
     }
 
     private UUID resolveProgramId(TherapySession session) {
