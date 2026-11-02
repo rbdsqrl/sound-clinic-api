@@ -550,6 +550,8 @@ CREATE TABLE ... ;
 ### Scheduled jobs
 - `@EnableScheduling` on `SimpleHearingApplication` (alongside `@EnableAsync`) — `reassignment/job/ReassignmentRevertJob.java` is the first `@Scheduled` job in the codebase; a small dedicated `@Component` delegating straight to a service method is the pattern to follow for the next one, rather than putting `@Scheduled` methods directly on a service.
 
+- `report/job/SessionReportJob` (every minute) → `SessionReportService`: emails every active Admin Roles user a day report at 11:40 and a night report at 23:00 in each organisation's own timezone. A sent slot is remembered in memory only (no table), so a restart in the slot's minute can resend it and a restart across it skips it. Uses `EmailService.sendHtmlReport`.
+
 ---
 
 ## Adding a New Feature Module

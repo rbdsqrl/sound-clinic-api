@@ -415,6 +415,14 @@ public class EmailService {
         }
     }
 
+    /** Sends an already-built HTML report (daily session reports) — one mail per recipient so addresses aren't shared. */
+    @Async
+    public void sendHtmlReport(List<String> recipients, String subject, String html) {
+        for (String to : recipients) {
+            send(to, subject, html);
+        }
+    }
+
     private String loadTemplate(String name) {
         try {
             ClassPathResource resource = new ClassPathResource("templates/email/" + name + ".html");
