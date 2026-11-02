@@ -27,7 +27,6 @@ import java.time.DateTimeException;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
-import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.EnumSet;
@@ -37,27 +36,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * Emails every Admin Role user a session report twice a day, in each organisation's own timezone: a day report at
- * {@value #DAY_HOUR}:{@value #DAY_MINUTE} (today's schedule so far) and a night report at {@value #NIGHT_HOUR}:00
- * (how the day ended). Modelled on Kidaura's day-start / day-end session reports.
- *
- * <p>Nothing is persisted: a sent slot is remembered in memory so the once-a-minute job fires each slot once.
- * A restart inside the slot's minute could send it again; a restart across it skips it.
+ * Emails every Admin Role user a session report twice a day: a day report at 11:40 AM (today's schedule so far)
+ * and a night report at 11:00 PM (how the day ended), fired by {@code SessionReportJob}'s two cron triggers.
+ * Modelled on Kidaura's day-start / day-end session reports. "Today" is each organisation's own local date.
  */
 @Service
 public class SessionReportService {
 
     private static final Logger log = LoggerFactory.getLogger(SessionReportService.class);
 
-    public static final int DAY_HOUR = 11;
-    public static final int DAY_MINUTE = 40;
-    public static final int NIGHT_HOUR = 23;
-    public static final int NIGHT_MINUTE = 0;
 
     private static final Set<Role> ADMIN_ROLES = EnumSet.of(Role.CLINIC_HEAD, Role.OFFICE_ADMIN, Role.BUSINESS_OWNER);
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("hh:mm a");
@@ -73,9 +64,6 @@ public class SessionReportService {
     private final SubscriptionRepository subscriptionRepository;
     private final ProgramRepository programRepository;
     private final EmailService emailService;
-
-    /** orgId + kind → the local date it last went out for. */
-    private final Map<String, LocalDate> lastSent = new ConcurrentHashMap<>();
 
     public SessionReportService(OrganisationRepository organisationRepository,
                                 UserRepository userRepository,
@@ -95,23 +83,20 @@ public class SessionReportService {
         this.emailService = emailService;
     }
 
-    /** Runs every minute; sends a report only when an organisation's local clock is exactly on a report time. */
     @Transactional(readOnly = true)
-    public void sendDueReports() {
+    public void sendDayReport() {
+        sendToAllOrganisations(Kind.DAY);
+    }
+
+    @Transactional(readOnly = true)
+    public void sendNightReport() {
+        sendToAllOrganisations(Kind.NIGHT);
+    }
+
+    private void sendToAllOrganisations(Kind kind) {
         for (Organisation org : organisationRepository.findAll()) {
-            ZonedDateTime now = ZonedDateTime.now(zoneOf(org));
-            Kind kind = null;
-            if (now.getHour() == DAY_HOUR && now.getMinute() == DAY_MINUTE) kind = Kind.DAY;
-            else if (now.getHour() == NIGHT_HOUR && now.getMinute() == NIGHT_MINUTE) kind = Kind.NIGHT;
-            if (kind == null) continue;
-
-            String key = org.getId() + "-" + kind;
-            LocalDate today = now.toLocalDate();
-            if (today.equals(lastSent.get(key))) continue;
-            lastSent.put(key, today);
-
             try {
-                send(org, kind, today);
+                send(org, kind, LocalDate.now(zoneOf(org)));
             } catch (Exception e) {
                 log.error("Session report ({}) failed for org {}: {}", kind, org.getId(), e.getMessage(), e);
             }
