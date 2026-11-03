@@ -24,6 +24,7 @@ import com.simplehearing.review.entity.ReviewMeeting;
 import com.simplehearing.review.repository.ReviewMeetingRepository;
 import com.simplehearing.storage.StorageService;
 import com.simplehearing.subscription.repository.SubscriptionRepository;
+import com.simplehearing.subscription.service.EnrollmentCancellationService;
 import com.simplehearing.successcriteria.dto.SuccessCriteriaResponse;
 import com.simplehearing.successcriteria.service.SuccessCriteriaService;
 import com.simplehearing.user.repository.UserRepository;
@@ -58,6 +59,7 @@ public class DischargeService {
     private final ObjectMapper objectMapper;
     private final DischargePdfService dischargePdfService;
     private final StorageService storageService;
+    private final EnrollmentCancellationService enrollmentCancellationService;
 
     public DischargeService(
             DischargeRecordRepository dischargeRecordRepository,
@@ -73,7 +75,8 @@ public class DischargeService {
             OrganisationRepository organisationRepository,
             ObjectMapper objectMapper,
             DischargePdfService dischargePdfService,
-            StorageService storageService) {
+            StorageService storageService,
+            EnrollmentCancellationService enrollmentCancellationService) {
         this.dischargeRecordRepository = dischargeRecordRepository;
         this.enrollmentRepository = enrollmentRepository;
         this.patientRepository = patientRepository;
@@ -88,6 +91,7 @@ public class DischargeService {
         this.objectMapper = objectMapper;
         this.dischargePdfService = dischargePdfService;
         this.storageService = storageService;
+        this.enrollmentCancellationService = enrollmentCancellationService;
     }
 
     /**
@@ -96,7 +100,11 @@ public class DischargeService {
      * overlapping/re-enrollment edge cases a date range would get wrong.
      */
     public List<Enrollment> resolveEpisodeEnrollments(UUID orgId, UUID patientId) {
-        return enrollmentRepository.findByOrgIdAndPatientIdAndDischargedInRecordIdIsNull(orgId, patientId);
+        // A cancelled program never ran to an outcome, so it takes no part in the discharge criteria — except one
+        // cancelled only because the case was marked inactive, which is still part of the episode.
+        return enrollmentRepository.findByOrgIdAndPatientIdAndDischargedInRecordIdIsNull(orgId, patientId).stream()
+                .filter(e -> e.getStatus() != EnrollmentStatus.CANCELLED || e.isCancelledByCaseInactive())
+                .toList();
     }
 
     private String programName(Enrollment e) {
@@ -200,6 +208,12 @@ public class DischargeService {
         record.setNotes(request.notes());
 
         DischargeRecord saved = dischargeRecordRepository.save(record);
+
+        // Closing the programs ends what is still ahead of them too — no upcoming session or review meeting
+        // should outlive the discharge.
+        enrollmentCancellationService.cancelUpcoming(
+                episodeEnrollments.stream().filter(e -> e.getStatus() == EnrollmentStatus.ACTIVE).toList(),
+                "Patient discharged");
 
         for (Enrollment e : episodeEnrollments) {
             e.setDischargedInRecordId(saved.getId());

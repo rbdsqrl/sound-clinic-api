@@ -48,6 +48,7 @@ import com.simplehearing.session.entity.TherapySession;
 import com.simplehearing.session.service.SessionGenerationService;
 import com.simplehearing.subscription.entity.Subscription;
 import com.simplehearing.subscription.enums.SubscriptionStatus;
+import com.simplehearing.subscription.service.EnrollmentCancellationService;
 import com.simplehearing.subscription.service.SubscriptionPaymentService;
 import com.simplehearing.subscription.enums.SubscriptionPaymentStatus;
 import com.simplehearing.subscription.repository.SubscriptionRepository;
@@ -90,6 +91,7 @@ public class EnrollmentController {
     private final ReviewMeetingRepository reviewMeetingRepository;
     private final AuditLogService auditLog;
     private final SubscriptionPaymentService paymentService;
+    private final EnrollmentCancellationService enrollmentCancellationService;
 
     public EnrollmentController(
             EnrollmentRepository enrollmentRepository,
@@ -105,7 +107,8 @@ public class EnrollmentController {
             TherapySessionRepository therapySessionRepository,
             ReviewMeetingRepository reviewMeetingRepository,
             AuditLogService auditLog,
-            SubscriptionPaymentService paymentService) {
+            SubscriptionPaymentService paymentService,
+            EnrollmentCancellationService enrollmentCancellationService) {
         this.enrollmentRepository = enrollmentRepository;
         this.subscriptionRepository = subscriptionRepository;
         this.programRepository = programRepository;
@@ -120,6 +123,7 @@ public class EnrollmentController {
         this.reviewMeetingRepository = reviewMeetingRepository;
         this.auditLog = auditLog;
         this.paymentService = paymentService;
+        this.enrollmentCancellationService = enrollmentCancellationService;
     }
 
     private String programNameOf(Enrollment e) {
@@ -445,8 +449,9 @@ public class EnrollmentController {
             throw new ApiException(HttpStatus.CONFLICT, "Enrollment is already cancelled");
         }
 
-        enrollment.setStatus(EnrollmentStatus.CANCELLED);
-        Enrollment saved = enrollmentRepository.save(enrollment);
+        // Also cancels the still-ahead sessions and review meetings, so none linger on the calendar.
+        enrollmentCancellationService.cancelEnrollment(enrollment);
+        Enrollment saved = enrollment;
         auditLog.recordCase(principal.getOrgId(), enrollment.getPatientId(), principal.getId(), "PROGRAM_CANCELLED",
                 "Program cancelled: " + programNameOf(enrollment), null);
 
@@ -633,6 +638,7 @@ public class EnrollmentController {
                 s.setCancelledByProgramCompletion(true);
             });
             therapySessionRepository.saveAll(stillAhead);
+            enrollmentCancellationService.cancelUpcomingMeetings(id, "Program completed");
 
             // Manual entry for the discharge success criteria that would otherwise never
             // arrive on a program closed this way — each left null (unset) is skipped, so
@@ -699,6 +705,7 @@ public class EnrollmentController {
         List<TherapySession> toRestore = therapySessionRepository
                 .findByEnrollmentIdOrderBySessionNumberAsc(id).stream()
                 .filter(TherapySession::isCancelledByProgramCompletion)
+                .filter(s -> !s.getSessionDate().isBefore(LocalDate.now()))
                 .toList();
         toRestore.forEach(s -> {
             s.setStatus(TherapySessionStatus.SCHEDULED);
