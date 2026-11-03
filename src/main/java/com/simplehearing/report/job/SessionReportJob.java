@@ -4,7 +4,7 @@ import com.simplehearing.report.service.SessionReportService;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-/** Fires the session reports once each: the day report at 11:40 AM and the night report at 11:00 PM ({@code app.timezone}, default Asia/Kolkata). */
+/** Fires the session reports once each: the day report at 11:40 AM and the day end report at 1:00 PM for the previous day ({@code app.timezone}, default Asia/Kolkata). */
 @Component
 public class SessionReportJob {
 
@@ -19,7 +19,7 @@ public class SessionReportJob {
         sessionReportService.sendDayReport();
     }
 
-    @Scheduled(cron = "0 0 23 * * *", zone = "${app.timezone:Asia/Kolkata}")
+    @Scheduled(cron = "0 0 13 * * *", zone = "${app.timezone:Asia/Kolkata}")
     public void sendNightReport() {
         sessionReportService.sendNightReport();
     }

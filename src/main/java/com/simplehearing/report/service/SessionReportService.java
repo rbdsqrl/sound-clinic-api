@@ -41,7 +41,7 @@ import java.util.stream.Collectors;
 
 /**
  * Emails every Admin Role user a session report twice a day: a day report at 11:40 AM (today's schedule so far)
- * and a night report at 11:00 PM (how the day ended), fired by {@code SessionReportJob}'s two cron triggers.
+ * and a day end report at 1:00 PM (how the previous day ended), fired by {@code SessionReportJob}'s two cron triggers.
  * Modelled on Kidaura's day-start / day-end session reports. "Today" is each organisation's own local date.
  */
 @Service
@@ -96,7 +96,8 @@ public class SessionReportService {
     private void sendToAllOrganisations(Kind kind) {
         for (Organisation org : organisationRepository.findAll()) {
             try {
-                send(org, kind, LocalDate.now(zoneOf(org)));
+                LocalDate today = LocalDate.now(zoneOf(org));
+                send(org, kind, kind == Kind.NIGHT ? today.minusDays(1) : today);
             } catch (Exception e) {
                 log.error("Session report ({}) failed for org {}: {}", kind, org.getId(), e.getMessage(), e);
             }
@@ -231,7 +232,7 @@ public class SessionReportService {
         h.append("<p style=\"font-size:12px;color:#6b7280;line-height:1.6;\">")
                 .append("<b>Attendance Marked:</b> sessions marked completed or no show. ")
                 .append("<b>Not Marked:</b> sessions still scheduled with no outcome recorded. ")
-                .append("<b>Rescheduled:</b> today's sessions that have been moved at least once. ")
+                .append("<b>Rescheduled:</b> this day's sessions that have been moved at least once. ")
                 .append("<b>Pending Requests:</b> sessions awaiting a reschedule or cancellation decision. ")
                 .append("<b>With Notes:</b> sessions with notes, feedback, a progress report or checklist notes saved.</p>")
                 .append("<p style=\"font-size:12px;color:#9ca3af;text-align:center;\">&copy; ").append(esc(org.getName()))
