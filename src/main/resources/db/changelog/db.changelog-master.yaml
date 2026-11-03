@@ -398,3 +398,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/133-cancel-orphaned-enrollment-sessions.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/134-session-cancelled-with-program.sql
+      relativeToChangelogFile: false

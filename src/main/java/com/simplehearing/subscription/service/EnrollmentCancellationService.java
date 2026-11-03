@@ -81,7 +81,10 @@ public class EnrollmentCancellationService {
                         || s.getStatus() == TherapySessionStatus.PENDING_RESCHEDULE
                         || s.getStatus() == TherapySessionStatus.CANCELLATION_REQUESTED)
                 .toList();
-        stillAhead.forEach(s -> s.setStatus(TherapySessionStatus.CANCELLED));
+        stillAhead.forEach(s -> {
+            s.setStatus(TherapySessionStatus.CANCELLED);
+            s.setCancelledWithProgram(true);
+        });
         sessionRepository.saveAll(stillAhead);
 
         for (Enrollment e : enrollments) {

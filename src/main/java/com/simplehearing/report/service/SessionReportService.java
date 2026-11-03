@@ -114,8 +114,11 @@ public class SessionReportService {
                 .toList();
         if (recipients.isEmpty()) return;
 
+        // Sessions cancelled along with their whole program are not part of the day's schedule.
         List<TherapySession> sessions = sessionRepository
-                .findByOrgIdAndSessionDateBetweenOrderBySessionDateAscStartTimeAsc(org.getId(), date, date);
+                .findByOrgIdAndSessionDateBetweenOrderBySessionDateAscStartTimeAsc(org.getId(), date, date).stream()
+                .filter(s -> !s.isCancelledWithProgram())
+                .toList();
 
         String title = kind == Kind.DAY ? "Day session report" : "Day end session report";
         String html = build(org, kind, date, sessions);

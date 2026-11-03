@@ -51,6 +51,9 @@ public record TherapySessionResponse(
          *  the calendar hides these rather than showing a cancelled chip for every session an
          *  inactive case would otherwise have had. */
         boolean cancelledByCaseInactive,
+        /** True when this session was cancelled along with its whole program (cancelled enrollment or plan, or a
+         *  discharge) — the calendar hides these like it hides the case-inactive ones. */
+        boolean cancelledWithProgram,
         /** True until the plan's subscription is paid in full — session is real and scheduled,
          *  just locked from completion/notes/reschedule-request until then. Status stays
          *  SCHEDULED throughout; this flag alone drives the "Payment pending" badge/lock. */
@@ -97,6 +100,7 @@ public record TherapySessionResponse(
                 session.isCountsTowardPlan(),
                 session.isRequiresPayment(),
                 session.isCancelledByCaseInactive(),
+                session.isCancelledWithProgram(),
                 session.isAwaitingPayment(),
                 requestedBy != null ? (requestedBy.getFirstName() + " " + requestedBy.getLastName()).trim() : null,
                 requestedBy != null && requestedBy.getRole() != null ? requestedBy.getRole().name() : null);

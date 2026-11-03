@@ -37,6 +37,7 @@ public interface TherapySessionRepository extends JpaRepository<TherapySession, 
             LEFT JOIN Subscription sub ON sub.id = e.subscriptionId
             LEFT JOIN Program pr ON pr.id = sub.programId
             WHERE s.orgId = :orgId AND s.sessionDate BETWEEN :from AND :to
+              AND s.cancelledWithProgram = false
               AND (:byTherapist = false OR s.therapistId = :therapistId)
               AND (:byPatients = false OR s.patientId IN :patientIds)
             ORDER BY s.sessionDate ASC, s.startTime ASC

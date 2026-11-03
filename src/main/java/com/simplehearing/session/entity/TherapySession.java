@@ -113,6 +113,12 @@ public class TherapySession {
     @Column(name = "cancelled_by_case_inactive", nullable = false)
     private boolean cancelledByCaseInactive = false;
 
+    /** True when this session was cancelled because its whole program (enrollment/plan) was cancelled or closed by
+     *  a discharge — the calendar hides these instead of showing a cancelled chip for every session the program
+     *  would have had. Unlike cancelledByCaseInactive nothing restores them, so it never drives a restore. */
+    @Column(name = "cancelled_with_program", nullable = false)
+    private boolean cancelledWithProgram = false;
+
     /** Mirrors Enrollment.awaitingPayment at the moment this session was generated — true until
      *  the subscription's payment is recorded in full. Status stays SCHEDULED throughout; this
      *  flag alone gates the "confirmed session" actions (complete, notes, parent reschedule/cancel). */
@@ -177,6 +183,8 @@ public class TherapySession {
     public void setCancelledByProgramCompletion(boolean v) { this.cancelledByProgramCompletion = v; }
     public boolean isCancelledByCaseInactive() { return cancelledByCaseInactive; }
     public void setCancelledByCaseInactive(boolean v) { this.cancelledByCaseInactive = v; }
+    public boolean isCancelledWithProgram() { return cancelledWithProgram; }
+    public void setCancelledWithProgram(boolean v) { this.cancelledWithProgram = v; }
     public boolean isAwaitingPayment() { return awaitingPayment; }
     public void setAwaitingPayment(boolean v) { this.awaitingPayment = v; }
 
