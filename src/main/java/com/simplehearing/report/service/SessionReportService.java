@@ -40,8 +40,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * Emails every Admin Role user a session report twice a day: a day report at 11:40 AM (today's schedule so far)
- * and a day end report at 1:00 PM (how the previous day ended), fired by {@code SessionReportJob}'s two cron triggers.
+ * Emails every Admin Role user a session report twice a day: a day end report at 10:30 AM (how the previous day ended)
+ * and a day report at 10:35 AM (today's schedule), fired by {@code SessionReportJob}'s two cron triggers.
  * Modelled on Kidaura's day-start / day-end session reports. "Today" is each organisation's own local date.
  */
 @Service
