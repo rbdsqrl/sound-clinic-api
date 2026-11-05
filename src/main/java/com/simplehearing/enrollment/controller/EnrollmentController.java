@@ -17,6 +17,7 @@ import com.simplehearing.common.exception.ResourceNotFoundException;
 import com.simplehearing.enrollment.dto.AvailableTherapistResponse;
 import com.simplehearing.enrollment.dto.CreateEnrollmentRequest;
 import com.simplehearing.enrollment.ProgramMonths;
+import com.simplehearing.enrollment.ProgramRuns;
 import com.simplehearing.enrollment.dto.RenewEnrollmentRequest;
 import com.simplehearing.enrollment.dto.RenewalDueResponse;
 import com.simplehearing.enrollment.dto.RenewalOutcomeRequest;
@@ -331,7 +332,8 @@ public class EnrollmentController {
                 sub.getNumSessions(),
                 ProgramMonths.current(therapySessionRepository.findByEnrollmentIdOrderBySessionNumberAsc(saved.getId()),
                         LocalDate.now()),
-                lastScheduledDate(therapySessionRepository.findByEnrollmentIdOrderBySessionNumberAsc(saved.getId())));
+                lastScheduledDate(therapySessionRepository.findByEnrollmentIdOrderBySessionNumberAsc(saved.getId())),
+                ProgramRuns.of(therapySessionRepository.findByEnrollmentIdOrderBySessionNumberAsc(saved.getId())));
 
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
     }
@@ -1058,7 +1060,7 @@ public class EnrollmentController {
                     e.getId(), TherapySessionStatus.COMPLETED);
             List<TherapySession> own = sessionsByEnrollment.getOrDefault(e.getId(), List.of());
             return EnrollmentResponse.from(e, fn, ln, prog, completed, total,
-                    ProgramMonths.current(own, today), lastScheduledDate(own));
+                    ProgramMonths.current(own, today), lastScheduledDate(own), ProgramRuns.of(own));
         }).toList();
     }
 }

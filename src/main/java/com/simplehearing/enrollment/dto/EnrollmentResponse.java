@@ -51,7 +51,9 @@ public record EnrollmentResponse(
         UUID dischargedInRecordId,
         /** Date of the last session still on the calendar (cancelled and extra sessions don't count) — a renewal
          *  can only start after it, or its new sessions would land on top of existing ones. Null with no sessions. */
-        LocalDate lastSessionDate
+        LocalDate lastSessionDate,
+        /** The program's runs — the original and each renewal — with their own dates; empty with no sessions. */
+        java.util.List<com.simplehearing.enrollment.ProgramRuns.Run> runs
 ) {
     public static EnrollmentResponse from(
             Enrollment enrollment,
@@ -61,7 +63,8 @@ public record EnrollmentResponse(
             int sessionsCompleted,
             int totalSessions,
             ProgramMonths.Summary month,
-            LocalDate lastSessionDate) {
+            LocalDate lastSessionDate,
+            java.util.List<com.simplehearing.enrollment.ProgramRuns.Run> runs) {
         return new EnrollmentResponse(
                 enrollment.getId(),
                 enrollment.getSubscriptionId(),
@@ -90,7 +93,8 @@ public record EnrollmentResponse(
                 effectiveProgramStatus(enrollment),
                 enrollment.getCreatedAt(),
                 enrollment.getDischargedInRecordId(),
-                lastSessionDate
+                lastSessionDate,
+                runs
         );
     }
 
