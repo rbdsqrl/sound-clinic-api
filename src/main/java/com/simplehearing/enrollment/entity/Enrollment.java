@@ -49,6 +49,11 @@ public class Enrollment {
     @Column(name = "end_date")
     private LocalDate endDate;
 
+    /** First session date of the program's current module — the original run, or the latest renewal's added
+     *  sessions. Null means the run has never been renewed, so the module starts at {@link #startDate}. */
+    @Column(name = "module_start_date")
+    private LocalDate moduleStartDate;
+
     /** Derived from start_date at creation time. Nullable — sessions are now daily. */
     @Enumerated(EnumType.STRING)
     @Column(name = "day_of_week")
@@ -172,6 +177,8 @@ public class Enrollment {
     public void setStartDate(LocalDate startDate) { this.startDate = startDate; }
     public LocalDate getEndDate() { return endDate; }
     public void setEndDate(LocalDate endDate) { this.endDate = endDate; }
+    public LocalDate getModuleStartDate() { return moduleStartDate; }
+    public void setModuleStartDate(LocalDate moduleStartDate) { this.moduleStartDate = moduleStartDate; }
     public DayOfWeek getDayOfWeek() { return dayOfWeek; }
     public void setDayOfWeek(DayOfWeek dayOfWeek) { this.dayOfWeek = dayOfWeek; }
     public Set<DayOfWeek> getSessionDays() { return sessionDays; }

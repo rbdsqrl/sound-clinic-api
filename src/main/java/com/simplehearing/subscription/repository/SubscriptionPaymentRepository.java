@@ -9,4 +9,6 @@ import java.util.UUID;
 public interface SubscriptionPaymentRepository extends JpaRepository<SubscriptionPayment, UUID> {
 
     List<SubscriptionPayment> findBySubscriptionIdOrderByPaidOnDescCreatedAtDesc(UUID subscriptionId);
+
+    List<SubscriptionPayment> findBySubscriptionIdAndPeriodStartIsNull(UUID subscriptionId);
 }

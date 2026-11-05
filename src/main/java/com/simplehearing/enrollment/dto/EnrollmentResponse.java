@@ -48,7 +48,10 @@ public record EnrollmentResponse(
         /** Set only when this enrollment was closed by a patient discharge — a force-completed
          *  one (via the care-status override) stays null, which is how the frontend knows
          *  whether "Reactivate" is even offered. */
-        UUID dischargedInRecordId
+        UUID dischargedInRecordId,
+        /** Date of the last session still on the calendar (cancelled and extra sessions don't count) — a renewal
+         *  can only start after it, or its new sessions would land on top of existing ones. Null with no sessions. */
+        LocalDate lastSessionDate
 ) {
     public static EnrollmentResponse from(
             Enrollment enrollment,
@@ -57,7 +60,8 @@ public record EnrollmentResponse(
             String programName,
             int sessionsCompleted,
             int totalSessions,
-            ProgramMonths.Summary month) {
+            ProgramMonths.Summary month,
+            LocalDate lastSessionDate) {
         return new EnrollmentResponse(
                 enrollment.getId(),
                 enrollment.getSubscriptionId(),
@@ -85,7 +89,8 @@ public record EnrollmentResponse(
                 month.total(),
                 effectiveProgramStatus(enrollment),
                 enrollment.getCreatedAt(),
-                enrollment.getDischargedInRecordId()
+                enrollment.getDischargedInRecordId(),
+                lastSessionDate
         );
     }
 

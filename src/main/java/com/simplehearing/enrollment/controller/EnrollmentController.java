@@ -305,6 +305,9 @@ public class EnrollmentController {
             saved = enrollmentRepository.save(saved);
         }
 
+        // Payments taken before the program had dates now belong to this run.
+        paymentService.stampOpenPayments(sub.getId(), saved.getStartDate(), saved.getEndDate());
+
         // Review meetings are opt-in — only generated when the setup flow asked for them
         if (request.reviewSchedule() != null) {
             reviewMeetingService.generateForEnrollment(saved, request.reviewSchedule(), clinicHeadIds, principal.getId());
@@ -327,7 +330,8 @@ public class EnrollmentController {
                 0, // freshly created — no sessions can be completed yet
                 sub.getNumSessions(),
                 ProgramMonths.current(therapySessionRepository.findByEnrollmentIdOrderBySessionNumberAsc(saved.getId()),
-                        LocalDate.now()));
+                        LocalDate.now()),
+                lastScheduledDate(therapySessionRepository.findByEnrollmentIdOrderBySessionNumberAsc(saved.getId())));
 
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
     }
@@ -765,6 +769,14 @@ public class EnrollmentController {
         List<TherapySession> existing = therapySessionRepository.findByEnrollmentIdOrderBySessionNumberAsc(id);
         int lastNumber = existing.stream().mapToInt(TherapySession::getSessionNumber).max().orElse(0);
         LocalDate lastDate = existing.stream().map(TherapySession::getSessionDate).max(LocalDate::compareTo).orElse(null);
+        // New sessions must start after the program's last scheduled session — an earlier start would put a second
+        // session on days that already have one.
+        LocalDate lastScheduled = lastScheduledDate(existing);
+        if (request.startDate() != null && lastScheduled != null && !request.startDate().isAfter(lastScheduled)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST,
+                    "The current program's last session is on " + lastScheduled
+                            + " — the new sessions must start after that date");
+        }
         LocalDate from = request.startDate() != null ? request.startDate()
                 : (lastDate != null && !lastDate.plusDays(1).isBefore(today) ? lastDate.plusDays(1) : today);
 
@@ -788,6 +800,7 @@ public class EnrollmentController {
                 enrollment, lastNumber + 1, from, request.additionalSessions(), enrollment.isAwaitingPayment());
 
         enrollment.setEndDate(added.get(added.size() - 1).getSessionDate());
+        enrollment.setModuleStartDate(added.get(0).getSessionDate());
         // Renewing completes the renewal — the reminders stop and the label goes back to Active.
         enrollment.setProgramStatus(ProgramStatus.ACTIVE);
         enrollment.setRenewalReminderLastSlot(null);
@@ -996,6 +1009,16 @@ public class EnrollmentController {
 
     // ── Private helpers ───────────────────────────────────────────────────────
 
+    /** Date of the last session still on the calendar — cancelled sessions free their slot and extra (ad hoc)
+     *  sessions sit outside the plan's own run, so neither counts. Null when there is none. */
+    private static LocalDate lastScheduledDate(List<TherapySession> sessions) {
+        return sessions.stream()
+                .filter(s -> s.getStatus() != TherapySessionStatus.CANCELLED && !s.isAdHoc())
+                .map(TherapySession::getSessionDate)
+                .max(LocalDate::compareTo)
+                .orElse(null);
+    }
+
     private List<EnrollmentResponse> enrichEnrollments(List<Enrollment> enrollments) {
         if (enrollments.isEmpty()) return List.of();
 
@@ -1033,8 +1056,9 @@ public class EnrollmentController {
             int total = totalSessions.getOrDefault(e.getSubscriptionId(), 0);
             int completed = therapySessionRepository.countByEnrollmentIdAndStatusAndCountsTowardPlanTrue(
                     e.getId(), TherapySessionStatus.COMPLETED);
+            List<TherapySession> own = sessionsByEnrollment.getOrDefault(e.getId(), List.of());
             return EnrollmentResponse.from(e, fn, ln, prog, completed, total,
-                    ProgramMonths.current(sessionsByEnrollment.getOrDefault(e.getId(), List.of()), today));
+                    ProgramMonths.current(own, today), lastScheduledDate(own));
         }).toList();
     }
 }

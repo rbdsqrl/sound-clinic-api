@@ -17,10 +17,14 @@ public record SubscriptionPaymentResponse(
         String note,
         UUID recordedById,
         String recordedByName,
-        Instant createdAt
+        Instant createdAt,
+        /** The program run (first to last session date) the payment was made for; null when unknown. */
+        LocalDate periodStart,
+        LocalDate periodEnd
 ) {
     public static SubscriptionPaymentResponse from(SubscriptionPayment p, String recordedByName) {
         return new SubscriptionPaymentResponse(p.getId(), p.getSubscriptionId(), p.getAmount(), p.getPaidOn(),
-                p.getMode(), p.getNote(), p.getRecordedBy(), recordedByName, p.getCreatedAt());
+                p.getMode(), p.getNote(), p.getRecordedBy(), recordedByName, p.getCreatedAt(),
+                p.getPeriodStart(), p.getPeriodEnd());
     }
 }

@@ -40,11 +40,24 @@ public class SubscriptionPayment {
     @Column(name = "recorded_by")
     private UUID recordedBy;
 
+    /** First and last session date of the program run this payment was made for — the original run or a renewal.
+     *  Null when the program had no dates yet at the time, or for older payments that can't be attributed. */
+    @Column(name = "period_start")
+    private LocalDate periodStart;
+
+    @Column(name = "period_end")
+    private LocalDate periodEnd;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
     public SubscriptionPayment() {}
+
+    public LocalDate getPeriodStart()           { return periodStart; }
+    public void setPeriodStart(LocalDate v)     { this.periodStart = v; }
+    public LocalDate getPeriodEnd()             { return periodEnd; }
+    public void setPeriodEnd(LocalDate v)       { this.periodEnd = v; }
 
     public UUID getId()                         { return id; }
     public UUID getOrgId()                      { return orgId; }

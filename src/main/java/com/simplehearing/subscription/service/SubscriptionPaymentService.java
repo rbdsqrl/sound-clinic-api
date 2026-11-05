@@ -1,5 +1,8 @@
 package com.simplehearing.subscription.service;
 
+import com.simplehearing.enrollment.entity.Enrollment;
+import com.simplehearing.enrollment.enums.EnrollmentStatus;
+import com.simplehearing.enrollment.repository.EnrollmentRepository;
 import com.simplehearing.subscription.entity.Subscription;
 import com.simplehearing.subscription.entity.SubscriptionPayment;
 import com.simplehearing.subscription.enums.PaymentMode;
@@ -12,6 +15,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.util.Comparator;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -26,10 +31,13 @@ public class SubscriptionPaymentService {
     private final SubscriptionRepository subscriptionRepository;
     private final SubscriptionPaymentRepository paymentRepository;
     private final EnrollmentPaymentActivationService activationService;
+    private final EnrollmentRepository enrollmentRepository;
 
     public SubscriptionPaymentService(SubscriptionRepository subscriptionRepository,
                                       SubscriptionPaymentRepository paymentRepository,
-                                      EnrollmentPaymentActivationService activationService) {
+                                      EnrollmentPaymentActivationService activationService,
+                                      EnrollmentRepository enrollmentRepository) {
+        this.enrollmentRepository = enrollmentRepository;
         this.subscriptionRepository = subscriptionRepository;
         this.paymentRepository = paymentRepository;
         this.activationService = activationService;
@@ -98,6 +106,22 @@ public class SubscriptionPaymentService {
         entry.setMode(mode);
         entry.setNote(note != null && !note.isBlank() ? note.trim() : null);
         entry.setRecordedBy(recordedBy);
+        // The payment is for the program run in progress: the original run, or the latest renewal's added sessions.
+        enrollmentRepository.findBySubscriptionId(sub.getId()).stream()
+                .filter(e -> e.getStatus() != EnrollmentStatus.CANCELLED)
+                .max(Comparator.comparing(Enrollment::getCreatedAt))
+                .ifPresent(e -> {
+                    entry.setPeriodStart(e.getModuleStartDate() != null ? e.getModuleStartDate() : e.getStartDate());
+                    entry.setPeriodEnd(e.getEndDate());
+                });
         paymentRepository.save(entry);
+    }
+
+    /** Payments recorded before the program had dates (no enrollment yet) take the dates of its first run. */
+    @Transactional
+    public void stampOpenPayments(UUID subscriptionId, LocalDate start, LocalDate end) {
+        List<SubscriptionPayment> open = paymentRepository.findBySubscriptionIdAndPeriodStartIsNull(subscriptionId);
+        open.forEach(p -> { p.setPeriodStart(start); p.setPeriodEnd(end); });
+        paymentRepository.saveAll(open);
     }
 }
