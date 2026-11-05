@@ -60,7 +60,9 @@ public record TherapySessionResponse(
         boolean awaitingPayment,
         /** Who raised the open cancellation or reschedule request, with their role — null when none is open. */
         String requestedByName,
-        String requestedByRole
+        String requestedByRole,
+        /** Why a cancellation was requested — null on requests raised before a reason was required. */
+        String cancellationReason
 ) {
     public static TherapySessionResponse from(
             TherapySession session,
@@ -103,6 +105,7 @@ public record TherapySessionResponse(
                 session.isCancelledWithProgram(),
                 session.isAwaitingPayment(),
                 requestedBy != null ? (requestedBy.getFirstName() + " " + requestedBy.getLastName()).trim() : null,
-                requestedBy != null && requestedBy.getRole() != null ? requestedBy.getRole().name() : null);
+                requestedBy != null && requestedBy.getRole() != null ? requestedBy.getRole().name() : null,
+                session.getCancellationRequestReason());
     }
 }

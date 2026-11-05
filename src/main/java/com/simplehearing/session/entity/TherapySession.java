@@ -86,6 +86,11 @@ public class TherapySession {
     private boolean parentRescheduleRequested = false;
 
     /** Booked by hand from the calendar rather than generated with the plan. */
+    /** Why the open (or last approved) cancellation request was raised. Null for requests raised before reasons were
+     *  required — those still work, they just have no reason to show. */
+    @Column(name = "cancellation_request_reason", length = 500)
+    private String cancellationRequestReason;
+
     @Column(name = "ad_hoc", nullable = false)
     private boolean adHoc = false;
 
@@ -191,6 +196,8 @@ public class TherapySession {
     public int getRescheduleCount() { return rescheduleCount; }
     public void setRescheduleCount(int rescheduleCount) { this.rescheduleCount = rescheduleCount; }
 
+    public String getCancellationRequestReason() { return cancellationRequestReason; }
+    public void setCancellationRequestReason(String v) { this.cancellationRequestReason = v; }
     public boolean isAdHoc() { return adHoc; }
     public void setAdHoc(boolean adHoc) { this.adHoc = adHoc; }
 

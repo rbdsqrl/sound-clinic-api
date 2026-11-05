@@ -24,6 +24,7 @@ import com.simplehearing.program.feedback.service.ProgramFeedbackService;
 import com.simplehearing.program.repository.ProgramRepository;
 import com.simplehearing.patient.entity.TherapistPatient;
 import com.simplehearing.patient.repository.TherapistPatientRepository;
+import com.simplehearing.session.dto.CancellationRequestBody;
 import com.simplehearing.session.dto.CreateAdHocSessionRequest;
 import com.simplehearing.session.dto.RescheduleSessionRequest;
 import com.simplehearing.session.dto.SessionAttachmentResponse;
@@ -852,6 +853,7 @@ public class TherapySessionController {
     @PreAuthorize("hasAnyRole('THERAPIST', 'CLINIC_HEAD', 'BUSINESS_OWNER', 'OFFICE_ADMIN')")
     public ResponseEntity<ApiResponse<TherapySessionResponse>> cancellationRequest(
             @PathVariable UUID id,
+            @Valid @RequestBody CancellationRequestBody body,
             @AuthenticationPrincipal UserPrincipal principal) {
 
         TherapySession session = findOwned(id, principal);
@@ -861,13 +863,16 @@ public class TherapySessionController {
             throw new ApiException(HttpStatus.CONFLICT, "Only SCHEDULED sessions can be requested for cancellation");
         }
 
+        String reason = body.reason().trim();
         session.setStatus(TherapySessionStatus.CANCELLATION_REQUESTED);
         session.setRescheduleRequestedBy(principal.getId());
+        session.setCancellationRequestReason(reason);
 
         TherapySession saved = sessionRepository.save(session);
         activityService.record(saved, principal.getId(), SessionActivityType.CANCELLATION_REQUESTED,
                 "Cancellation requested",
-                List.of(SessionActivityService.change("Status", "Scheduled", "Cancellation requested")));
+                List.of(SessionActivityService.change("Status", "Scheduled", "Cancellation requested"),
+                        SessionActivityService.change("Reason", "", reason)));
         return ResponseEntity.ok(ApiResponse.success(enrich(List.of(saved)).get(0)));
     }
 
@@ -913,6 +918,7 @@ public class TherapySessionController {
 
         session.setStatus(TherapySessionStatus.SCHEDULED);
         session.setRescheduleRequestedBy(null);
+        session.setCancellationRequestReason(null);
 
         TherapySession saved = sessionRepository.save(session);
         activityService.record(saved, principal.getId(), SessionActivityType.CANCELLATION_REJECTED,

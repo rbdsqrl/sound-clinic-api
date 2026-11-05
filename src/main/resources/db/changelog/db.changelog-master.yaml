@@ -410,3 +410,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/137-enrollment-module-start-from-runs.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/138-cancellation-request-reason.sql
+      relativeToChangelogFile: false
