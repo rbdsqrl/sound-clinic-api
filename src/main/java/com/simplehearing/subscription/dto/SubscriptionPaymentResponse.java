@@ -23,8 +23,15 @@ public record SubscriptionPaymentResponse(
         LocalDate periodEnd
 ) {
     public static SubscriptionPaymentResponse from(SubscriptionPayment p, String recordedByName) {
+        return from(p, recordedByName, null, null);
+    }
+
+    /** {@code fallbackStart/End} (the program's overall run) fill in when the payment has no run of its own. */
+    public static SubscriptionPaymentResponse from(SubscriptionPayment p, String recordedByName,
+                                                   LocalDate fallbackStart, LocalDate fallbackEnd) {
+        boolean own = p.getPeriodStart() != null && p.getPeriodEnd() != null;
         return new SubscriptionPaymentResponse(p.getId(), p.getSubscriptionId(), p.getAmount(), p.getPaidOn(),
                 p.getMode(), p.getNote(), p.getRecordedBy(), recordedByName, p.getCreatedAt(),
-                p.getPeriodStart(), p.getPeriodEnd());
+                own ? p.getPeriodStart() : fallbackStart, own ? p.getPeriodEnd() : fallbackEnd);
     }
 }

@@ -219,9 +219,11 @@ public class SubscriptionController {
                         payments.stream().map(p -> p.getRecordedBy()).filter(java.util.Objects::nonNull)
                                 .collect(Collectors.toSet())).stream()
                 .collect(Collectors.toMap(User::getId, u -> u));
+        LocalDate[] run = paymentService.overallRun(sub.getId());
         return ResponseEntity.ok(ApiResponse.success(payments.stream().map(p -> {
             User u = p.getRecordedBy() != null ? users.get(p.getRecordedBy()) : null;
-            return SubscriptionPaymentResponse.from(p, u != null ? u.getFirstName() + " " + u.getLastName() : null);
+            return SubscriptionPaymentResponse.from(p, u != null ? u.getFirstName() + " " + u.getLastName() : null,
+                    run != null ? run[0] : null, run != null ? run[1] : null);
         }).toList()));
     }
 

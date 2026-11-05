@@ -404,3 +404,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/135-payment-program-period.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/136-payment-period-from-sessions.sql
+      relativeToChangelogFile: false

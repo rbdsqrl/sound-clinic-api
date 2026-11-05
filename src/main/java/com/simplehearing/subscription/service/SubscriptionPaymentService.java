@@ -117,6 +117,17 @@ public class SubscriptionPaymentService {
         paymentRepository.save(entry);
     }
 
+    /** The program's overall run — first to last session date of its latest live enrollment — or null while it has no
+     *  dates yet. The payment list shows this for any payment whose own run isn't stored, so none is ever blank. */
+    public LocalDate[] overallRun(UUID subscriptionId) {
+        return enrollmentRepository.findBySubscriptionId(subscriptionId).stream()
+                .filter(e -> e.getStatus() != EnrollmentStatus.CANCELLED)
+                .max(Comparator.comparing(Enrollment::getCreatedAt))
+                .filter(e -> e.getStartDate() != null && e.getEndDate() != null)
+                .map(e -> new LocalDate[] { e.getStartDate(), e.getEndDate() })
+                .orElse(null);
+    }
+
     /** Payments recorded before the program had dates (no enrollment yet) take the dates of its first run. */
     @Transactional
     public void stampOpenPayments(UUID subscriptionId, LocalDate start, LocalDate end) {
