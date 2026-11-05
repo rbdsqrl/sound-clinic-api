@@ -91,6 +91,11 @@ public class TherapySession {
     @Column(name = "cancellation_request_reason", length = 500)
     private String cancellationRequestReason;
 
+    /** Set on a session created by moving an incorrectly completed one to a later date: the session it replaces. The new
+     *  session counts as part of the same run (original or renewal batch) as that one. Null otherwise. */
+    @Column(name = "moved_from_session_id")
+    private UUID movedFromSessionId;
+
     @Column(name = "ad_hoc", nullable = false)
     private boolean adHoc = false;
 
@@ -198,6 +203,8 @@ public class TherapySession {
 
     public String getCancellationRequestReason() { return cancellationRequestReason; }
     public void setCancellationRequestReason(String v) { this.cancellationRequestReason = v; }
+    public UUID getMovedFromSessionId() { return movedFromSessionId; }
+    public void setMovedFromSessionId(UUID v) { this.movedFromSessionId = v; }
     public boolean isAdHoc() { return adHoc; }
     public void setAdHoc(boolean adHoc) { this.adHoc = adHoc; }
 

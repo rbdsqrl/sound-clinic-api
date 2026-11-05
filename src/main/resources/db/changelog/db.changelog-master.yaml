@@ -413,3 +413,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/migrations/138-cancellation-request-reason.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/migrations/139-session-moved-from.sql
+      relativeToChangelogFile: false

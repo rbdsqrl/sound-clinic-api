@@ -24,6 +24,7 @@ import com.simplehearing.program.feedback.service.ProgramFeedbackService;
 import com.simplehearing.program.repository.ProgramRepository;
 import com.simplehearing.patient.entity.TherapistPatient;
 import com.simplehearing.patient.repository.TherapistPatientRepository;
+import com.simplehearing.session.dto.MoveSessionRequest;
 import com.simplehearing.session.dto.CancellationRequestBody;
 import com.simplehearing.session.dto.CreateAdHocSessionRequest;
 import com.simplehearing.session.dto.RescheduleSessionRequest;
@@ -56,6 +57,7 @@ import com.simplehearing.user.repository.UserRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -736,6 +738,95 @@ public class TherapySessionController {
             // A notification failure must not undo a reschedule the user has already been told succeeded.
             log.error("Session {} rescheduled but notifications failed: {}", session.getId(), e.getMessage());
         }
+    }
+
+    // ── Move a wrongly completed session to a later date ──────────────────────
+
+    @Operation(
+        summary = "Move a COMPLETED session to a later date — it is cancelled and a new session is created",
+        description = "For a session marked completed by mistake. The completed session becomes CANCELLED (its notes stay "
+                    + "on it for the record) and a clean SCHEDULED session is created on the same plan and run, with the "
+                    + "same session number, therapist and length, for the new date. Admin roles only."
+    )
+    @PostMapping("/{id}/move")
+    @PreAuthorize("hasAnyRole('CLINIC_HEAD', 'BUSINESS_OWNER', 'OFFICE_ADMIN')")
+    @Transactional
+    public ResponseEntity<ApiResponse<TherapySessionResponse>> moveCompleted(
+            @PathVariable UUID id,
+            @Valid @RequestBody MoveSessionRequest request,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        TherapySession old = findOwned(id, principal);
+
+        if (old.getStatus() != TherapySessionStatus.COMPLETED) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "Only a completed session can be moved this way — this one is "
+                            + old.getStatus().name().toLowerCase().replace('_', ' '));
+        }
+        if (!request.newDate().isAfter(old.getSessionDate())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST,
+                    "Pick a date after the session's own date (" + old.getSessionDate() + ")");
+        }
+        if (request.newDate().isBefore(LocalDate.now())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "The new date can't be in the past");
+        }
+
+        Enrollment enrollment = enrollmentRepository.findById(old.getEnrollmentId())
+                .orElseThrow(() -> new ResourceNotFoundException("Therapy plan not found"));
+        if (enrollment.getStatus() != EnrollmentStatus.ACTIVE) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "This session's program is " + enrollment.getStatus().name().toLowerCase()
+                            + " — reopen or renew the program before moving a session on it");
+        }
+
+        // The new session keeps the original's length; only the start may change.
+        long minutes = java.time.Duration.between(old.getStartTime(), old.getEndTime()).toMinutes();
+        LocalTime start = request.newStartTime() != null ? request.newStartTime() : old.getStartTime();
+
+        TherapySession fresh = new TherapySession();
+        fresh.setOrgId(old.getOrgId());
+        fresh.setEnrollmentId(old.getEnrollmentId());
+        fresh.setPatientId(old.getPatientId());
+        fresh.setTherapistId(old.getTherapistId());
+        fresh.setSessionNumber(old.getSessionNumber());      // it takes over the plan slot of the one it replaces
+        fresh.setSessionDate(request.newDate());
+        fresh.setStartTime(start);
+        fresh.setEndTime(start.plusMinutes(minutes));
+        fresh.setStatus(TherapySessionStatus.SCHEDULED);
+        fresh.setAdHoc(old.isAdHoc());
+        fresh.setCountsTowardPlan(old.isCountsTowardPlan());
+        fresh.setRequiresPayment(old.isRequiresPayment());
+        fresh.setAwaitingPayment(old.isAwaitingPayment());
+        fresh.setMovedFromSessionId(old.getId());            // keeps it in the same run / renewal block
+        TherapySession saved = sessionRepository.save(fresh);
+
+        old.setStatus(TherapySessionStatus.CANCELLED);
+        sessionRepository.save(old);
+
+        // The plan runs at least until its last session.
+        if (enrollment.getEndDate() == null || saved.getSessionDate().isAfter(enrollment.getEndDate())) {
+            enrollment.setEndDate(saved.getSessionDate());
+            enrollmentRepository.save(enrollment);
+        }
+
+        String reason = request.reason() != null && !request.reason().isBlank() ? request.reason().trim() : null;
+        var oldChanges = SessionActivityService.list();
+        oldChanges.add(SessionActivityService.change("Status", "Completed", "Cancelled"));
+        oldChanges.add(SessionActivityService.change("Moved to", null, saved.getSessionDate().toString()));
+        if (reason != null) oldChanges.add(SessionActivityService.change("Reason", null, reason));
+        activityService.record(old, principal.getId(), SessionActivityType.STATUS_CHANGED,
+                "Marked completed by mistake — moved to a later date", oldChanges);
+
+        var newChanges = SessionActivityService.list();
+        newChanges.add(SessionActivityService.change("Date", null, saved.getSessionDate().toString()));
+        newChanges.add(SessionActivityService.change("Start Time", null, saved.getStartTime().toString().substring(0, 5)));
+        newChanges.add(SessionActivityService.change("Moved from", null, old.getSessionDate().toString()));
+        activityService.record(saved, principal.getId(), SessionActivityType.SESSION_CREATED,
+                "Session reopened for a later date", newChanges);
+
+        log.info("Completed session {} moved to {} as new session {}", old.getId(), saved.getSessionDate(), saved.getId());
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(enrich(List.of(saved)).get(0)));
     }
 
     // ── Ad-hoc session booked from the calendar ────────────────────────────────
