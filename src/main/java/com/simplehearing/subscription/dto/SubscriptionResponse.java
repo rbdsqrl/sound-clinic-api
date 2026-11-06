@@ -25,7 +25,10 @@ public record SubscriptionResponse(
         String notes,
         Instant createdAt,
         /** Set when an admin agreed a total for the whole plan (an ad hoc discount) — totalAmount is then this figure. */
-        BigDecimal totalOverride
+        BigDecimal totalOverride,
+        /** Start date and weekdays chosen when the program was created — null on older plans. */
+        java.time.LocalDate plannedStartDate,
+        java.util.Set<java.time.DayOfWeek> plannedSessionDays
 ) {
     public static SubscriptionResponse from(Subscription sub, String programName) {
         // totalAmount: the admin-agreed total if there is one, else sessions × per-session cost less the
@@ -46,7 +49,9 @@ public record SubscriptionResponse(
                 sub.getPaymentNotes(),
                 sub.getNotes(),
                 sub.getCreatedAt(),
-                sub.getTotalOverride()
+                sub.getTotalOverride(),
+                sub.getPlannedStartDate(),
+                sub.getPlannedSessionDays()
         );
     }
 }

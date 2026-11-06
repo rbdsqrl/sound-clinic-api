@@ -135,6 +135,8 @@ public class SubscriptionController {
                 ? request.perSessionCost()
                 : ProgramResponse.effectiveCost(program, tax));
         sub.setNotes(request.notes());
+        sub.setPlannedStartDate(request.plannedStartDate());
+        sub.setPlannedSessionDays(request.plannedSessionDays());
         sub.setCreatedBy(principal.getId());
 
         Subscription saved = subscriptionRepository.save(sub);

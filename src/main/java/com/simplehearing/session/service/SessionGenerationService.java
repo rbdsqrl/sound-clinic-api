@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -151,6 +152,54 @@ public class SessionGenerationService {
         }
 
         return sessionRepository.saveAll(sessionsToReschedule);
+    }
+
+    /** Result of {@link #preview}: how many sessions a schedule produces and the first / last date they land on. */
+    public record SchedulePreview(int sessionCount, LocalDate firstDate, LocalDate lastDate) {}
+
+    /**
+     * Counts the sessions a schedule would generate, by the same rules {@link #generateSessions} uses (public holidays,
+     * the org's weekly off days, the chosen weekdays). Give either {@code sessions} — the last date is where that many
+     * land — or {@code endDate} — every valid day from the start up to and including it counts. Nothing is saved.
+     */
+    public SchedulePreview preview(UUID orgId, LocalDate startDate, Set<DayOfWeek> sessionDays,
+                                   Integer sessions, LocalDate endDate) {
+        if ((sessions == null) == (endDate == null)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Give either a number of sessions or an end date");
+        }
+        if (endDate != null && endDate.isBefore(startDate)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "The end date is before the start date");
+        }
+        if (endDate != null && startDate.plusDays(1100).isBefore(endDate)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "That period is too long to plan at once");
+        }
+        if (sessions != null && (sessions < 1 || sessions > 500)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Sessions must be between 1 and 500");
+        }
+
+        Set<LocalDate> holidays = holidayRepository.findByOrgIdOrderByHolidayDateAsc(orgId).stream()
+                .map(h -> h.getHolidayDate()).collect(Collectors.toSet());
+        Set<DayOfWeek> weeklyOffDays = organisationRepository.findById(orgId)
+                .map(Organisation::getWeeklyOffDays).orElse(EnumSet.noneOf(DayOfWeek.class));
+        boolean restrict = sessionDays != null && !sessionDays.isEmpty();
+        if (restrict && weeklyOffDays.containsAll(sessionDays)) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "Every selected day is a weekly off day for this organisation — choose a different day");
+        }
+
+        int count = 0;
+        LocalDate first = null;
+        LocalDate last = null;
+        LocalDate limit = endDate != null ? endDate : startDate.plusDays(1100);
+        for (LocalDate d = startDate; !d.isAfter(limit); d = d.plusDays(1)) {
+            if (holidays.contains(d) || weeklyOffDays.contains(d.getDayOfWeek())
+                    || (restrict && !sessionDays.contains(d.getDayOfWeek()))) continue;
+            count++;
+            if (first == null) first = d;
+            last = d;
+            if (sessions != null && count == sessions) break;
+        }
+        return new SchedulePreview(count, first, last);
     }
 
     /** Advances {@code date} past any public holiday, the org's weekly off days, or a weekday

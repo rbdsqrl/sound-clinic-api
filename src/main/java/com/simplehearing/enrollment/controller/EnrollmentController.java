@@ -209,6 +209,27 @@ public class EnrollmentController {
         return ResponseEntity.ok(ApiResponse.success(result));
     }
 
+    // ── Schedule preview ──────────────────────────────────────────────────────
+
+    @Operation(
+        summary = "Preview how many sessions a schedule produces — nothing is saved",
+        description = "Counts sessions with the same rules enrollment uses (public holidays, weekly off days, the chosen "
+                    + "weekdays). Give either `sessions` (the last date is where that many land) or `endDate` (every valid "
+                    + "day up to and including it counts). Used to quote the session count and price when a program or a "
+                    + "renewal is set up by month."
+    )
+    @GetMapping("/schedule-preview")
+    @PreAuthorize("hasAnyRole('CLINIC_HEAD', 'BUSINESS_OWNER', 'OFFICE_ADMIN')")
+    public ResponseEntity<ApiResponse<SessionGenerationService.SchedulePreview>> schedulePreview(
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) Set<java.time.DayOfWeek> sessionDays,
+            @RequestParam(required = false) Integer sessions,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                sessionGenerationService.preview(principal.getOrgId(), startDate, sessionDays, sessions, endDate)));
+    }
+
     // ── Create enrollment ─────────────────────────────────────────────────────
 
     @Operation(summary = "Create an enrollment for a subscription")

@@ -65,6 +65,14 @@ public class Subscription {
     @Column(columnDefinition = "TEXT")
     private String notes;
 
+    /** Start date and weekdays chosen when the program was created, so the enrollment step starts from them. Null on
+     *  plans created before they were asked up front. The days are stored as a comma-separated list of DayOfWeek names. */
+    @Column(name = "planned_start_date")
+    private java.time.LocalDate plannedStartDate;
+
+    @Column(name = "planned_session_days", length = 80)
+    private String plannedSessionDays;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -106,4 +114,20 @@ public class Subscription {
     public void setNotes(String notes) { this.notes = notes; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
+
+    public java.time.LocalDate getPlannedStartDate() { return plannedStartDate; }
+    public void setPlannedStartDate(java.time.LocalDate v) { this.plannedStartDate = v; }
+
+    public java.util.Set<java.time.DayOfWeek> getPlannedSessionDays() {
+        java.util.Set<java.time.DayOfWeek> out = new java.util.TreeSet<>();
+        if (plannedSessionDays != null && !plannedSessionDays.isBlank()) {
+            for (String d : plannedSessionDays.split(",")) out.add(java.time.DayOfWeek.valueOf(d.trim()));
+        }
+        return out;
+    }
+
+    public void setPlannedSessionDays(java.util.Collection<java.time.DayOfWeek> days) {
+        this.plannedSessionDays = days == null || days.isEmpty() ? null
+                : days.stream().sorted().map(Enum::name).collect(java.util.stream.Collectors.joining(","));
+    }
 }

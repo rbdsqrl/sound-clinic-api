@@ -15,5 +15,9 @@ public record CreateSubscriptionRequest(
 
         /** Optional per-session fee override for this one case — the program's own price is
          *  unaffected. Omit to use the program's price (with tax) as before. */
-        @DecimalMin(value = "0", inclusive = true) BigDecimal perSessionCost
+        @DecimalMin(value = "0", inclusive = true) BigDecimal perSessionCost,
+
+        /** The start date and weekdays chosen up front — kept so the enrollment step starts from the same schedule. */
+        java.time.LocalDate plannedStartDate,
+        java.util.Set<java.time.DayOfWeek> plannedSessionDays
 ) {}
