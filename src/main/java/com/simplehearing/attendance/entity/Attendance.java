@@ -74,6 +74,10 @@ public class Attendance {
     @Column(nullable = false)
     private AttendanceStatus status = AttendanceStatus.CHECKED_IN;
 
+    /** True once the Business Owner has corrected the login / logout time by hand (see attendance_edit_history). */
+    @Column(name = "manually_edited", nullable = false)
+    private boolean manuallyEdited = false;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -123,4 +127,6 @@ public class Attendance {
     public void setStatus(AttendanceStatus status) { this.status = status; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
+    public boolean isManuallyEdited() { return manuallyEdited; }
+    public void setManuallyEdited(boolean v) { this.manuallyEdited = v; }
 }

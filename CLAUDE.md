@@ -348,6 +348,12 @@ All responses are wrapped: `{ "success": true, "data": ..., "timestamp": "..." }
 | POST     | `/api/v1/clinics`                       | BUSINESS_OWNER, CLINIC_HEAD                                   | Create clinic                       |
 | GET      | `/api/v1/clinics/{id}`                  | All authenticated                                       | Clinic detail                       |
 | PATCH    | `/api/v1/clinics/{id}`                  | BUSINESS_OWNER, CLINIC_HEAD                                   | Update clinic                       |
+| GET      | `/api/v1/attendance`                    | BUSINESS_OWNER only                                     | All staff attendance records in a date range (includes each check-in's latitude/longitude) |
+| PATCH    | `/api/v1/attendance/{id}/review-override` | BUSINESS_OWNER only                                   | Approve / reject a face-override check-in |
+| PATCH    | `/api/v1/attendance/{id}/times`         | BUSINESS_OWNER only                                     | Correct a record's login / logout time (working hours follow); writes an `attendance_edit_history` entry and flags the record `manuallyEdited` |
+| GET      | `/api/v1/attendance/{id}/history`       | BUSINESS_OWNER only                                     | The manual corrections made to a record, newest first |
+
+**GPS settings are the Business Owner's alone:** the organisation's and each clinic's latitude / longitude / geo-fence radius are returned only to a user holding BUSINESS_OWNER and a change by anyone else is refused with 403 (the rest of the org / clinic profile stays editable by the other Admin Roles).
 | GET      | `/api/v1/patients`                      | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST | Paginated patients list — 20/page, sorted `createdAt` desc by default; `search`, `mine`, `status` (comma-separated ACTIVE/INACTIVE — Active = not discharged, Inactive = stage DISCHARGED), `compact` (id-only parent/therapist stubs) filters |
 | POST     | `/api/v1/patients`                      | BUSINESS_OWNER, CLINIC_HEAD, OFFICE_ADMIN                     | Create patient                      |
 | GET      | `/api/v1/patients/{id}`                 | BUSINESS_OWNER, CLINIC_HEAD, THERAPIST | Patient detail                      |
@@ -463,6 +469,7 @@ Master file: `db.changelog-master.yaml` — lists migrations in order.
 | 126-org-custom-roles.sql             | `org_custom_roles` — an organisation's Custom Role picker list (name unique per org, case-insensitive); a member's own value lives in `users.specialization` |
 | 130-program-status.sql               | `enrollments.program_status` (ACTIVE / RENEWAL_DUE / COMPLETED_DISCONTINUED; finished programs backfilled to COMPLETED_DISCONTINUED) + `renewal_reminder_last_slot` — drives `RenewalReminderJob` (hourly; emails parents at 9:00 and 21:00 org time, only for programs set to Renewal Due, from 3 days before `end_date` until renewed or discontinued) |
 | 131-renewal-outcome.sql              | `enrollments.renewal_outcome` (+ `_at`/`_by`) — the admin's end-of-program decision that takes a program off the Renewals task list |
+| 140-attendance-edit-history.sql      | `attendance.manually_edited` + `attendance_edit_history` — the Business Owner's manual corrections of login / logout time, with who / when / what changed |
 | 132-parent-session-feedback.sql      | `parent_session_feedback` — a parent's feedback on a completed session; `admin_reviewed_at` drives the admin card, `shared_with_therapist` / `therapist_seen_at` the therapist card |
 | 113-phone-uniqueness.sql             | Normalises existing `users.phone` values (digits + leading `+` only) and adds `uq_users_phone` — a second login identity alongside email, so it must be unique too |
 

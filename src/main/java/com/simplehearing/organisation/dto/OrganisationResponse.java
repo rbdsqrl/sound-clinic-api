@@ -31,6 +31,11 @@ public record OrganisationResponse(
         Instant createdAt
 ) {
     public static OrganisationResponse from(Organisation org) {
+        return from(org, true);
+    }
+
+    /** {@code includeGeoFence} false blanks the GPS settings — only the Business Owner may see or change them. */
+    public static OrganisationResponse from(Organisation org, boolean includeGeoFence) {
         return new OrganisationResponse(
                 org.getId(),
                 org.getName(),
@@ -44,9 +49,9 @@ public record OrganisationResponse(
                 org.getAiProvider(),
                 org.getAiApiKey() != null && !org.getAiApiKey().isBlank(),
                 org.getWeeklyOffDays(),
-                org.getLatitude(),
-                org.getLongitude(),
-                org.getGeoFenceRadiusMeters(),
+                includeGeoFence ? org.getLatitude() : null,
+                includeGeoFence ? org.getLongitude() : null,
+                includeGeoFence ? org.getGeoFenceRadiusMeters() : null,
                 org.getReviewSlotTimes().stream().sorted().toList(),
                 org.getCreatedAt()
         );

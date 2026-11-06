@@ -2,14 +2,18 @@ package com.simplehearing.attendance.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.simplehearing.attendance.dto.AttendanceEditResponse;
 import com.simplehearing.attendance.dto.AttendanceResponse;
+import com.simplehearing.attendance.dto.EditAttendanceTimesRequest;
 import com.simplehearing.attendance.dto.CheckInRequest;
 import com.simplehearing.attendance.dto.CheckOutRequest;
 import com.simplehearing.attendance.dto.GeoCheckResponse;
 import com.simplehearing.attendance.dto.GeoCheckResponse.GeoCheckReferenceType;
 import com.simplehearing.attendance.dto.VerifyAttendanceRequest;
 import com.simplehearing.attendance.entity.Attendance;
+import com.simplehearing.attendance.entity.AttendanceEditEntry;
 import com.simplehearing.attendance.enums.AttendanceStatus;
+import com.simplehearing.attendance.repository.AttendanceEditEntryRepository;
 import com.simplehearing.attendance.repository.AttendanceRepository;
 import com.simplehearing.auth.security.UserPrincipal;
 import com.simplehearing.clinic.entity.Clinic;
@@ -28,9 +32,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.DateTimeException;
+import java.time.Duration;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -49,14 +58,17 @@ public class AttendanceService {
     private final OrganisationRepository organisationRepository;
     private final EmailService           emailService;
     private final ObjectMapper           objectMapper;
+    private final AttendanceEditEntryRepository editEntryRepository;
 
     public AttendanceService(AttendanceRepository attendanceRepository,
+                             AttendanceEditEntryRepository editEntryRepository,
                              ClinicRepository clinicRepository,
                              UserRepository userRepository,
                              OrganisationRepository organisationRepository,
                              EmailService emailService,
                              ObjectMapper objectMapper) {
         this.attendanceRepository   = attendanceRepository;
+        this.editEntryRepository    = editEntryRepository;
         this.clinicRepository       = clinicRepository;
         this.userRepository         = userRepository;
         this.organisationRepository = organisationRepository;
@@ -230,6 +242,116 @@ public class AttendanceService {
                 .findByOrgIdAndAttendanceDateBetweenOrderByAttendanceDateDescCheckInTimeDesc(
                         orgId, resolvedFrom, resolvedTo);
         return enrich(records);
+    }
+
+    // ── Manual correction of login / logout time (Business Owner) ─────────────
+
+    private static final DateTimeFormatter EDIT_FMT = DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a");
+
+    private ZoneId zoneOf(UUID orgId) {
+        try {
+            return organisationRepository.findById(orgId).map(o -> ZoneId.of(o.getTimezone())).orElse(ZoneId.of("UTC"));
+        } catch (DateTimeException | NullPointerException e) {
+            return ZoneId.of("UTC");
+        }
+    }
+
+    private static String clock(Instant t, ZoneId zone) {
+        return t == null ? "—" : t.atZone(zone).format(EDIT_FMT);
+    }
+
+    private static String hours(Instant in, Instant out) {
+        if (in == null || out == null) return "—";
+        long mins = Duration.between(in, out).toMinutes();
+        return (mins / 60) + "h " + String.format("%02d", mins % 60) + "m";
+    }
+
+    /**
+     * Corrects the login and logout time of a record. The working hours follow from the two times. Every correction is
+     * kept in the record's edit history with who made it, when, and the before / after of login, logout and hours.
+     */
+    @Transactional
+    public AttendanceResponse editTimes(UUID id, EditAttendanceTimesRequest request, UserPrincipal principal) {
+        Attendance a = attendanceRepository.findById(id)
+                .filter(r -> r.getOrgId().equals(principal.getOrgId()))
+                .orElseThrow(() -> new ResourceNotFoundException("Attendance record not found"));
+
+        Instant in = request.checkInTime();
+        Instant out = request.checkOutTime();
+        ZoneId zone = zoneOf(a.getOrgId());
+
+        if (!in.atZone(zone).toLocalDate().equals(a.getAttendanceDate())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST,
+                    "The login time must be on the record's own day (" + a.getAttendanceDate() + ")");
+        }
+        if (out != null && !out.isAfter(in)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "The logout time must be after the login time");
+        }
+        if (out != null && Duration.between(in, out).toHours() >= 24) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "The logout time must be within 24 hours of the login time");
+        }
+        Instant limit = Instant.now().plus(Duration.ofMinutes(5));
+        if (in.isAfter(limit) || (out != null && out.isAfter(limit))) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "The times can't be in the future");
+        }
+
+        Instant oldIn = a.getCheckInTime();
+        Instant oldOut = a.getCheckOutTime();
+        if (Objects.equals(oldIn, in) && Objects.equals(oldOut, out)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Nothing to change — the times are the same as saved");
+        }
+
+        List<AttendanceEditResponse.FieldChange> changes = new ArrayList<>();
+        if (!Objects.equals(oldIn, in)) changes.add(new AttendanceEditResponse.FieldChange("Login time", clock(oldIn, zone), clock(in, zone)));
+        if (!Objects.equals(oldOut, out)) changes.add(new AttendanceEditResponse.FieldChange("Logout time", clock(oldOut, zone), clock(out, zone)));
+        changes.add(new AttendanceEditResponse.FieldChange("Working hours", hours(oldIn, oldOut), hours(in, out)));
+
+        a.setCheckInTime(in);
+        a.setCheckOutTime(out);
+        a.setStatus(out != null ? AttendanceStatus.CHECKED_OUT : AttendanceStatus.CHECKED_IN);
+        if (out == null) {
+            a.setCheckOutLat(null);
+            a.setCheckOutLon(null);
+        }
+        a.setManuallyEdited(true);
+        Attendance saved = attendanceRepository.save(a);
+
+        AttendanceEditEntry entry = new AttendanceEditEntry();
+        entry.setOrgId(saved.getOrgId());
+        entry.setAttendanceId(saved.getId());
+        entry.setEditedBy(principal.getId());
+        entry.setNote(request.note() != null && !request.note().isBlank() ? request.note().trim() : null);
+        try {
+            entry.setChanges(objectMapper.writeValueAsString(changes));
+        } catch (Exception e) {
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to record the edit history");
+        }
+        editEntryRepository.save(entry);
+
+        return enrich(List.of(saved)).get(0);
+    }
+
+    /** The corrections made to a record, newest first. */
+    @Transactional(readOnly = true)
+    public List<AttendanceEditResponse> editHistory(UUID id, UserPrincipal principal) {
+        Attendance a = attendanceRepository.findById(id)
+                .filter(r -> r.getOrgId().equals(principal.getOrgId()))
+                .orElseThrow(() -> new ResourceNotFoundException("Attendance record not found"));
+        List<AttendanceEditEntry> entries = editEntryRepository.findByAttendanceIdOrderByEditedAtDesc(a.getId());
+        Map<UUID, User> editors = userRepository.findAllById(
+                        entries.stream().map(AttendanceEditEntry::getEditedBy).filter(Objects::nonNull).collect(Collectors.toSet()))
+                .stream().collect(Collectors.toMap(User::getId, u -> u));
+        return entries.stream().map(e -> {
+            User u = e.getEditedBy() != null ? editors.get(e.getEditedBy()) : null;
+            List<AttendanceEditResponse.FieldChange> changes;
+            try {
+                changes = objectMapper.readValue(e.getChanges(), new TypeReference<List<AttendanceEditResponse.FieldChange>>() {});
+            } catch (Exception ex) {
+                changes = List.of();
+            }
+            return new AttendanceEditResponse(e.getId(), e.getEditedBy(),
+                    u != null ? u.getFirstName() + " " + u.getLastName() : null, e.getEditedAt(), e.getNote(), changes);
+        }).toList();
     }
 
     // ── Face enrollment ───────────────────────────────────────────────────────

@@ -1,5 +1,7 @@
 package com.simplehearing.attendance.controller;
 
+import com.simplehearing.attendance.dto.AttendanceEditResponse;
+import com.simplehearing.attendance.dto.EditAttendanceTimesRequest;
 import com.simplehearing.attendance.dto.AttendanceResponse;
 import com.simplehearing.attendance.dto.CheckInRequest;
 import com.simplehearing.attendance.dto.CheckOutRequest;
@@ -92,9 +94,9 @@ public class AttendanceController {
         return ResponseEntity.ok(ApiResponse.success(attendanceService.listMine(principal)));
     }
 
-    @Operation(summary = "List all attendance records in the org (admin view)")
+    @Operation(summary = "List all attendance records in the org — Business Owner only")
     @GetMapping
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasRole('BUSINESS_OWNER')")
     public ResponseEntity<ApiResponse<List<AttendanceResponse>>> listAll(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
@@ -113,14 +115,33 @@ public class AttendanceController {
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
-    @Operation(summary = "Review a face-override check-in (approve or reject)")
+    @Operation(summary = "Review a face-override check-in (approve or reject) — Business Owner only")
     @PatchMapping("/{id}/review-override")
-    @PreAuthorize("hasAnyRole('BUSINESS_OWNER', 'CLINIC_HEAD')")
+    @PreAuthorize("hasRole('BUSINESS_OWNER')")
     public ResponseEntity<ApiResponse<AttendanceResponse>> reviewOverride(
             @PathVariable UUID id,
             @RequestBody ReviewOverrideRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
                 attendanceService.reviewOverride(id, request.approved(), principal)));
+    }
+
+    @Operation(summary = "Correct a record's login / logout time — Business Owner only; the change is kept in the record's edit history")
+    @PatchMapping("/{id}/times")
+    @PreAuthorize("hasRole('BUSINESS_OWNER')")
+    public ResponseEntity<ApiResponse<AttendanceResponse>> editTimes(
+            @PathVariable UUID id,
+            @Valid @RequestBody EditAttendanceTimesRequest request,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(attendanceService.editTimes(id, request, principal)));
+    }
+
+    @Operation(summary = "The manual corrections made to a record, newest first — Business Owner only")
+    @GetMapping("/{id}/history")
+    @PreAuthorize("hasRole('BUSINESS_OWNER')")
+    public ResponseEntity<ApiResponse<List<AttendanceEditResponse>>> editHistory(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(attendanceService.editHistory(id, principal)));
     }
 }

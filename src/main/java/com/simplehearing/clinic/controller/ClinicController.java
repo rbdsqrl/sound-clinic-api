@@ -44,7 +44,7 @@ public class ClinicController {
     public ResponseEntity<ApiResponse<List<ClinicResponse>>> list(
             @AuthenticationPrincipal UserPrincipal principal) {
         List<ClinicResponse> clinics = clinicService.listForOrg(principal);
-        return ResponseEntity.ok(ApiResponse.success(isTherapistView(principal)
+        return ResponseEntity.ok(ApiResponse.success(!isBusinessOwner(principal)
                 ? clinics.stream().map(ClinicResponse::withoutGeoFence).toList() : clinics));
     }
 
@@ -55,12 +55,12 @@ public class ClinicController {
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
         ClinicResponse clinic = clinicService.get(id, principal);
-        return ResponseEntity.ok(ApiResponse.success(isTherapistView(principal) ? clinic.withoutGeoFence() : clinic));
+        return ResponseEntity.ok(ApiResponse.success(!isBusinessOwner(principal) ? clinic.withoutGeoFence() : clinic));
     }
 
-    /** A therapist reads clinics for reference only — the geo-fence used for attendance checks is not theirs to see. */
-    private static boolean isTherapistView(UserPrincipal principal) {
-        return principal.getActiveRole() == com.simplehearing.user.enums.Role.THERAPIST;
+    /** The geo-fence used for attendance checks (GPS settings) is the Business Owner's alone — everyone else reads clinics without it. */
+    private static boolean isBusinessOwner(UserPrincipal principal) {
+        return principal.getUser().hasRole(com.simplehearing.user.enums.Role.BUSINESS_OWNER);
     }
 
     @Operation(summary = "Update a clinic")

@@ -26,7 +26,12 @@ public record AttendanceResponse(
         String overrideReviewedByName,
         Instant overrideReviewedAt,
         AttendanceStatus status,
-        Instant createdAt
+        Instant createdAt,
+        /** Where the employee was when they checked in — null when location wasn't available. */
+        Double checkInLatitude,
+        Double checkInLongitude,
+        /** True once the Business Owner has corrected this record's times by hand. */
+        boolean manuallyEdited
 ) {
     public static AttendanceResponse from(
             Attendance a,
@@ -52,7 +57,10 @@ public record AttendanceResponse(
                 overrideReviewedByName,
                 a.getOverrideReviewedAt(),
                 a.getStatus(),
-                a.getCreatedAt()
+                a.getCreatedAt(),
+                a.getCheckInLat(),
+                a.getCheckInLon(),
+                a.isManuallyEdited()
         );
     }
 }

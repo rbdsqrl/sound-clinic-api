@@ -27,7 +27,12 @@ public class OrganisationService {
     public OrganisationResponse getMyOrg(UserPrincipal principal) {
         Organisation org = organisationRepository.findById(principal.getOrgId())
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Organisation not found"));
-        return OrganisationResponse.from(org);
+        return OrganisationResponse.from(org, isBusinessOwner(principal));
+    }
+
+    /** GPS (geo-fence) settings belong to the Business Owner alone. */
+    private static boolean isBusinessOwner(UserPrincipal principal) {
+        return principal.getUser().hasRole(com.simplehearing.user.enums.Role.BUSINESS_OWNER);
     }
 
     /**
@@ -57,6 +62,13 @@ public class OrganisationService {
             org.getWeeklyOffDays().clear();
             org.getWeeklyOffDays().addAll(request.weeklyOffDays());
         }
+        boolean owner = isBusinessOwner(principal);
+        boolean geoChange = (request.latitude() != null && !request.latitude().equals(org.getLatitude()))
+                || (request.longitude() != null && !request.longitude().equals(org.getLongitude()))
+                || (request.geoFenceRadiusMeters() != null && !request.geoFenceRadiusMeters().equals(org.getGeoFenceRadiusMeters()));
+        if (geoChange && !owner) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only the Business Owner can change the GPS settings");
+        }
         if (request.latitude() != null)             org.setLatitude(request.latitude());
         if (request.longitude() != null)             org.setLongitude(request.longitude());
         if (request.geoFenceRadiusMeters() != null)  org.setGeoFenceRadiusMeters(request.geoFenceRadiusMeters());
@@ -68,6 +80,6 @@ public class OrganisationService {
             org.getReviewSlotTimes().addAll(request.reviewSlotTimes());
         }
 
-        return OrganisationResponse.from(organisationRepository.save(org));
+        return OrganisationResponse.from(organisationRepository.save(org), owner);
     }
 }

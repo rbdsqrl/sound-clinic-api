@@ -24,6 +24,10 @@ public class ClinicService {
     }
 
     public ClinicResponse create(CreateClinicRequest request, UserPrincipal principal) {
+        if (!isBusinessOwner(principal)
+                && (request.latitude() != null || request.longitude() != null || request.geoFenceRadiusMeters() != null)) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only the Business Owner can set a clinic's GPS settings");
+        }
         Clinic clinic = new Clinic();
         clinic.setOrgId(principal.getOrgId());
         clinic.setName(request.name());
@@ -55,6 +59,13 @@ public class ClinicService {
         Clinic clinic = clinicRepository.findByIdAndOrgId(clinicId, principal.getOrgId())
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Clinic not found"));
 
+        boolean geoChange = (request.latitude() != null && !request.latitude().equals(clinic.getLatitude()))
+                || (request.longitude() != null && !request.longitude().equals(clinic.getLongitude()))
+                || (request.geoFenceRadiusMeters() != null && !request.geoFenceRadiusMeters().equals(clinic.getGeoFenceRadiusMeters()));
+        if (geoChange && !isBusinessOwner(principal)) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Only the Business Owner can change a clinic's GPS settings");
+        }
+
         if (request.name() != null)                 clinic.setName(request.name());
         if (request.address() != null)              clinic.setAddress(request.address());
         if (request.phone() != null)                clinic.setPhone(request.phone());
@@ -65,5 +76,10 @@ public class ClinicService {
         if (request.geoFenceRadiusMeters() != null) clinic.setGeoFenceRadiusMeters(request.geoFenceRadiusMeters());
 
         return ClinicResponse.from(clinicRepository.save(clinic));
+    }
+
+    /** GPS (geo-fence) settings belong to the Business Owner alone. */
+    private static boolean isBusinessOwner(UserPrincipal principal) {
+        return principal.getUser().hasRole(com.simplehearing.user.enums.Role.BUSINESS_OWNER);
     }
 }
